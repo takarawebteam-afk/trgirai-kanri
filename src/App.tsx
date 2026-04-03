@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts'
 import './App.css'
+import { supabase } from './supabase'
 
 type Department = '人事' | '総務' | '経理' | '管理' | '売買' | '仲介' | '本社'
 type TaskType = '単発' | '継続'
@@ -61,122 +62,6 @@ const taskTypes: TaskType[] = ['単発', '継続']
 const taskStatuses: TaskStatus[] = ['依頼', '作業中', '完了']
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram']
 
-const initialTasks: Task[] = [
-  {
-    id: crypto.randomUUID(),
-    name: '採用LP改善',
-    department: '人事',
-    taskType: '継続',
-    startDate: '2026-03-01',
-    endDate: '2026-03-31',
-    memo: '応募導線改善と原稿差し替え',
-    savings: 180000,
-    status: '完了',
-  },
-  {
-    id: crypto.randomUUID(),
-    name: '契約書テンプレート統合',
-    department: '総務',
-    taskType: '単発',
-    startDate: '2026-04-01',
-    endDate: '2026-04-18',
-    memo: '文言統一と確認フロー整理',
-    savings: 90000,
-    status: '作業中',
-  },
-  {
-    id: crypto.randomUUID(),
-    name: '経費精算フロー見直し',
-    department: '経理',
-    taskType: '単発',
-    startDate: '2026-02-10',
-    endDate: '2026-02-28',
-    memo: '手入力工数削減',
-    savings: 120000,
-    status: '完了',
-  },
-  {
-    id: crypto.randomUUID(),
-    name: '物件紹介ショート動画運用',
-    department: '仲介',
-    taskType: '継続',
-    startDate: '2026-04-01',
-    endDate: '2026-06-30',
-    memo: '週3投稿の運用支援',
-    savings: 0,
-    status: '作業中',
-  },
-]
-
-const initialPosts: SnsPost[] = [
-  {
-    id: crypto.randomUUID(),
-    postDate: '2026-04-01',
-    platform: 'TikTok',
-    account: '@recruit_tokyo',
-    views: 12400,
-    likes: 820,
-    comments: 36,
-    saves: 64,
-    shares: 29,
-    followerGrowth: 58,
-  },
-  {
-    id: crypto.randomUUID(),
-    postDate: '2026-04-02',
-    platform: 'Instagram',
-    account: '@trg_life',
-    views: 8300,
-    likes: 610,
-    comments: 22,
-    saves: 120,
-    shares: 18,
-    followerGrowth: 31,
-  },
-  {
-    id: crypto.randomUUID(),
-    postDate: '2026-03-19',
-    platform: 'TikTok',
-    account: '@trg_estate',
-    views: 15200,
-    likes: 1040,
-    comments: 44,
-    saves: 52,
-    shares: 41,
-    followerGrowth: 72,
-  },
-]
-
-const initialRecruitment: RecruitmentRecord[] = [
-  {
-    id: crypto.randomUUID(),
-    date: '2026-04-01',
-    platform: 'TikTok',
-    account: '@recruit_tokyo',
-    urlClicks: 140,
-    applications: 9,
-    hires: 2,
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '2026-04-02',
-    platform: 'Instagram',
-    account: '@trg_life',
-    urlClicks: 92,
-    applications: 5,
-    hires: 1,
-  },
-  {
-    id: crypto.randomUUID(),
-    date: '2026-03-20',
-    platform: 'TikTok',
-    account: '@trg_estate',
-    urlClicks: 110,
-    applications: 6,
-    hires: 1,
-  },
-]
-
 const defaultTaskForm: Omit<Task, 'id'> = {
   name: '',
   department: '人事',
@@ -216,13 +101,12 @@ const currency = new Intl.NumberFormat('ja-JP', {
 })
 
 const integer = new Intl.NumberFormat('ja-JP')
+
 function App() {
   const [activePage, setActivePage] = useState<PageKey>('dashboard')
-  const [tasks, setTasks] = useState<Task[]>(() => loadStorage('tasks', initialTasks))
-  const [posts, setPosts] = useState<SnsPost[]>(() => loadStorage('posts', initialPosts))
-  const [recruitment, setRecruitment] = useState<RecruitmentRecord[]>(() =>
-    loadStorage('recruitment', initialRecruitment),
-  )
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [posts, setPosts] = useState<SnsPost[]>([])
+  const [recruitment, setRecruitment] = useState<RecruitmentRecord[]>([])
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
   const [taskForm, setTaskForm] = useState(defaultTaskForm)
@@ -232,17 +116,35 @@ function App() {
   const [recruitmentForm, setRecruitmentForm] = useState(defaultRecruitmentForm)
   const [recruitmentEditingId, setRecruitmentEditingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    localStorage.setItem('shanairai_tasks', JSON.stringify(tasks))
-  }, [tasks])
+  async function fetchTasks() {
+    const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
+    if (data) setTasks(data as Task[])
+  }
+
+  async function fetchPosts() {
+    const { data } = await supabase.from('sns_posts').select('*').order('created_at', { ascending: false })
+    if (data) setPosts(data as SnsPost[])
+  }
+
+  async function fetchRecruitment() {
+    const { data } = await supabase.from('recruitment').select('*').order('created_at', { ascending: false })
+    if (data) setRecruitment(data as RecruitmentRecord[])
+  }
 
   useEffect(() => {
-    localStorage.setItem('shanairai_posts', JSON.stringify(posts))
-  }, [posts])
+    fetchTasks()
+    fetchPosts()
+    fetchRecruitment()
 
-  useEffect(() => {
-    localStorage.setItem('shanairai_recruitment', JSON.stringify(recruitment))
-  }, [recruitment])
+    const channel = supabase
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posts' }, fetchPosts)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   const yearOptions = Array.from(
     new Set([
@@ -317,48 +219,43 @@ function App() {
     { urlClicks: 0, applications: 0, hires: 0 },
   )
 
-  const handleTaskSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleTaskSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const payload = normalizeTask(taskForm)
     if (taskEditingId) {
-      setTasks((current) =>
-        current.map((task) => (task.id === taskEditingId ? { ...payload, id: taskEditingId } : task)),
-      )
+      await supabase.from('tasks').update(payload).eq('id', taskEditingId)
       setTaskEditingId(null)
     } else {
-      setTasks((current) => [{ ...payload, id: crypto.randomUUID() }, ...current])
+      await supabase.from('tasks').insert({ ...payload, id: crypto.randomUUID() })
     }
     setTaskForm(defaultTaskForm)
+    fetchTasks()
   }
 
-  const handleSnsSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSnsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const payload = normalizePost(snsForm)
     if (snsEditingId) {
-      setPosts((current) =>
-        current.map((post) => (post.id === snsEditingId ? { ...payload, id: snsEditingId } : post)),
-      )
+      await supabase.from('sns_posts').update(payload).eq('id', snsEditingId)
       setSnsEditingId(null)
     } else {
-      setPosts((current) => [{ ...payload, id: crypto.randomUUID() }, ...current])
+      await supabase.from('sns_posts').insert({ ...payload, id: crypto.randomUUID() })
     }
     setSnsForm(defaultSnsForm)
+    fetchPosts()
   }
 
-  const handleRecruitmentSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleRecruitmentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const payload = normalizeRecruitment(recruitmentForm)
     if (recruitmentEditingId) {
-      setRecruitment((current) =>
-        current.map((record) =>
-          record.id === recruitmentEditingId ? { ...payload, id: recruitmentEditingId } : record,
-        ),
-      )
+      await supabase.from('recruitment').update(payload).eq('id', recruitmentEditingId)
       setRecruitmentEditingId(null)
     } else {
-      setRecruitment((current) => [{ ...payload, id: crypto.randomUUID() }, ...current])
+      await supabase.from('recruitment').insert({ ...payload, id: crypto.randomUUID() })
     }
     setRecruitmentForm(defaultRecruitmentForm)
+    fetchRecruitment()
   }
 
   return (
@@ -525,7 +422,7 @@ function App() {
                       <tr key={task.id}>
                         <td>{task.name}</td><td>{task.department}</td><td>{task.taskType}</td><td>{task.startDate}</td><td>{task.endDate}</td><td>{task.memo}</td><td>{currency.format(task.savings)}</td>
                         <td><span className={`status status-${task.status}`}>{task.status}</span></td>
-                        <td><div className="row-actions"><button className="secondary" onClick={() => { setTaskEditingId(task.id); setTaskForm({ ...task }); setActivePage('tasks') }}>編集</button><button className="danger" onClick={() => setTasks((current) => current.filter((item) => item.id !== task.id))}>削除</button></div></td>
+                        <td><div className="row-actions"><button className="secondary" onClick={() => { setTaskEditingId(task.id); setTaskForm({ ...task }); setActivePage('tasks') }}>編集</button><button className="danger" onClick={async () => { await supabase.from('tasks').delete().eq('id', task.id); fetchTasks() }}>削除</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -564,7 +461,7 @@ function App() {
                     {posts.map((post) => (
                       <tr key={post.id}>
                         <td>{post.postDate}</td><td>{post.platform}</td><td>{post.account}</td><td>{integer.format(post.views)}</td><td>{integer.format(post.likes)}</td><td>{integer.format(post.comments)}</td><td>{integer.format(post.saves)}</td><td>{integer.format(post.shares)}</td><td>{integer.format(post.followerGrowth)}</td>
-                        <td><div className="row-actions"><button className="secondary" onClick={() => { setSnsEditingId(post.id); setSnsForm({ ...post }) }}>編集</button><button className="danger" onClick={() => setPosts((current) => current.filter((item) => item.id !== post.id))}>削除</button></div></td>
+                        <td><div className="row-actions"><button className="secondary" onClick={() => { setSnsEditingId(post.id); setSnsForm({ ...post }) }}>編集</button><button className="danger" onClick={async () => { await supabase.from('sns_posts').delete().eq('id', post.id); fetchPosts() }}>削除</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -601,7 +498,7 @@ function App() {
                     {recruitment.map((record) => (
                       <tr key={record.id}>
                         <td>{record.date}</td><td>{record.platform}</td><td>{record.account}</td><td>{integer.format(record.urlClicks)}</td><td>{integer.format(record.applications)}</td><td>{integer.format(record.hires)}</td>
-                        <td><div className="row-actions"><button className="secondary" onClick={() => { setRecruitmentEditingId(record.id); setRecruitmentForm({ ...record }) }}>編集</button><button className="danger" onClick={() => setRecruitment((current) => current.filter((item) => item.id !== record.id))}>削除</button></div></td>
+                        <td><div className="row-actions"><button className="secondary" onClick={() => { setRecruitmentEditingId(record.id); setRecruitmentForm({ ...record }) }}>編集</button><button className="danger" onClick={async () => { await supabase.from('recruitment').delete().eq('id', record.id); fetchRecruitment() }}>削除</button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -613,11 +510,6 @@ function App() {
       </main>
     </div>
   )
-}
-
-function loadStorage<T>(key: string, fallback: T): T {
-  const stored = localStorage.getItem(`shanairai_${key}`)
-  return stored ? (JSON.parse(stored) as T) : fallback
 }
 
 function getYear(dateString: string) {
@@ -667,4 +559,3 @@ function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<Recru
 }
 
 export default App
-
