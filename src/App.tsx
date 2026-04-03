@@ -1,0 +1,670 @@
+﻿import { useEffect, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import './App.css'
+
+type Department = '人事' | '総務' | '経理' | '管理' | '売買' | '仲介' | '本社'
+type TaskType = '単発' | '継続'
+type TaskStatus = '依頼' | '作業中' | '完了'
+type SnsPlatform = 'TikTok' | 'Instagram'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment'
+
+type Task = {
+  id: string
+  name: string
+  department: Department
+  taskType: TaskType
+  startDate: string
+  endDate: string
+  memo: string
+  savings: number
+  status: TaskStatus
+}
+
+type SnsPost = {
+  id: string
+  postDate: string
+  platform: SnsPlatform
+  account: string
+  views: number
+  likes: number
+  comments: number
+  saves: number
+  shares: number
+  followerGrowth: number
+}
+
+type RecruitmentRecord = {
+  id: string
+  date: string
+  platform: SnsPlatform
+  account: string
+  urlClicks: number
+  applications: number
+  hires: number
+}
+
+const departments: Department[] = ['人事', '総務', '経理', '管理', '売買', '仲介', '本社']
+const taskTypes: TaskType[] = ['単発', '継続']
+const taskStatuses: TaskStatus[] = ['依頼', '作業中', '完了']
+const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram']
+
+const initialTasks: Task[] = [
+  {
+    id: crypto.randomUUID(),
+    name: '採用LP改善',
+    department: '人事',
+    taskType: '継続',
+    startDate: '2026-03-01',
+    endDate: '2026-03-31',
+    memo: '応募導線改善と原稿差し替え',
+    savings: 180000,
+    status: '完了',
+  },
+  {
+    id: crypto.randomUUID(),
+    name: '契約書テンプレート統合',
+    department: '総務',
+    taskType: '単発',
+    startDate: '2026-04-01',
+    endDate: '2026-04-18',
+    memo: '文言統一と確認フロー整理',
+    savings: 90000,
+    status: '作業中',
+  },
+  {
+    id: crypto.randomUUID(),
+    name: '経費精算フロー見直し',
+    department: '経理',
+    taskType: '単発',
+    startDate: '2026-02-10',
+    endDate: '2026-02-28',
+    memo: '手入力工数削減',
+    savings: 120000,
+    status: '完了',
+  },
+  {
+    id: crypto.randomUUID(),
+    name: '物件紹介ショート動画運用',
+    department: '仲介',
+    taskType: '継続',
+    startDate: '2026-04-01',
+    endDate: '2026-06-30',
+    memo: '週3投稿の運用支援',
+    savings: 0,
+    status: '作業中',
+  },
+]
+
+const initialPosts: SnsPost[] = [
+  {
+    id: crypto.randomUUID(),
+    postDate: '2026-04-01',
+    platform: 'TikTok',
+    account: '@recruit_tokyo',
+    views: 12400,
+    likes: 820,
+    comments: 36,
+    saves: 64,
+    shares: 29,
+    followerGrowth: 58,
+  },
+  {
+    id: crypto.randomUUID(),
+    postDate: '2026-04-02',
+    platform: 'Instagram',
+    account: '@trg_life',
+    views: 8300,
+    likes: 610,
+    comments: 22,
+    saves: 120,
+    shares: 18,
+    followerGrowth: 31,
+  },
+  {
+    id: crypto.randomUUID(),
+    postDate: '2026-03-19',
+    platform: 'TikTok',
+    account: '@trg_estate',
+    views: 15200,
+    likes: 1040,
+    comments: 44,
+    saves: 52,
+    shares: 41,
+    followerGrowth: 72,
+  },
+]
+
+const initialRecruitment: RecruitmentRecord[] = [
+  {
+    id: crypto.randomUUID(),
+    date: '2026-04-01',
+    platform: 'TikTok',
+    account: '@recruit_tokyo',
+    urlClicks: 140,
+    applications: 9,
+    hires: 2,
+  },
+  {
+    id: crypto.randomUUID(),
+    date: '2026-04-02',
+    platform: 'Instagram',
+    account: '@trg_life',
+    urlClicks: 92,
+    applications: 5,
+    hires: 1,
+  },
+  {
+    id: crypto.randomUUID(),
+    date: '2026-03-20',
+    platform: 'TikTok',
+    account: '@trg_estate',
+    urlClicks: 110,
+    applications: 6,
+    hires: 1,
+  },
+]
+
+const defaultTaskForm: Omit<Task, 'id'> = {
+  name: '',
+  department: '人事',
+  taskType: '単発',
+  startDate: '',
+  endDate: '',
+  memo: '',
+  savings: 0,
+  status: '依頼',
+}
+
+const defaultSnsForm: Omit<SnsPost, 'id'> = {
+  postDate: '',
+  platform: 'TikTok',
+  account: '',
+  views: 0,
+  likes: 0,
+  comments: 0,
+  saves: 0,
+  shares: 0,
+  followerGrowth: 0,
+}
+
+const defaultRecruitmentForm: Omit<RecruitmentRecord, 'id'> = {
+  date: '',
+  platform: 'TikTok',
+  account: '',
+  urlClicks: 0,
+  applications: 0,
+  hires: 0,
+}
+
+const currency = new Intl.NumberFormat('ja-JP', {
+  style: 'currency',
+  currency: 'JPY',
+  maximumFractionDigits: 0,
+})
+
+const integer = new Intl.NumberFormat('ja-JP')
+function App() {
+  const [activePage, setActivePage] = useState<PageKey>('dashboard')
+  const [tasks, setTasks] = useState<Task[]>(() => loadStorage('tasks', initialTasks))
+  const [posts, setPosts] = useState<SnsPost[]>(() => loadStorage('posts', initialPosts))
+  const [recruitment, setRecruitment] = useState<RecruitmentRecord[]>(() =>
+    loadStorage('recruitment', initialRecruitment),
+  )
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState('all')
+  const [taskForm, setTaskForm] = useState(defaultTaskForm)
+  const [taskEditingId, setTaskEditingId] = useState<string | null>(null)
+  const [snsForm, setSnsForm] = useState(defaultSnsForm)
+  const [snsEditingId, setSnsEditingId] = useState<string | null>(null)
+  const [recruitmentForm, setRecruitmentForm] = useState(defaultRecruitmentForm)
+  const [recruitmentEditingId, setRecruitmentEditingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    localStorage.setItem('shanairai_tasks', JSON.stringify(tasks))
+  }, [tasks])
+
+  useEffect(() => {
+    localStorage.setItem('shanairai_posts', JSON.stringify(posts))
+  }, [posts])
+
+  useEffect(() => {
+    localStorage.setItem('shanairai_recruitment', JSON.stringify(recruitment))
+  }, [recruitment])
+
+  const yearOptions = Array.from(
+    new Set([
+      new Date().getFullYear(),
+      ...tasks.flatMap((task) => [getYear(task.startDate), getYear(task.endDate)]),
+      ...posts.map((post) => getYear(post.postDate)),
+      ...recruitment.map((record) => getYear(record.date)),
+    ]),
+  )
+    .filter(Boolean)
+    .sort((a, b) => b - a)
+
+  const filteredCompletedTasks = tasks.filter(
+    (task) => task.status === '完了' && matchesYearMonth(task.endDate, selectedYear, selectedMonth),
+  )
+  const filteredPosts = posts.filter((post) =>
+    matchesYearMonth(post.postDate, selectedYear, selectedMonth),
+  )
+  const filteredRecruitment = recruitment.filter((record) =>
+    matchesYearMonth(record.date, selectedYear, selectedMonth),
+  )
+  const ongoingTasks = tasks.filter((task) => {
+    if (task.status !== '作業中') return false
+    return overlapsPeriod(task.startDate, task.endDate, selectedYear, selectedMonth)
+  })
+
+  const totalSavings = filteredCompletedTasks.reduce((sum, task) => sum + task.savings, 0)
+  const departmentSavings = departments
+    .map((department) => ({
+      department,
+      savings: filteredCompletedTasks
+        .filter((task) => task.department === department)
+        .reduce((sum, task) => sum + task.savings, 0),
+    }))
+    .filter((entry) => entry.savings > 0)
+
+  const snsAccountMetrics = Object.values(
+    filteredPosts.reduce<Record<string, { account: string; posts: number; followerGrowth: number }>>(
+      (acc, post) => {
+        if (!acc[post.account]) {
+          acc[post.account] = { account: post.account, posts: 0, followerGrowth: 0 }
+        }
+        acc[post.account].posts += 1
+        acc[post.account].followerGrowth += post.followerGrowth
+        return acc
+      },
+      {},
+    ),
+  )
+
+  const recruitmentByAccount = Object.values(
+    filteredRecruitment.reduce<
+      Record<string, { account: string; urlClicks: number; applications: number; hires: number }>
+    >((acc, record) => {
+      if (!acc[record.account]) {
+        acc[record.account] = { account: record.account, urlClicks: 0, applications: 0, hires: 0 }
+      }
+      acc[record.account].urlClicks += record.urlClicks
+      acc[record.account].applications += record.applications
+      acc[record.account].hires += record.hires
+      return acc
+    }, {}),
+  )
+
+  const recruitmentSummary = filteredRecruitment.reduce(
+    (acc, record) => {
+      acc.urlClicks += record.urlClicks
+      acc.applications += record.applications
+      acc.hires += record.hires
+      return acc
+    },
+    { urlClicks: 0, applications: 0, hires: 0 },
+  )
+
+  const handleTaskSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const payload = normalizeTask(taskForm)
+    if (taskEditingId) {
+      setTasks((current) =>
+        current.map((task) => (task.id === taskEditingId ? { ...payload, id: taskEditingId } : task)),
+      )
+      setTaskEditingId(null)
+    } else {
+      setTasks((current) => [{ ...payload, id: crypto.randomUUID() }, ...current])
+    }
+    setTaskForm(defaultTaskForm)
+  }
+
+  const handleSnsSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const payload = normalizePost(snsForm)
+    if (snsEditingId) {
+      setPosts((current) =>
+        current.map((post) => (post.id === snsEditingId ? { ...payload, id: snsEditingId } : post)),
+      )
+      setSnsEditingId(null)
+    } else {
+      setPosts((current) => [{ ...payload, id: crypto.randomUUID() }, ...current])
+    }
+    setSnsForm(defaultSnsForm)
+  }
+
+  const handleRecruitmentSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const payload = normalizeRecruitment(recruitmentForm)
+    if (recruitmentEditingId) {
+      setRecruitment((current) =>
+        current.map((record) =>
+          record.id === recruitmentEditingId ? { ...payload, id: recruitmentEditingId } : record,
+        ),
+      )
+      setRecruitmentEditingId(null)
+    } else {
+      setRecruitment((current) => [{ ...payload, id: crypto.randomUUID() }, ...current])
+    }
+    setRecruitmentForm(defaultRecruitmentForm)
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div>
+          <p className="eyebrow">Internal Operations Dashboard</p>
+          <h1>社内依頼案件管理ツール</h1>
+          <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理アプリです。</p>
+        </div>
+        <div className="header-panel">
+          <label>
+            年
+            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>{year}年</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            月
+            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
+              <option value="all">全年月</option>
+              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                <option key={month} value={String(month)}>{month}月</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </header>
+
+      <nav className="tab-nav" aria-label="主要メニュー">
+        <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => setActivePage('dashboard')}>ダッシュボード</button>
+        <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => setActivePage('tasks')}>案件管理</button>
+        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => setActivePage('sns')}>SNS投稿管理</button>
+        <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => setActivePage('recruitment')}>採用管理</button>
+      </nav>
+
+      <main className="page-content">
+        {activePage === 'dashboard' && (
+          <section className="dashboard-grid">
+            <div className="stat-card strong"><span>総削減額</span><strong>{currency.format(totalSavings)}</strong><small>完了案件のみを集計</small></div>
+            <div className="stat-card"><span>SNS投稿数</span><strong>{integer.format(filteredPosts.length)}件</strong><small>選択期間の合計投稿</small></div>
+            <div className="stat-card"><span>応募数</span><strong>{integer.format(recruitmentSummary.applications)}件</strong><small>採用導線経由</small></div>
+            <div className="stat-card"><span>採用数</span><strong>{integer.format(recruitmentSummary.hires)}名</strong><small>選択期間の合計</small></div>
+
+            <section className="panel chart-panel">
+              <div className="panel-heading"><div><h2>部署別削減額</h2><p>完了案件の削減額を部署別に表示</p></div></div>
+              <div className="chart-box">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={departmentSavings.length ? departmentSavings : [{ department: 'データなし', savings: 0 }]}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="department" />
+                    <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
+                    <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} />
+                    <Bar dataKey="savings" fill="#0f766e" radius={[10, 10, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="panel chart-panel">
+              <div className="panel-heading"><div><h2>アカウント別SNS指標</h2><p>投稿数とフォロワー増加数を並列表示</p></div></div>
+              <div className="chart-box">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={snsAccountMetrics}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="account" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="posts" stroke="#ea580c" strokeWidth={3} />
+                    <Line type="monotone" dataKey="followerGrowth" stroke="#2563eb" strokeWidth={3} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+            <section className="panel chart-panel">
+              <div className="panel-heading"><div><h2>採用ファネル</h2><p>URLクリック、応募、採用を比較</p></div></div>
+              <div className="chart-box">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'URLクリック', value: recruitmentSummary.urlClicks },
+                        { name: '応募', value: recruitmentSummary.applications },
+                        { name: '採用', value: recruitmentSummary.hires },
+                      ]}
+                      dataKey="value"
+                      nameKey="name"
+                      outerRadius={96}
+                      innerRadius={52}
+                      fill="#1d4ed8"
+                      label
+                    />
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading"><div><h2>アカウント別採用実績</h2><p>選択期間のアカウント単位の成果</p></div></div>
+              <div className="mini-table">
+                <table>
+                  <thead><tr><th>アカウント</th><th>URLクリック</th><th>応募</th><th>採用</th></tr></thead>
+                  <tbody>
+                    {recruitmentByAccount.length === 0 && <tr><td colSpan={4}>データがありません。</td></tr>}
+                    {recruitmentByAccount.map((record) => (
+                      <tr key={record.account}>
+                        <td>{record.account}</td>
+                        <td>{integer.format(record.urlClicks)}</td>
+                        <td>{integer.format(record.applications)}</td>
+                        <td>{integer.format(record.hires)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading"><div><h2>進行中案件</h2><p>ステータスが「作業中」の案件一覧</p></div></div>
+              <div className="ongoing-list">
+                {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません。</p>}
+                {ongoingTasks.map((task) => (
+                  <article className="ongoing-item" key={task.id}>
+                    <div><strong>{task.name}</strong><p>{task.department} / {task.taskType}</p></div>
+                    <div><span>{task.startDate}</span><span>{task.endDate}</span></div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
+        )}
+
+        {activePage === 'tasks' && (
+          <section className="management-layout">
+            <section className="panel form-panel">
+              <div className="panel-heading"><div><h2>{taskEditingId ? '案件を編集' : '案件を追加'}</h2><p>完了案件のみ削減額に反映されます。</p></div></div>
+              <form className="data-form" onSubmit={handleTaskSubmit}>
+                <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
+                <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select>
+                <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+                <input type="date" value={taskForm.startDate} onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })} required />
+                <input type="date" value={taskForm.endDate} onChange={(e) => setTaskForm({ ...taskForm, endDate: e.target.value })} required />
+                <textarea placeholder="内容メモ" value={taskForm.memo} onChange={(e) => setTaskForm({ ...taskForm, memo: e.target.value })} rows={4} />
+                <input type="number" min="0" placeholder="削減額" value={taskForm.savings} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) })} />
+                <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select>
+                <div className="form-actions">
+                  <button type="submit" className="primary">{taskEditingId ? '更新する' : '追加する'}</button>
+                  {taskEditingId && <button type="button" className="secondary" onClick={() => { setTaskEditingId(null); setTaskForm(defaultTaskForm) }}>キャンセル</button>}
+                </div>
+              </form>
+            </section>
+
+            <section className="panel table-panel">
+              <div className="panel-heading"><div><h2>案件一覧</h2><p>編集・削除可能な案件テーブル</p></div></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>案件名</th><th>依頼部署</th><th>種類</th><th>開始日</th><th>終了日</th><th>内容メモ</th><th>削減額</th><th>ステータス</th><th>操作</th></tr></thead>
+                  <tbody>
+                    {tasks.map((task) => (
+                      <tr key={task.id}>
+                        <td>{task.name}</td><td>{task.department}</td><td>{task.taskType}</td><td>{task.startDate}</td><td>{task.endDate}</td><td>{task.memo}</td><td>{currency.format(task.savings)}</td>
+                        <td><span className={`status status-${task.status}`}>{task.status}</span></td>
+                        <td><div className="row-actions"><button className="secondary" onClick={() => { setTaskEditingId(task.id); setTaskForm({ ...task }); setActivePage('tasks') }}>編集</button><button className="danger" onClick={() => setTasks((current) => current.filter((item) => item.id !== task.id))}>削除</button></div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        )}
+
+        {activePage === 'sns' && (
+          <section className="management-layout">
+            <section className="panel form-panel">
+              <div className="panel-heading"><div><h2>{snsEditingId ? '投稿を編集' : '投稿を追加'}</h2><p>TikTok / Instagram の投稿指標を管理</p></div></div>
+              <form className="data-form" onSubmit={handleSnsSubmit}>
+                <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
+                <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((platform) => <option key={platform} value={platform}>{platform}</option>)}</select>
+                <input placeholder="アカウント" value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })} required />
+                <input type="number" min="0" placeholder="再生数" value={snsForm.views} onChange={(e) => setSnsForm({ ...snsForm, views: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="いいね数" value={snsForm.likes} onChange={(e) => setSnsForm({ ...snsForm, likes: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="コメント数" value={snsForm.comments} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="保存数" value={snsForm.saves} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="シェア数" value={snsForm.shares} onChange={(e) => setSnsForm({ ...snsForm, shares: Number(e.target.value) })} />
+                <input type="number" placeholder="フォロワー増加数" value={snsForm.followerGrowth} onChange={(e) => setSnsForm({ ...snsForm, followerGrowth: Number(e.target.value) })} />
+                <div className="form-actions">
+                  <button type="submit" className="primary">{snsEditingId ? '更新する' : '追加する'}</button>
+                  {snsEditingId && <button type="button" className="secondary" onClick={() => { setSnsEditingId(null); setSnsForm(defaultSnsForm) }}>キャンセル</button>}
+                </div>
+              </form>
+            </section>
+            <section className="panel table-panel">
+              <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>投稿実績テーブル</p></div></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>再生数</th><th>いいね</th><th>コメント</th><th>保存</th><th>シェア</th><th>フォロワー増加</th><th>操作</th></tr></thead>
+                  <tbody>
+                    {posts.map((post) => (
+                      <tr key={post.id}>
+                        <td>{post.postDate}</td><td>{post.platform}</td><td>{post.account}</td><td>{integer.format(post.views)}</td><td>{integer.format(post.likes)}</td><td>{integer.format(post.comments)}</td><td>{integer.format(post.saves)}</td><td>{integer.format(post.shares)}</td><td>{integer.format(post.followerGrowth)}</td>
+                        <td><div className="row-actions"><button className="secondary" onClick={() => { setSnsEditingId(post.id); setSnsForm({ ...post }) }}>編集</button><button className="danger" onClick={() => setPosts((current) => current.filter((item) => item.id !== post.id))}>削除</button></div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        )}
+
+        {activePage === 'recruitment' && (
+          <section className="management-layout">
+            <section className="panel form-panel">
+              <div className="panel-heading"><div><h2>{recruitmentEditingId ? '採用データを編集' : '採用データを追加'}</h2><p>SNS流入から応募・採用までを記録</p></div></div>
+              <form className="data-form" onSubmit={handleRecruitmentSubmit}>
+                <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required />
+                <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((platform) => <option key={platform} value={platform}>{platform}</option>)}</select>
+                <input placeholder="アカウント" value={recruitmentForm.account} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, account: e.target.value })} required />
+                <input type="number" min="0" placeholder="URLクリック数" value={recruitmentForm.urlClicks} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, urlClicks: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="応募数" value={recruitmentForm.applications} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, applications: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="採用数" value={recruitmentForm.hires} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, hires: Number(e.target.value) })} />
+                <div className="form-actions">
+                  <button type="submit" className="primary">{recruitmentEditingId ? '更新する' : '追加する'}</button>
+                  {recruitmentEditingId && <button type="button" className="secondary" onClick={() => { setRecruitmentEditingId(null); setRecruitmentForm(defaultRecruitmentForm) }}>キャンセル</button>}
+                </div>
+              </form>
+            </section>
+
+            <section className="panel table-panel">
+              <div className="panel-heading"><div><h2>採用実績一覧</h2><p>URLクリック、応募、採用の推移</p></div></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>日付</th><th>SNS媒体</th><th>アカウント</th><th>URLクリック</th><th>応募数</th><th>採用数</th><th>操作</th></tr></thead>
+                  <tbody>
+                    {recruitment.map((record) => (
+                      <tr key={record.id}>
+                        <td>{record.date}</td><td>{record.platform}</td><td>{record.account}</td><td>{integer.format(record.urlClicks)}</td><td>{integer.format(record.applications)}</td><td>{integer.format(record.hires)}</td>
+                        <td><div className="row-actions"><button className="secondary" onClick={() => { setRecruitmentEditingId(record.id); setRecruitmentForm({ ...record }) }}>編集</button><button className="danger" onClick={() => setRecruitment((current) => current.filter((item) => item.id !== record.id))}>削除</button></div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        )}
+      </main>
+    </div>
+  )
+}
+
+function loadStorage<T>(key: string, fallback: T): T {
+  const stored = localStorage.getItem(`shanairai_${key}`)
+  return stored ? (JSON.parse(stored) as T) : fallback
+}
+
+function getYear(dateString: string) {
+  if (!dateString) return 0
+  return new Date(dateString).getFullYear()
+}
+
+function matchesYearMonth(dateString: string, year: number, month: string) {
+  if (!dateString) return false
+  const date = new Date(dateString)
+  const matchesYear = date.getFullYear() === year
+  const matchesMonth = month === 'all' || date.getMonth() + 1 === Number(month)
+  return matchesYear && matchesMonth
+}
+
+function overlapsPeriod(startDate: string, endDate: string, year: number, month: string) {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const periodStart = new Date(year, month === 'all' ? 0 : Number(month) - 1, 1)
+  const periodEnd = month === 'all' ? new Date(year, 11, 31, 23, 59, 59, 999) : new Date(year, Number(month), 0, 23, 59, 59, 999)
+  return start <= periodEnd && end >= periodStart
+}
+
+function normalizeTask(task: Omit<Task, 'id'>): Omit<Task, 'id'> {
+  return { ...task, savings: Number(task.savings) || 0 }
+}
+
+function normalizePost(post: Omit<SnsPost, 'id'>): Omit<SnsPost, 'id'> {
+  return {
+    ...post,
+    views: Number(post.views) || 0,
+    likes: Number(post.likes) || 0,
+    comments: Number(post.comments) || 0,
+    saves: Number(post.saves) || 0,
+    shares: Number(post.shares) || 0,
+    followerGrowth: Number(post.followerGrowth) || 0,
+  }
+}
+
+function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<RecruitmentRecord, 'id'> {
+  return {
+    ...record,
+    urlClicks: Number(record.urlClicks) || 0,
+    applications: Number(record.applications) || 0,
+    hires: Number(record.hires) || 0,
+  }
+}
+
+export default App
+
