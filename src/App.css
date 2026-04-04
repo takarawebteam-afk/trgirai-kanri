@@ -430,6 +430,105 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   gap: 16px;
 }
 
+.calendar-login-prompt {
+  padding: 24px;
+  text-align: center;
+  color: var(--gray-500);
+  background: var(--blue-50);
+  border-radius: var(--radius-md);
+  margin-top: 8px;
+}
+
+.today-tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.member-task-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.member-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--blue-50);
+  padding-left: 12px;
+}
+
+.member-name { font-weight: 700; color: var(--gray-900); }
+.member-event-count { font-size: 12px; color: var(--gray-500); }
+
+.no-events {
+  padding: 12px 14px;
+  color: var(--gray-400);
+  font-size: 13px;
+  margin: 0;
+}
+
+.event-checklist {
+  list-style: none;
+  padding: 8px 0;
+  margin: 0;
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+
+.event-item:hover { background: var(--blue-50); }
+
+.event-item.checked .event-title {
+  text-decoration: line-through;
+  color: var(--gray-400);
+}
+
+.event-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--gray-300);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--blue-700);
+  background: white;
+}
+
+.event-item.checked .event-checkbox {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+  color: white;
+}
+
+.event-time {
+  color: var(--gray-500);
+  font-size: 11px;
+  flex-shrink: 0;
+  width: 36px;
+}
+
+.event-title {
+  color: var(--gray-800);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .calendar-wrap {
   border-radius: var(--radius-md);
   overflow: hidden;

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useGoogleLogin } from '@react-oauth/google'
 import {
   Bar,
   BarChart,
@@ -57,6 +58,16 @@ type RecruitmentRecord = {
   hires: number
 }
 
+const TEAM_MEMBERS = [
+  { name: '新居', calendarId: 'trg.yshini@gmail.com', color: '#374151' },
+  { name: '泉', calendarId: 'izumiyurina2322@gmail.com', color: '#7c3aed' },
+  { name: '坂本', calendarId: 'takarabaito3@gmail.com', color: '#1d4ed8' },
+  { name: '吉田', calendarId: 'takarabaito1@gmail.com', color: '#db2777' },
+  { name: 'WEBチーム', calendarId: 'takara.webteam@gmail.com', color: '#0ea5e9' },
+]
+
+type CalendarEvent = { id: string; summary: string; start: string }
+
 const departments: Department[] = ['人事', '総務', '経理', '管理', '売買', '仲介', '本社']
 const taskTypes: TaskType[] = ['単発', '継続']
 const taskStatuses: TaskStatus[] = ['依頼', '作業中', '完了']
@@ -114,6 +125,48 @@ function App() {
   const [taskForm, setTaskForm] = useState(defaultTaskForm)
   const [snsForm, setSnsForm] = useState(defaultSnsForm)
   const [recruitmentForm, setRecruitmentForm] = useState(defaultRecruitmentForm)
+
+  // Googleカレンダー
+  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
+  const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
+  const [calendarLoading, setCalendarLoading] = useState(false)
+
+  const fetchMemberEvents = useCallback(async (token: string) => {
+    setCalendarLoading(true)
+    const now = new Date()
+    const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString()
+    const results: Record<string, CalendarEvent[]> = {}
+    await Promise.all(
+      TEAM_MEMBERS.map(async (member) => {
+        try {
+          const res = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          const data = await res.json()
+          results[member.calendarId] = (data.items || []).map((e: any) => ({
+            id: e.id,
+            summary: e.summary || '（タイトルなし）',
+            start: e.start?.dateTime || e.start?.date || '',
+          }))
+        } catch {
+          results[member.calendarId] = []
+        }
+      })
+    )
+    setMemberEvents(results)
+    setCalendarLoading(false)
+  }, [])
+
+  const googleLogin = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    onSuccess: (res) => {
+      setAccessToken(res.access_token)
+      fetchMemberEvents(res.access_token)
+    },
+  })
 
   // インライン編集
   const [taskInlineId, setTaskInlineId] = useState<string | null>(null)
@@ -700,11 +753,80 @@ function App() {
         {/* ===== メンバー ===== */}
         {activePage === 'members' && (
           <section className="members-page">
+
+            {/* 今日のタスク */}
+            <div className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>今日のタスク</h2>
+                  <p>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
+                </div>
+                {!accessToken && (
+                  <button className="primary" onClick={() => googleLogin()}>
+                    Googleでログイン
+                  </button>
+                )}
+                {accessToken && (
+                  <button className="secondary" onClick={() => fetchMemberEvents(accessToken)}>
+                    再読み込み
+                  </button>
+                )}
+              </div>
+
+              {!accessToken && (
+                <div className="calendar-login-prompt">
+                  <p>「Googleでログイン」ボタンを押すと、各メンバーの今日の予定をカレンダーから取得します。</p>
+                </div>
+              )}
+
+              {calendarLoading && (
+                <div className="calendar-login-prompt"><p>読み込み中...</p></div>
+              )}
+
+              {accessToken && !calendarLoading && (
+                <div className="today-tasks-grid">
+                  {TEAM_MEMBERS.map((member) => {
+                    const events = memberEvents[member.calendarId] || []
+                    return (
+                      <div key={member.calendarId} className="member-task-card">
+                        <div className="member-task-header" style={{ borderLeft: `4px solid ${member.color}` }}>
+                          <span className="member-name">{member.name}</span>
+                          <span className="member-event-count">{events.length}件</span>
+                        </div>
+                        {events.length === 0 ? (
+                          <p className="no-events">予定なし</p>
+                        ) : (
+                          <ul className="event-checklist">
+                            {events.map((ev) => {
+                              const key = `${member.calendarId}:${ev.id}`
+                              const checked = !!checkedEvents[key]
+                              const time = ev.start.includes('T')
+                                ? new Date(ev.start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                                : '終日'
+                              return (
+                                <li key={ev.id} className={`event-item ${checked ? 'checked' : ''}`}
+                                  onClick={() => setCheckedEvents(prev => ({ ...prev, [key]: !prev[key] }))}>
+                                  <span className="event-checkbox">{checked ? '✓' : ''}</span>
+                                  <span className="event-time">{time}</span>
+                                  <span className="event-title">{ev.summary}</span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* カレンダー埋め込み */}
             <div className="panel">
               <div className="panel-heading">
                 <div>
                   <h2>チームカレンダー</h2>
-                  <p>Googleカレンダーと連携しています。カレンダー上で直接イベントの追加・編集が可能です。</p>
+                  <p>カレンダー上で直接イベントの追加・編集が可能です。</p>
                 </div>
               </div>
               <div className="calendar-wrap">
