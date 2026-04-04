@@ -20,7 +20,9 @@ import { supabase } from './supabase'
 type Department = '人事' | '総務' | '経理' | '管理' | '売買' | '仲介' | '本社'
 type TaskType = '単発' | '継続'
 type TaskStatus = '依頼' | '作業中' | '完了'
-type SnsPlatform = 'TikTok' | 'Instagram'
+type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
+type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
+type JobType = '正社員' | 'パート'
 type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'members'
 
 type Task = {
@@ -40,22 +42,17 @@ type SnsPost = {
   postDate: string
   platform: SnsPlatform
   account: string
-  views: number
-  likes: number
   comments: number
   saves: number
-  shares: number
-  followerGrowth: number
 }
 
 type RecruitmentRecord = {
   id: string
   date: string
   platform: SnsPlatform
-  account: string
-  urlClicks: number
-  applications: number
-  hires: number
+  department: RecruitDepartment
+  jobType: JobType
+  costReduction: number
 }
 
 const TEAM_MEMBERS = [
@@ -71,7 +68,10 @@ type CalendarEvent = { id: string; summary: string; start: string }
 const departments: Department[] = ['人事', '総務', '経理', '管理', '売買', '仲介', '本社']
 const taskTypes: TaskType[] = ['単発', '継続']
 const taskStatuses: TaskStatus[] = ['依頼', '作業中', '完了']
-const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram']
+const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
+const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
+const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
+const jobTypes: JobType[] = ['正社員', 'パート']
 
 const defaultTaskForm: Omit<Task, 'id'> = {
   name: '',
@@ -87,22 +87,17 @@ const defaultTaskForm: Omit<Task, 'id'> = {
 const defaultSnsForm: Omit<SnsPost, 'id'> = {
   postDate: '',
   platform: 'TikTok',
-  account: '',
-  views: 0,
-  likes: 0,
+  account: 'Karilun',
   comments: 0,
   saves: 0,
-  shares: 0,
-  followerGrowth: 0,
 }
 
 const defaultRecruitmentForm: Omit<RecruitmentRecord, 'id'> = {
   date: '',
   platform: 'TikTok',
-  account: '',
-  urlClicks: 0,
-  applications: 0,
-  hires: 0,
+  department: '仲介',
+  jobType: '正社員',
+  costReduction: 0,
 }
 
 const currency = new Intl.NumberFormat('ja-JP', {
@@ -200,41 +195,38 @@ function App() {
     .filter((entry) => entry.savings > 0)
 
   const snsAccountMetrics = Object.values(
-    filteredPosts.reduce<Record<string, { account: string; posts: number; followerGrowth: number }>>(
+    filteredPosts.reduce<Record<string, { account: string; posts: number }>>(
       (acc, post) => {
         if (!acc[post.account]) {
-          acc[post.account] = { account: post.account, posts: 0, followerGrowth: 0 }
+          acc[post.account] = { account: post.account, posts: 0 }
         }
         acc[post.account].posts += 1
-        acc[post.account].followerGrowth += post.followerGrowth
         return acc
       },
       {},
     ),
   )
 
-  const recruitmentByAccount = Object.values(
-    filteredRecruitment.reduce<
-      Record<string, { account: string; urlClicks: number; applications: number; hires: number }>
-    >((acc, record) => {
-      if (!acc[record.account]) {
-        acc[record.account] = { account: record.account, urlClicks: 0, applications: 0, hires: 0 }
-      }
-      acc[record.account].urlClicks += record.urlClicks
-      acc[record.account].applications += record.applications
-      acc[record.account].hires += record.hires
-      return acc
-    }, {}),
+  const recruitmentByDepartment = Object.values(
+    filteredRecruitment.reduce<Record<string, { department: string; count: number; costReduction: number }>>(
+      (acc, record) => {
+        if (!acc[record.department]) {
+          acc[record.department] = { department: record.department, count: 0, costReduction: 0 }
+        }
+        acc[record.department].count += 1
+        acc[record.department].costReduction += record.costReduction
+        return acc
+      },
+      {},
+    ),
   )
 
   const recruitmentSummary = filteredRecruitment.reduce(
     (acc, record) => {
-      acc.urlClicks += record.urlClicks
-      acc.applications += record.applications
-      acc.hires += record.hires
+      acc.costReduction += record.costReduction
       return acc
     },
-    { urlClicks: 0, applications: 0, hires: 0 },
+    { costReduction: 0 },
   )
 
   // 新規追加ハンドラ
@@ -266,11 +258,11 @@ function App() {
   }
   const startSnsInline = (post: SnsPost) => {
     setSnsInlineId(post.id)
-    setSnsInlineForm({ postDate: post.postDate, platform: post.platform, account: post.account, views: post.views, likes: post.likes, comments: post.comments, saves: post.saves, shares: post.shares, followerGrowth: post.followerGrowth })
+    setSnsInlineForm({ postDate: post.postDate, platform: post.platform, account: post.account, comments: post.comments, saves: post.saves })
   }
   const startRecruitmentInline = (record: RecruitmentRecord) => {
     setRecruitmentInlineId(record.id)
-    setRecruitmentInlineForm({ date: record.date, platform: record.platform, account: record.account, urlClicks: record.urlClicks, applications: record.applications, hires: record.hires })
+    setRecruitmentInlineForm({ date: record.date, platform: record.platform, department: record.department, jobType: record.jobType, costReduction: record.costReduction })
   }
 
   // インライン編集 保存
@@ -341,8 +333,8 @@ function App() {
           <section className="dashboard-grid">
             <div className="stat-card strong"><span>総削減額</span><strong>{currency.format(totalSavings)}</strong><small>完了案件のみを集計</small></div>
             <div className="stat-card"><span>SNS投稿数</span><strong>{integer.format(filteredPosts.length)}件</strong><small>選択期間の合計投稿</small></div>
-            <div className="stat-card"><span>応募数</span><strong>{integer.format(recruitmentSummary.applications)}件</strong><small>採用導線経由</small></div>
-            <div className="stat-card"><span>採用数</span><strong>{integer.format(recruitmentSummary.hires)}名</strong><small>選択期間の合計</small></div>
+            <div className="stat-card"><span>採用記録数</span><strong>{integer.format(filteredRecruitment.length)}件</strong><small>選択期間の合計</small></div>
+            <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>選択期間の合計</small></div>
 
             <section className="panel chart-panel">
               <div className="panel-heading"><div><h2>部署別削減額</h2><p>完了案件の削減額を部署別に表示</p></div></div>
@@ -360,58 +352,46 @@ function App() {
             </section>
 
             <section className="panel chart-panel">
-              <div className="panel-heading"><div><h2>アカウント別SNS指標</h2><p>投稿数とフォロワー増加数を並列表示</p></div></div>
+              <div className="panel-heading"><div><h2>アカウント別SNS投稿数</h2><p>選択期間のアカウント別投稿数</p></div></div>
               <div className="chart-box">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={snsAccountMetrics}>
+                  <BarChart data={snsAccountMetrics}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="account" />
                     <YAxis />
                     <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="posts" stroke="#ea580c" strokeWidth={3} />
-                    <Line type="monotone" dataKey="followerGrowth" stroke="#2563eb" strokeWidth={3} />
-                  </LineChart>
+                    <Bar dataKey="posts" name="投稿数" fill="#ea580c" radius={[6,6,0,0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </section>
             <section className="panel chart-panel">
-              <div className="panel-heading"><div><h2>採用ファネル</h2><p>URLクリック、応募、採用を比較</p></div></div>
+              <div className="panel-heading"><div><h2>部署別採用削減額</h2><p>選択期間の部署別コスト削減</p></div></div>
               <div className="chart-box">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'URLクリック', value: recruitmentSummary.urlClicks },
-                        { name: '応募', value: recruitmentSummary.applications },
-                        { name: '採用', value: recruitmentSummary.hires },
-                      ]}
-                      dataKey="value"
-                      nameKey="name"
-                      outerRadius={96}
-                      innerRadius={52}
-                      fill="#1d4ed8"
-                      label
-                    />
-                    <Tooltip />
-                  </PieChart>
+                  <BarChart data={recruitmentByDepartment}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="department" />
+                    <YAxis tickFormatter={(v) => `${Math.round(Number(v)/10000)}万`} />
+                    <Tooltip formatter={(v) => currency.format(Number(v ?? 0))} />
+                    <Bar dataKey="costReduction" name="削減額" fill="#1d4ed8" radius={[6,6,0,0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </section>
 
             <section className="panel">
-              <div className="panel-heading"><div><h2>アカウント別採用実績</h2><p>選択期間のアカウント単位の成果</p></div></div>
+              <div className="panel-heading"><div><h2>部署別採用実績</h2><p>選択期間の部署単位の件数・削減額</p></div></div>
               <div className="mini-table">
                 <table>
-                  <thead><tr><th>アカウント</th><th>URLクリック</th><th>応募</th><th>採用</th></tr></thead>
+                  <thead><tr><th>部署</th><th>件数</th><th>削減額</th></tr></thead>
                   <tbody>
-                    {recruitmentByAccount.length === 0 && <tr><td colSpan={4}>データがありません。</td></tr>}
-                    {recruitmentByAccount.map((record) => (
-                      <tr key={record.account}>
-                        <td>{record.account}</td>
-                        <td>{integer.format(record.urlClicks)}</td>
-                        <td>{integer.format(record.applications)}</td>
-                        <td>{integer.format(record.hires)}</td>
+                    {recruitmentByDepartment.length === 0 && <tr><td colSpan={3}>データがありません。</td></tr>}
+                    {recruitmentByDepartment.map((r) => (
+                      <tr key={r.department}>
+                        <td>{r.department}</td>
+                        <td>{integer.format(r.count)}件</td>
+                        <td>{currency.format(r.costReduction)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -551,17 +531,13 @@ function App() {
         {activePage === 'sns' && (
           <section className="management-layout">
             <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>投稿を追加</h2><p>TikTok / Instagram の投稿指標を管理</p></div></div>
+              <div className="panel-heading"><div><h2>投稿を追加</h2><p>TikTok / Instagram / Threads / YouTube の投稿指標を管理</p></div></div>
               <form className="data-form" onSubmit={handleSnsSubmit}>
                 <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
                 <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                <input placeholder="アカウント" value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })} required />
-                <input type="number" min="0" placeholder="再生数（例: 5000）" value={snsForm.views || ''} onChange={(e) => setSnsForm({ ...snsForm, views: Number(e.target.value) || 0 })} />
-                <input type="number" min="0" placeholder="いいね数（例: 300）" value={snsForm.likes || ''} onChange={(e) => setSnsForm({ ...snsForm, likes: Number(e.target.value) || 0 })} />
+                <select value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })}>{snsAccounts.map((a) => <option key={a} value={a}>{a}</option>)}</select>
                 <input type="number" min="0" placeholder="コメント数（例: 50）" value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
                 <input type="number" min="0" placeholder="保存数（例: 100）" value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
-                <input type="number" min="0" placeholder="シェア数（例: 30）" value={snsForm.shares || ''} onChange={(e) => setSnsForm({ ...snsForm, shares: Number(e.target.value) || 0 })} />
-                <input type="number" placeholder="フォロワー増加数（例: 20）" value={snsForm.followerGrowth || ''} onChange={(e) => setSnsForm({ ...snsForm, followerGrowth: Number(e.target.value) || 0 })} />
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                 </div>
@@ -572,7 +548,7 @@ function App() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>再生数</th><th>いいね</th><th>コメント</th><th>保存</th><th>シェア</th><th>フォロワー増加</th><th>操作</th></tr>
+                    <tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>コメント</th><th>保存</th><th>操作</th></tr>
                   </thead>
                   <tbody>
                     {posts.map((post) => {
@@ -591,25 +567,13 @@ function App() {
                             {isEditing ? <select className="inline-select" value={f.platform} onChange={(e) => setSnsInlineForm({ ...f, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p}>{p}</option>)}</select> : post.platform}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.account} onChange={(e) => setSnsInlineForm({ ...f, account: e.target.value })} /> : post.account}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.views} onChange={(e) => setSnsInlineForm({ ...f, views: Number(e.target.value) })} /> : integer.format(post.views)}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.likes} onChange={(e) => setSnsInlineForm({ ...f, likes: Number(e.target.value) })} /> : integer.format(post.likes)}
+                            {isEditing ? <select className="inline-select" value={f.account} onChange={(e) => setSnsInlineForm({ ...f, account: e.target.value })}>{snsAccounts.map((a) => <option key={a}>{a}</option>)}</select> : post.account}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing ? <input className="inline-input" type="number" value={f.comments} onChange={(e) => setSnsInlineForm({ ...f, comments: Number(e.target.value) })} /> : integer.format(post.comments)}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing ? <input className="inline-input" type="number" value={f.saves} onChange={(e) => setSnsInlineForm({ ...f, saves: Number(e.target.value) })} /> : integer.format(post.saves)}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.shares} onChange={(e) => setSnsInlineForm({ ...f, shares: Number(e.target.value) })} /> : integer.format(post.shares)}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.followerGrowth} onChange={(e) => setSnsInlineForm({ ...f, followerGrowth: Number(e.target.value) })} /> : integer.format(post.followerGrowth)}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="row-actions">
@@ -637,14 +601,13 @@ function App() {
         {activePage === 'recruitment' && (
           <section className="management-layout">
             <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>採用データを追加</h2><p>SNS流入から応募・採用までを記録</p></div></div>
+              <div className="panel-heading"><div><h2>採用データを追加</h2><p>採用媒体・部署・職種・削減額を記録</p></div></div>
               <form className="data-form" onSubmit={handleRecruitmentSubmit}>
-                <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required />
+                <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required placeholder="応募日" />
                 <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                <input placeholder="アカウント" value={recruitmentForm.account} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, account: e.target.value })} required />
-                <input type="number" min="0" placeholder="URLクリック数（例: 200）" value={recruitmentForm.urlClicks || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, urlClicks: Number(e.target.value) || 0 })} />
-                <input type="number" min="0" placeholder="応募数（例: 10）" value={recruitmentForm.applications || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, applications: Number(e.target.value) || 0 })} />
-                <input type="number" min="0" placeholder="採用数（例: 2）" value={recruitmentForm.hires || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, hires: Number(e.target.value) || 0 })} />
+                <select value={recruitmentForm.department} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, department: e.target.value as RecruitDepartment })}>{recruitDepartments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
+                <select value={recruitmentForm.jobType} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, jobType: e.target.value as JobType })}>{jobTypes.map((j) => <option key={j} value={j}>{j}</option>)}</select>
+                <input type="number" min="0" placeholder="削減額（例: 50000）" value={recruitmentForm.costReduction || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, costReduction: Number(e.target.value) || 0 })} />
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                 </div>
@@ -656,7 +619,7 @@ function App() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>日付</th><th>SNS媒体</th><th>アカウント</th><th>URLクリック</th><th>応募数</th><th>採用数</th><th>操作</th></tr>
+                    <tr><th>応募日</th><th>媒体</th><th>部署</th><th>職種</th><th>削減額</th><th>操作</th></tr>
                   </thead>
                   <tbody>
                     {recruitment.map((record) => {
@@ -675,16 +638,13 @@ function App() {
                             {isEditing ? <select className="inline-select" value={f.platform} onChange={(e) => setRecruitmentInlineForm({ ...f, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p}>{p}</option>)}</select> : record.platform}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.account} onChange={(e) => setRecruitmentInlineForm({ ...f, account: e.target.value })} /> : record.account}
+                            {isEditing ? <select className="inline-select" value={f.department} onChange={(e) => setRecruitmentInlineForm({ ...f, department: e.target.value as RecruitDepartment })}>{recruitDepartments.map((d) => <option key={d}>{d}</option>)}</select> : record.department}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.urlClicks} onChange={(e) => setRecruitmentInlineForm({ ...f, urlClicks: Number(e.target.value) })} /> : integer.format(record.urlClicks)}
+                            {isEditing ? <select className="inline-select" value={f.jobType} onChange={(e) => setRecruitmentInlineForm({ ...f, jobType: e.target.value as JobType })}>{jobTypes.map((j) => <option key={j}>{j}</option>)}</select> : record.jobType}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.applications} onChange={(e) => setRecruitmentInlineForm({ ...f, applications: Number(e.target.value) })} /> : integer.format(record.applications)}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.hires} onChange={(e) => setRecruitmentInlineForm({ ...f, hires: Number(e.target.value) })} /> : integer.format(record.hires)}
+                            {isEditing ? <input className="inline-input" type="number" value={f.costReduction} onChange={(e) => setRecruitmentInlineForm({ ...f, costReduction: Number(e.target.value) })} /> : currency.format(record.costReduction)}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="row-actions">
@@ -954,21 +914,15 @@ function normalizeTask(task: Omit<Task, 'id'>): Omit<Task, 'id'> {
 function normalizePost(post: Omit<SnsPost, 'id'>): Omit<SnsPost, 'id'> {
   return {
     ...post,
-    views: Number(post.views) || 0,
-    likes: Number(post.likes) || 0,
     comments: Number(post.comments) || 0,
     saves: Number(post.saves) || 0,
-    shares: Number(post.shares) || 0,
-    followerGrowth: Number(post.followerGrowth) || 0,
   }
 }
 
 function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<RecruitmentRecord, 'id'> {
   return {
     ...record,
-    urlClicks: Number(record.urlClicks) || 0,
-    applications: Number(record.applications) || 0,
-    hires: Number(record.hires) || 0,
+    costReduction: Number(record.costReduction) || 0,
   }
 }
 
