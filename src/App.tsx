@@ -709,7 +709,7 @@ function App() {
               </div>
               <div className="calendar-wrap">
                 <iframe
-                  src="https://calendar.google.com/calendar/embed?src=takara.webteam%40gmail.com&ctz=Asia%2FTokyo"
+                  src="https://calendar.google.com/calendar/embed?src=takara.webteam%40gmail.com&src=trg.yshini%40gmail.com&src=izumiyurina2322%40gmail.com&src=takarabaito3%40gmail.com&src=takarabaito1%40gmail.com&ctz=Asia%2FTokyo"
                   style={{ border: 0 }}
                   width="100%"
                   height="640"
