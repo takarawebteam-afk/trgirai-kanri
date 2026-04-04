@@ -424,6 +424,24 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   outline-offset: 2px;
 }
 
+/* ===== メンバーページ ===== */
+.members-page {
+  display: grid;
+  gap: 16px;
+}
+
+.calendar-wrap {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+}
+
+.calendar-wrap iframe {
+  display: block;
+  width: 100%;
+}
+
 /* ===== レスポンシブ ===== */
 @media (max-width: 1120px) {
   .stat-card { grid-column: span 6; }

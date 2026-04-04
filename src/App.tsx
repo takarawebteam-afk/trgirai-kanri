@@ -20,7 +20,7 @@ type Department = '人事' | '総務' | '経理' | '管理' | '売買' | '仲介
 type TaskType = '単発' | '継続'
 type TaskStatus = '依頼' | '作業中' | '完了'
 type SnsPlatform = 'TikTok' | 'Instagram'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'members'
 
 type Task = {
   id: string
@@ -322,6 +322,7 @@ function App() {
         <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => setActivePage('tasks')}>案件管理</button>
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => setActivePage('sns')}>SNS投稿管理</button>
         <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => setActivePage('recruitment')}>採用管理</button>
+        <button className={activePage === 'members' ? 'active' : ''} onClick={() => setActivePage('members')}>メンバー</button>
       </nav>
 
       <main className="page-content">
@@ -693,6 +694,31 @@ function App() {
                 </table>
               </div>
             </section>
+          </section>
+        )}
+
+        {/* ===== メンバー ===== */}
+        {activePage === 'members' && (
+          <section className="members-page">
+            <div className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>チームカレンダー</h2>
+                  <p>Googleカレンダーと連携しています。カレンダー上で直接イベントの追加・編集が可能です。</p>
+                </div>
+              </div>
+              <div className="calendar-wrap">
+                <iframe
+                  src="https://calendar.google.com/calendar/embed?src=takara.webteam%40gmail.com&ctz=Asia%2FTokyo"
+                  style={{ border: 0 }}
+                  width="100%"
+                  height="640"
+                  frameBorder={0}
+                  scrolling="no"
+                  title="チームカレンダー"
+                />
+              </div>
+            </div>
           </section>
         )}
       </main>
