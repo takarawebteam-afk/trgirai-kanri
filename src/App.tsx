@@ -12,9 +12,10 @@ import {
 import './App.css'
 import { supabase } from './supabase'
 
-type Department = '人事' | '総務' | '経理' | '管理' | '売買' | '仲介' | '本社'
+type Department = '人事' | '総務' | '仲介' | '管理' | '売買' | '本社' | 'その他'
 type TaskType = '単発' | '継続'
-type TaskStatus = '依頼' | '作業中' | '完了'
+type TaskStatus = '未実施' | '作業中' | '完了'
+type Priority = '高' | '中' | '低'
 type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
@@ -22,14 +23,17 @@ type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'members'
 
 type Task = {
   id: string
-  name: string
+  taskDate: string
+  assignees: string[]
   department: Department
+  name: string
+  content: string
   taskType: TaskType
-  startDate: string
-  endDate: string
-  memo: string
-  savings: number
+  dueDate: string
+  priority: Priority
   status: TaskStatus
+  savings: number
+  note: string
 }
 
 type SnsPost = {
@@ -60,23 +64,28 @@ const TEAM_MEMBERS = [
 
 type CalendarEvent = { id: string; summary: string; start: string }
 
-const departments: Department[] = ['人事', '総務', '経理', '管理', '売買', '仲介', '本社']
+const departments: Department[] = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他']
 const taskTypes: TaskType[] = ['単発', '継続']
-const taskStatuses: TaskStatus[] = ['依頼', '作業中', '完了']
+const taskStatuses: TaskStatus[] = ['未実施', '作業中', '完了']
+const priorityOptions: Priority[] = ['高', '中', '低']
+const assigneeOptions = ['泉', '坂本', '吉田', '新居']
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
 const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
 const jobTypes: JobType[] = ['正社員', 'パート']
 
 const defaultTaskForm: Omit<Task, 'id'> = {
-  name: '',
+  taskDate: '',
+  assignees: [],
   department: '人事',
+  name: '',
+  content: '',
   taskType: '単発',
-  startDate: '',
-  endDate: '',
-  memo: '',
+  dueDate: '',
+  priority: '中',
+  status: '未実施',
   savings: 0,
-  status: '依頼',
+  note: '',
 }
 
 const defaultSnsForm: Omit<SnsPost, 'id'> = {
@@ -157,7 +166,7 @@ function App() {
   const yearOptions = Array.from(
     new Set([
       new Date().getFullYear(),
-      ...tasks.flatMap((task) => [getYear(task.startDate), getYear(task.endDate)]),
+      ...tasks.flatMap((task) => [getYear(task.taskDate), getYear(task.dueDate)]),
       ...posts.map((post) => getYear(post.postDate)),
       ...recruitment.map((record) => getYear(record.date)),
     ]),
@@ -166,7 +175,7 @@ function App() {
     .sort((a, b) => b - a)
 
   const filteredCompletedTasks = tasks.filter(
-    (task) => task.status === '完了' && matchesYearMonth(task.endDate, selectedYear, selectedMonth),
+    (task) => task.status === '完了' && matchesYearMonth(task.dueDate, selectedYear, selectedMonth),
   )
   const filteredPosts = posts.filter((post) =>
     matchesYearMonth(post.postDate, selectedYear, selectedMonth),
@@ -176,7 +185,7 @@ function App() {
   )
   const ongoingTasks = tasks.filter((task) => {
     if (task.status !== '作業中') return false
-    return overlapsPeriod(task.startDate, task.endDate, selectedYear, selectedMonth)
+    return matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
   })
 
   const totalSavings = filteredCompletedTasks.reduce((sum, task) => sum + task.savings, 0)
@@ -249,7 +258,19 @@ function App() {
   // インライン編集 開始
   const startTaskInline = (task: Task) => {
     setTaskInlineId(task.id)
-    setTaskInlineForm({ name: task.name, department: task.department, taskType: task.taskType, startDate: task.startDate, endDate: task.endDate, memo: task.memo, savings: task.savings, status: task.status })
+    setTaskInlineForm({
+      taskDate: task.taskDate || '',
+      assignees: task.assignees || [],
+      department: task.department,
+      name: task.name,
+      content: task.content || '',
+      taskType: task.taskType,
+      dueDate: task.dueDate || '',
+      priority: task.priority || '中',
+      status: task.status,
+      savings: task.savings,
+      note: task.note || '',
+    })
   }
   const startSnsInline = (post: SnsPost) => {
     setSnsInlineId(post.id)
@@ -400,8 +421,8 @@ function App() {
                 {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません。</p>}
                 {ongoingTasks.map((task) => (
                   <article className="ongoing-item" key={task.id}>
-                    <div><strong>{task.name}</strong><p>{task.department} / {task.taskType}</p></div>
-                    <div><span>{task.startDate}</span><span>{task.endDate}</span></div>
+                    <div><strong>{task.name}</strong><p>{task.department} / {task.taskType} / 優先度: {task.priority}</p></div>
+                    <div><span>担当: {(task.assignees || []).join('・')}</span><span>期日: {task.dueDate}</span></div>
                   </article>
                 ))}
               </div>
@@ -415,14 +436,49 @@ function App() {
             <section className="panel form-panel">
               <div className="panel-heading"><div><h2>案件を追加</h2><p>完了案件のみ削減額に反映されます。</p></div></div>
               <form className="data-form" onSubmit={handleTaskSubmit}>
-                <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
-                <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
-                <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-                <input type="date" value={taskForm.startDate} onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })} required />
-                <input type="date" value={taskForm.endDate} onChange={(e) => setTaskForm({ ...taskForm, endDate: e.target.value })} required />
-                <textarea placeholder="内容メモ（例: LP制作の依頼、修正3回まで含む）" value={taskForm.memo} onChange={(e) => setTaskForm({ ...taskForm, memo: e.target.value })} rows={4} />
-                <input type="number" min="0" placeholder="削減額（例: 50000）" value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
-                <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+                <label className="form-label">案件日
+                  <input type="date" value={taskForm.taskDate} onChange={(e) => setTaskForm({ ...taskForm, taskDate: e.target.value })} required />
+                </label>
+                <label className="form-label">担当者（複数選択可）
+                  <div className="checkbox-group">
+                    {assigneeOptions.map((a) => (
+                      <label key={a} className="checkbox-item">
+                        <input type="checkbox" checked={taskForm.assignees.includes(a)} onChange={(e) => {
+                          const next = e.target.checked ? [...taskForm.assignees, a] : taskForm.assignees.filter((x) => x !== a)
+                          setTaskForm({ ...taskForm, assignees: next })
+                        }} />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                </label>
+                <label className="form-label">依頼部署
+                  <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
+                </label>
+                <label className="form-label">案件名
+                  <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
+                </label>
+                <label className="form-label">案件内容
+                  <textarea placeholder="案件の詳細内容" value={taskForm.content} onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })} rows={3} />
+                </label>
+                <label className="form-label">種類
+                  <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                </label>
+                <label className="form-label">期日
+                  <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
+                </label>
+                <label className="form-label">優先度
+                  <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                </label>
+                <label className="form-label">現状
+                  <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+                </label>
+                <label className="form-label">削減額
+                  <input type="number" min="0" placeholder="削減額（例: 50000）" value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
+                </label>
+                <label className="form-label">補足
+                  <textarea placeholder="補足・メモ" value={taskForm.note} onChange={(e) => setTaskForm({ ...taskForm, note: e.target.value })} rows={2} />
+                </label>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                 </div>
@@ -431,12 +487,15 @@ function App() {
 
             <section className="panel table-panel">
               <div className="panel-heading">
-                <div><h2>案件一覧</h2><p>行をクリックして直接編集・ステータスはその場で変更可能</p></div>
+                <div><h2>案件一覧</h2><p>行をクリックして直接編集・現状はその場で変更可能</p></div>
               </div>
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>案件名</th><th>依頼部署</th><th>種類</th><th>開始日</th><th>終了日</th><th>内容メモ</th><th>削減額</th><th>ステータス</th><th>操作</th></tr>
+                    <tr>
+                      <th>案件日</th><th>担当者</th><th>依頼部署</th><th>案件名</th><th>案件内容</th>
+                      <th>種類</th><th>期日</th><th>優先度</th><th>現状</th><th>削減額</th><th>補足</th><th>操作</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {tasks.map((task) => {
@@ -449,41 +508,40 @@ function App() {
                           onClick={() => { if (!isEditing) startTaskInline(task) }}
                         >
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.name} onChange={(e) => setTaskInlineForm({ ...f, name: e.target.value })} />
-                              : task.name}
+                            {isEditing ? <input className="inline-input" type="date" value={f.taskDate} onChange={(e) => setTaskInlineForm({ ...f, taskDate: e.target.value })} /> : task.taskDate}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
-                              ? <select className="inline-select" value={f.department} onChange={(e) => setTaskInlineForm({ ...f, department: e.target.value as Department })}>{departments.map((d) => <option key={d}>{d}</option>)}</select>
-                              : task.department}
+                              ? <div className="inline-checkbox-group">{assigneeOptions.map((a) => (
+                                  <label key={a} className="inline-checkbox-item">
+                                    <input type="checkbox" checked={f.assignees.includes(a)} onChange={(e) => {
+                                      const next = e.target.checked ? [...f.assignees, a] : f.assignees.filter((x) => x !== a)
+                                      setTaskInlineForm({ ...f, assignees: next })
+                                    }} />{a}
+                                  </label>
+                                ))}</div>
+                              : (task.assignees || []).join('・')}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <select className="inline-select" value={f.department} onChange={(e) => setTaskInlineForm({ ...f, department: e.target.value as Department })}>{departments.map((d) => <option key={d}>{d}</option>)}</select> : task.department}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.name} onChange={(e) => setTaskInlineForm({ ...f, name: e.target.value })} /> : task.name}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.content} onChange={(e) => setTaskInlineForm({ ...f, content: e.target.value })} /> : <span className="cell-truncate" title={task.content}>{task.content}</span>}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <select className="inline-select" value={f.taskType} onChange={(e) => setTaskInlineForm({ ...f, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t}>{t}</option>)}</select> : task.taskType}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="date" value={f.dueDate} onChange={(e) => setTaskInlineForm({ ...f, dueDate: e.target.value })} /> : task.dueDate}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
-                              ? <select className="inline-select" value={f.taskType} onChange={(e) => setTaskInlineForm({ ...f, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t}>{t}</option>)}</select>
-                              : task.taskType}
+                              ? <select className="inline-select" value={f.priority} onChange={(e) => setTaskInlineForm({ ...f, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p}>{p}</option>)}</select>
+                              : <span className={`priority priority-${task.priority}`}>{task.priority}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" type="date" value={f.startDate} onChange={(e) => setTaskInlineForm({ ...f, startDate: e.target.value })} />
-                              : task.startDate}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" type="date" value={f.endDate} onChange={(e) => setTaskInlineForm({ ...f, endDate: e.target.value })} />
-                              : task.endDate}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.memo} onChange={(e) => setTaskInlineForm({ ...f, memo: e.target.value })} />
-                              : task.memo}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" type="number" value={f.savings} onChange={(e) => setTaskInlineForm({ ...f, savings: Number(e.target.value) })} />
-                              : currency.format(task.savings)}
-                          </td>
-                          {/* ステータス：常にセレクトとして表示 */}
                           <td onClick={(e) => e.stopPropagation()}>
                             <select
                               className={`status-select status-${isEditing ? f.status : task.status}`}
@@ -499,6 +557,12 @@ function App() {
                             >
                               {taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.savings} onChange={(e) => setTaskInlineForm({ ...f, savings: Number(e.target.value) })} /> : currency.format(task.savings)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.note} onChange={(e) => setTaskInlineForm({ ...f, note: e.target.value })} /> : <span className="cell-truncate" title={task.note}>{task.note}</span>}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="row-actions">
@@ -894,13 +958,6 @@ function matchesYearMonth(dateString: string, year: number, month: string) {
   return matchesYear && matchesMonth
 }
 
-function overlapsPeriod(startDate: string, endDate: string, year: number, month: string) {
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  const periodStart = new Date(year, month === 'all' ? 0 : Number(month) - 1, 1)
-  const periodEnd = month === 'all' ? new Date(year, 11, 31, 23, 59, 59, 999) : new Date(year, Number(month), 0, 23, 59, 59, 999)
-  return start <= periodEnd && end >= periodStart
-}
 
 function normalizeTask(task: Omit<Task, 'id'>): Omit<Task, 'id'> {
   return { ...task, savings: Number(task.savings) || 0 }
