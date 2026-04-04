@@ -817,7 +817,7 @@ function TodayTasksPanel() {
 
       {accessToken && !calendarLoading && (
         <div className="today-tasks-grid">
-          {TEAM_MEMBERS.map((member) => {
+          {TEAM_MEMBERS.filter(m => m.name !== 'WEBチーム').map((member) => {
             const events = memberEvents[member.calendarId] || []
             return (
               <div key={member.calendarId} className="member-task-card">
@@ -840,7 +840,7 @@ function TodayTasksPanel() {
                           onClick={() => setCheckedEvents(prev => ({ ...prev, [key]: !prev[key] }))}>
                           <span className="event-checkbox">{checked ? '✓' : ''}</span>
                           <span className="event-time">{time}</span>
-                          <span className="event-title">{ev.summary}</span>
+                          <span className="event-title" title={ev.summary}>{ev.summary}</span>
                         </li>
                       )
                     })}
