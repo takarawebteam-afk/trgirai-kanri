@@ -303,9 +303,9 @@ function App() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Internal Operations Dashboard</p>
-          <h1>社内依頼案件管理ツール</h1>
-          <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理アプリです。</p>
+          <p className="eyebrow">WEB Strategic Team</p>
+          <h1>WEB戦略チーム管理表</h1>
+          <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
         </div>
         <div className="header-panel">
           <label>

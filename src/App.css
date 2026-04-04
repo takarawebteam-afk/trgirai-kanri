@@ -52,7 +52,7 @@
 
 .eyebrow {
   margin-bottom: 8px;
-  color: var(--blue-400);
+  color: rgba(255,255,255,0.85);
   font-size: 0.78rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -66,7 +66,7 @@ h1 {
 
 .intro {
   max-width: 56ch;
-  color: rgba(255,255,255,0.72);
+  color: rgba(255,255,255,0.90);
   font-size: 0.9rem;
 }
 
