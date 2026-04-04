@@ -433,8 +433,8 @@ function App() {
                 <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
                 <input type="date" value={taskForm.startDate} onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })} required />
                 <input type="date" value={taskForm.endDate} onChange={(e) => setTaskForm({ ...taskForm, endDate: e.target.value })} required />
-                <textarea placeholder="内容メモ" value={taskForm.memo} onChange={(e) => setTaskForm({ ...taskForm, memo: e.target.value })} rows={4} />
-                <input type="number" min="0" placeholder="削減額" value={taskForm.savings} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) })} />
+                <textarea placeholder="内容メモ（例: LP制作の依頼、修正3回まで含む）" value={taskForm.memo} onChange={(e) => setTaskForm({ ...taskForm, memo: e.target.value })} rows={4} />
+                <input type="number" min="0" placeholder="削減額（例: 50000）" value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
                 <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
@@ -544,12 +544,12 @@ function App() {
                 <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
                 <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 <input placeholder="アカウント" value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })} required />
-                <input type="number" min="0" placeholder="再生数" value={snsForm.views} onChange={(e) => setSnsForm({ ...snsForm, views: Number(e.target.value) })} />
-                <input type="number" min="0" placeholder="いいね数" value={snsForm.likes} onChange={(e) => setSnsForm({ ...snsForm, likes: Number(e.target.value) })} />
-                <input type="number" min="0" placeholder="コメント数" value={snsForm.comments} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) })} />
-                <input type="number" min="0" placeholder="保存数" value={snsForm.saves} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) })} />
-                <input type="number" min="0" placeholder="シェア数" value={snsForm.shares} onChange={(e) => setSnsForm({ ...snsForm, shares: Number(e.target.value) })} />
-                <input type="number" placeholder="フォロワー増加数" value={snsForm.followerGrowth} onChange={(e) => setSnsForm({ ...snsForm, followerGrowth: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="再生数（例: 5000）" value={snsForm.views || ''} onChange={(e) => setSnsForm({ ...snsForm, views: Number(e.target.value) || 0 })} />
+                <input type="number" min="0" placeholder="いいね数（例: 300）" value={snsForm.likes || ''} onChange={(e) => setSnsForm({ ...snsForm, likes: Number(e.target.value) || 0 })} />
+                <input type="number" min="0" placeholder="コメント数（例: 50）" value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
+                <input type="number" min="0" placeholder="保存数（例: 100）" value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
+                <input type="number" min="0" placeholder="シェア数（例: 30）" value={snsForm.shares || ''} onChange={(e) => setSnsForm({ ...snsForm, shares: Number(e.target.value) || 0 })} />
+                <input type="number" placeholder="フォロワー増加数（例: 20）" value={snsForm.followerGrowth || ''} onChange={(e) => setSnsForm({ ...snsForm, followerGrowth: Number(e.target.value) || 0 })} />
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                 </div>
@@ -630,9 +630,9 @@ function App() {
                 <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required />
                 <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 <input placeholder="アカウント" value={recruitmentForm.account} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, account: e.target.value })} required />
-                <input type="number" min="0" placeholder="URLクリック数" value={recruitmentForm.urlClicks} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, urlClicks: Number(e.target.value) })} />
-                <input type="number" min="0" placeholder="応募数" value={recruitmentForm.applications} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, applications: Number(e.target.value) })} />
-                <input type="number" min="0" placeholder="採用数" value={recruitmentForm.hires} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, hires: Number(e.target.value) })} />
+                <input type="number" min="0" placeholder="URLクリック数（例: 200）" value={recruitmentForm.urlClicks || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, urlClicks: Number(e.target.value) || 0 })} />
+                <input type="number" min="0" placeholder="応募数（例: 10）" value={recruitmentForm.applications || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, applications: Number(e.target.value) || 0 })} />
+                <input type="number" min="0" placeholder="採用数（例: 2）" value={recruitmentForm.hires || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, hires: Number(e.target.value) || 0 })} />
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                 </div>
