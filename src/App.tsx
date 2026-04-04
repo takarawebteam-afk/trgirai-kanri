@@ -786,37 +786,23 @@ function TodayTasksPanel() {
   const [calendarLoading, setCalendarLoading] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
 
-  // Supabaseから今日のチェック状態を読み込む
+  // Supabaseから今日のチェック状態を読み込む（3秒ごとにポーリングして他PCと同期）
   useEffect(() => {
-    supabase
-      .from('checked_events')
-      .select('event_key')
-      .eq('event_date', today)
-      .then(({ data }) => {
-        if (data) {
-          const map: Record<string, boolean> = {}
-          data.forEach((row: { event_key: string }) => { map[row.event_key] = true })
-          setCheckedEvents(map)
-        }
-      })
+    const fetchChecked = async () => {
+      const { data } = await supabase
+        .from('checked_events')
+        .select('event_key')
+        .eq('event_date', today)
+      if (data) {
+        const map: Record<string, boolean> = {}
+        data.forEach((row: { event_key: string }) => { map[row.event_key] = true })
+        setCheckedEvents(map)
+      }
+    }
+    fetchChecked()
+    const interval = setInterval(fetchChecked, 3000)
+    return () => clearInterval(interval)
   }, [today])
-
-  // Supabase Realtimeでリアルタイム同期
-  useEffect(() => {
-    const channel = supabase
-      .channel('checked_events_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checked_events' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const key = (payload.new as { event_key: string }).event_key
-          setCheckedEvents(prev => ({ ...prev, [key]: true }))
-        } else if (payload.eventType === 'DELETE') {
-          const key = (payload.old as { event_key: string }).event_key
-          setCheckedEvents(prev => { const n = { ...prev }; delete n[key]; return n })
-        }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [])
 
   const toggleCheck = async (key: string, checked: boolean) => {
     // 楽観的UI更新
