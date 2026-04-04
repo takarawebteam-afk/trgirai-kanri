@@ -750,8 +750,37 @@ function App() {
   )
 }
 
+const STORAGE_KEY = 'gcal_token'
+const STORAGE_EXPIRY_KEY = 'gcal_token_expiry'
+
+function getSavedToken(): string | null {
+  try {
+    const expiry = localStorage.getItem(STORAGE_EXPIRY_KEY)
+    if (!expiry || Date.now() > Number(expiry)) {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(STORAGE_EXPIRY_KEY)
+      return null
+    }
+    return localStorage.getItem(STORAGE_KEY)
+  } catch { return null }
+}
+
+function saveToken(token: string, expiresIn: number) {
+  try {
+    localStorage.setItem(STORAGE_KEY, token)
+    localStorage.setItem(STORAGE_EXPIRY_KEY, String(Date.now() + expiresIn * 1000))
+  } catch { /* ignore */ }
+}
+
+function clearToken() {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(STORAGE_EXPIRY_KEY)
+  } catch { /* ignore */ }
+}
+
 function TodayTasksPanel() {
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(getSavedToken)
   const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
   const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
   const [calendarLoading, setCalendarLoading] = useState(false)
@@ -769,6 +798,12 @@ function TodayTasksPanel() {
             `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
             { headers: { Authorization: `Bearer ${token}` } }
           )
+          if (res.status === 401) {
+            clearToken()
+            setAccessToken(null)
+            setCalendarLoading(false)
+            return
+          }
           const data = await res.json()
           results[member.calendarId] = (data.items || []).map((e: any) => ({
             id: e.id,
@@ -784,9 +819,16 @@ function TodayTasksPanel() {
     setCalendarLoading(false)
   }, [])
 
+  // 保存済みトークンがあれば起動時に自動取得
+  useEffect(() => {
+    const saved = getSavedToken()
+    if (saved) fetchMemberEvents(saved)
+  }, [fetchMemberEvents])
+
   const googleLogin = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
     onSuccess: (res) => {
+      saveToken(res.access_token, res.expires_in ?? 3600)
       setAccessToken(res.access_token)
       fetchMemberEvents(res.access_token)
     },
