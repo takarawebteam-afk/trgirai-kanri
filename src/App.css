@@ -235,6 +235,59 @@ textarea {
 .status-完了 { background: #dcfce7; color: #15803d; }
 .empty-text { color: #64748b; }
 
+/* インライン編集 */
+.row-hoverable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.row-hoverable:hover {
+  background: #f0fdf4;
+}
+.row-editing {
+  background: #fffbeb;
+  box-shadow: inset 0 0 0 2px #fcd34d;
+}
+.row-editing td {
+  vertical-align: middle;
+}
+
+.inline-input,
+.inline-select {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #94a3b8;
+  font: inherit;
+  font-size: 0.88rem;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 60px;
+}
+.inline-input:focus,
+.inline-select:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
+}
+
+/* ステータスをセレクトとして表示（バッジ風） */
+.status-select {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  appearance: auto;
+  width: auto;
+}
+.status-select:focus {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
 @media (max-width: 1120px) {
   .stat-card { grid-column: span 6; }
   .chart-panel:nth-of-type(1),

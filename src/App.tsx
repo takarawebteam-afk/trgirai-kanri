@@ -109,12 +109,19 @@ function App() {
   const [recruitment, setRecruitment] = useState<RecruitmentRecord[]>([])
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
+
+  // 新規追加フォーム
   const [taskForm, setTaskForm] = useState(defaultTaskForm)
-  const [taskEditingId, setTaskEditingId] = useState<string | null>(null)
   const [snsForm, setSnsForm] = useState(defaultSnsForm)
-  const [snsEditingId, setSnsEditingId] = useState<string | null>(null)
   const [recruitmentForm, setRecruitmentForm] = useState(defaultRecruitmentForm)
-  const [recruitmentEditingId, setRecruitmentEditingId] = useState<string | null>(null)
+
+  // インライン編集
+  const [taskInlineId, setTaskInlineId] = useState<string | null>(null)
+  const [taskInlineForm, setTaskInlineForm] = useState<Omit<Task, 'id'>>(defaultTaskForm)
+  const [snsInlineId, setSnsInlineId] = useState<string | null>(null)
+  const [snsInlineForm, setSnsInlineForm] = useState<Omit<SnsPost, 'id'>>(defaultSnsForm)
+  const [recruitmentInlineId, setRecruitmentInlineId] = useState<string | null>(null)
+  const [recruitmentInlineForm, setRecruitmentInlineForm] = useState<Omit<RecruitmentRecord, 'id'>>(defaultRecruitmentForm)
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -219,43 +226,66 @@ function App() {
     { urlClicks: 0, applications: 0, hires: 0 },
   )
 
+  // 新規追加ハンドラ
   const handleTaskSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const payload = normalizeTask(taskForm)
-    if (taskEditingId) {
-      await supabase.from('tasks').update(payload).eq('id', taskEditingId)
-      setTaskEditingId(null)
-    } else {
-      await supabase.from('tasks').insert({ ...payload, id: crypto.randomUUID() })
-    }
+    await supabase.from('tasks').insert({ ...normalizeTask(taskForm), id: crypto.randomUUID() })
     setTaskForm(defaultTaskForm)
     fetchTasks()
   }
 
   const handleSnsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const payload = normalizePost(snsForm)
-    if (snsEditingId) {
-      await supabase.from('sns_posts').update(payload).eq('id', snsEditingId)
-      setSnsEditingId(null)
-    } else {
-      await supabase.from('sns_posts').insert({ ...payload, id: crypto.randomUUID() })
-    }
+    await supabase.from('sns_posts').insert({ ...normalizePost(snsForm), id: crypto.randomUUID() })
     setSnsForm(defaultSnsForm)
     fetchPosts()
   }
 
   const handleRecruitmentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const payload = normalizeRecruitment(recruitmentForm)
-    if (recruitmentEditingId) {
-      await supabase.from('recruitment').update(payload).eq('id', recruitmentEditingId)
-      setRecruitmentEditingId(null)
-    } else {
-      await supabase.from('recruitment').insert({ ...payload, id: crypto.randomUUID() })
-    }
+    await supabase.from('recruitment').insert({ ...normalizeRecruitment(recruitmentForm), id: crypto.randomUUID() })
     setRecruitmentForm(defaultRecruitmentForm)
     fetchRecruitment()
+  }
+
+  // インライン編集 開始
+  const startTaskInline = (task: Task) => {
+    setTaskInlineId(task.id)
+    setTaskInlineForm({ name: task.name, department: task.department, taskType: task.taskType, startDate: task.startDate, endDate: task.endDate, memo: task.memo, savings: task.savings, status: task.status })
+  }
+  const startSnsInline = (post: SnsPost) => {
+    setSnsInlineId(post.id)
+    setSnsInlineForm({ postDate: post.postDate, platform: post.platform, account: post.account, views: post.views, likes: post.likes, comments: post.comments, saves: post.saves, shares: post.shares, followerGrowth: post.followerGrowth })
+  }
+  const startRecruitmentInline = (record: RecruitmentRecord) => {
+    setRecruitmentInlineId(record.id)
+    setRecruitmentInlineForm({ date: record.date, platform: record.platform, account: record.account, urlClicks: record.urlClicks, applications: record.applications, hires: record.hires })
+  }
+
+  // インライン編集 保存
+  const saveTaskInline = async () => {
+    if (!taskInlineId) return
+    await supabase.from('tasks').update(normalizeTask(taskInlineForm)).eq('id', taskInlineId)
+    setTaskInlineId(null)
+    fetchTasks()
+  }
+  const saveSnsInline = async () => {
+    if (!snsInlineId) return
+    await supabase.from('sns_posts').update(normalizePost(snsInlineForm)).eq('id', snsInlineId)
+    setSnsInlineId(null)
+    fetchPosts()
+  }
+  const saveRecruitmentInline = async () => {
+    if (!recruitmentInlineId) return
+    await supabase.from('recruitment').update(normalizeRecruitment(recruitmentInlineForm)).eq('id', recruitmentInlineId)
+    setRecruitmentInlineId(null)
+    fetchRecruitment()
+  }
+
+  // ステータスのみ即時更新（行を編集モードにしなくてもOK）
+  const updateTaskStatus = async (id: string, status: TaskStatus) => {
+    await supabase.from('tasks').update({ status }).eq('id', id)
+    fetchTasks()
   }
 
   return (
@@ -392,39 +422,112 @@ function App() {
           </section>
         )}
 
+        {/* ===== 案件管理 ===== */}
         {activePage === 'tasks' && (
           <section className="management-layout">
             <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>{taskEditingId ? '案件を編集' : '案件を追加'}</h2><p>完了案件のみ削減額に反映されます。</p></div></div>
+              <div className="panel-heading"><div><h2>案件を追加</h2><p>完了案件のみ削減額に反映されます。</p></div></div>
               <form className="data-form" onSubmit={handleTaskSubmit}>
                 <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
-                <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((department) => <option key={department} value={department}>{department}</option>)}</select>
-                <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+                <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
+                <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
                 <input type="date" value={taskForm.startDate} onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })} required />
                 <input type="date" value={taskForm.endDate} onChange={(e) => setTaskForm({ ...taskForm, endDate: e.target.value })} required />
                 <textarea placeholder="内容メモ" value={taskForm.memo} onChange={(e) => setTaskForm({ ...taskForm, memo: e.target.value })} rows={4} />
                 <input type="number" min="0" placeholder="削減額" value={taskForm.savings} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) })} />
-                <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select>
+                <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
                 <div className="form-actions">
-                  <button type="submit" className="primary">{taskEditingId ? '更新する' : '追加する'}</button>
-                  {taskEditingId && <button type="button" className="secondary" onClick={() => { setTaskEditingId(null); setTaskForm(defaultTaskForm) }}>キャンセル</button>}
+                  <button type="submit" className="primary">追加する</button>
                 </div>
               </form>
             </section>
 
             <section className="panel table-panel">
-              <div className="panel-heading"><div><h2>案件一覧</h2><p>編集・削除可能な案件テーブル</p></div></div>
+              <div className="panel-heading">
+                <div><h2>案件一覧</h2><p>行をクリックして直接編集・ステータスはその場で変更可能</p></div>
+              </div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>案件名</th><th>依頼部署</th><th>種類</th><th>開始日</th><th>終了日</th><th>内容メモ</th><th>削減額</th><th>ステータス</th><th>操作</th></tr></thead>
+                  <thead>
+                    <tr><th>案件名</th><th>依頼部署</th><th>種類</th><th>開始日</th><th>終了日</th><th>内容メモ</th><th>削減額</th><th>ステータス</th><th>操作</th></tr>
+                  </thead>
                   <tbody>
-                    {tasks.map((task) => (
-                      <tr key={task.id}>
-                        <td>{task.name}</td><td>{task.department}</td><td>{task.taskType}</td><td>{task.startDate}</td><td>{task.endDate}</td><td>{task.memo}</td><td>{currency.format(task.savings)}</td>
-                        <td><span className={`status status-${task.status}`}>{task.status}</span></td>
-                        <td><div className="row-actions"><button className="secondary" onClick={() => { setTaskEditingId(task.id); setTaskForm({ ...task }); setActivePage('tasks') }}>編集</button><button className="danger" onClick={async () => { await supabase.from('tasks').delete().eq('id', task.id); fetchTasks() }}>削除</button></div></td>
-                      </tr>
-                    ))}
+                    {tasks.map((task) => {
+                      const isEditing = taskInlineId === task.id
+                      const f = taskInlineForm
+                      return (
+                        <tr
+                          key={task.id}
+                          className={isEditing ? 'row-editing' : 'row-hoverable'}
+                          onClick={() => { if (!isEditing) startTaskInline(task) }}
+                        >
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.name} onChange={(e) => setTaskInlineForm({ ...f, name: e.target.value })} />
+                              : task.name}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.department} onChange={(e) => setTaskInlineForm({ ...f, department: e.target.value as Department })}>{departments.map((d) => <option key={d}>{d}</option>)}</select>
+                              : task.department}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.taskType} onChange={(e) => setTaskInlineForm({ ...f, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t}>{t}</option>)}</select>
+                              : task.taskType}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" type="date" value={f.startDate} onChange={(e) => setTaskInlineForm({ ...f, startDate: e.target.value })} />
+                              : task.startDate}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" type="date" value={f.endDate} onChange={(e) => setTaskInlineForm({ ...f, endDate: e.target.value })} />
+                              : task.endDate}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.memo} onChange={(e) => setTaskInlineForm({ ...f, memo: e.target.value })} />
+                              : task.memo}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" type="number" value={f.savings} onChange={(e) => setTaskInlineForm({ ...f, savings: Number(e.target.value) })} />
+                              : currency.format(task.savings)}
+                          </td>
+                          {/* ステータス：常にセレクトとして表示 */}
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <select
+                              className={`status-select status-${isEditing ? f.status : task.status}`}
+                              value={isEditing ? f.status : task.status}
+                              onChange={async (e) => {
+                                const newStatus = e.target.value as TaskStatus
+                                if (isEditing) {
+                                  setTaskInlineForm({ ...f, status: newStatus })
+                                } else {
+                                  await updateTaskStatus(task.id, newStatus)
+                                }
+                              }}
+                            >
+                              {taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  <button className="primary" onClick={saveTaskInline}>保存</button>
+                                  <button className="secondary" onClick={() => setTaskInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <button className="danger" onClick={async () => { await supabase.from('tasks').delete().eq('id', task.id); fetchTasks() }}>削除</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -432,13 +535,14 @@ function App() {
           </section>
         )}
 
+        {/* ===== SNS投稿管理 ===== */}
         {activePage === 'sns' && (
           <section className="management-layout">
             <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>{snsEditingId ? '投稿を編集' : '投稿を追加'}</h2><p>TikTok / Instagram の投稿指標を管理</p></div></div>
+              <div className="panel-heading"><div><h2>投稿を追加</h2><p>TikTok / Instagram の投稿指標を管理</p></div></div>
               <form className="data-form" onSubmit={handleSnsSubmit}>
                 <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
-                <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((platform) => <option key={platform} value={platform}>{platform}</option>)}</select>
+                <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 <input placeholder="アカウント" value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })} required />
                 <input type="number" min="0" placeholder="再生数" value={snsForm.views} onChange={(e) => setSnsForm({ ...snsForm, views: Number(e.target.value) })} />
                 <input type="number" min="0" placeholder="いいね数" value={snsForm.likes} onChange={(e) => setSnsForm({ ...snsForm, likes: Number(e.target.value) })} />
@@ -447,23 +551,69 @@ function App() {
                 <input type="number" min="0" placeholder="シェア数" value={snsForm.shares} onChange={(e) => setSnsForm({ ...snsForm, shares: Number(e.target.value) })} />
                 <input type="number" placeholder="フォロワー増加数" value={snsForm.followerGrowth} onChange={(e) => setSnsForm({ ...snsForm, followerGrowth: Number(e.target.value) })} />
                 <div className="form-actions">
-                  <button type="submit" className="primary">{snsEditingId ? '更新する' : '追加する'}</button>
-                  {snsEditingId && <button type="button" className="secondary" onClick={() => { setSnsEditingId(null); setSnsForm(defaultSnsForm) }}>キャンセル</button>}
+                  <button type="submit" className="primary">追加する</button>
                 </div>
               </form>
             </section>
             <section className="panel table-panel">
-              <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>投稿実績テーブル</p></div></div>
+              <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>再生数</th><th>いいね</th><th>コメント</th><th>保存</th><th>シェア</th><th>フォロワー増加</th><th>操作</th></tr></thead>
+                  <thead>
+                    <tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>再生数</th><th>いいね</th><th>コメント</th><th>保存</th><th>シェア</th><th>フォロワー増加</th><th>操作</th></tr>
+                  </thead>
                   <tbody>
-                    {posts.map((post) => (
-                      <tr key={post.id}>
-                        <td>{post.postDate}</td><td>{post.platform}</td><td>{post.account}</td><td>{integer.format(post.views)}</td><td>{integer.format(post.likes)}</td><td>{integer.format(post.comments)}</td><td>{integer.format(post.saves)}</td><td>{integer.format(post.shares)}</td><td>{integer.format(post.followerGrowth)}</td>
-                        <td><div className="row-actions"><button className="secondary" onClick={() => { setSnsEditingId(post.id); setSnsForm({ ...post }) }}>編集</button><button className="danger" onClick={async () => { await supabase.from('sns_posts').delete().eq('id', post.id); fetchPosts() }}>削除</button></div></td>
-                      </tr>
-                    ))}
+                    {posts.map((post) => {
+                      const isEditing = snsInlineId === post.id
+                      const f = snsInlineForm
+                      return (
+                        <tr
+                          key={post.id}
+                          className={isEditing ? 'row-editing' : 'row-hoverable'}
+                          onClick={() => { if (!isEditing) startSnsInline(post) }}
+                        >
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="date" value={f.postDate} onChange={(e) => setSnsInlineForm({ ...f, postDate: e.target.value })} /> : post.postDate}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <select className="inline-select" value={f.platform} onChange={(e) => setSnsInlineForm({ ...f, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p}>{p}</option>)}</select> : post.platform}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.account} onChange={(e) => setSnsInlineForm({ ...f, account: e.target.value })} /> : post.account}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.views} onChange={(e) => setSnsInlineForm({ ...f, views: Number(e.target.value) })} /> : integer.format(post.views)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.likes} onChange={(e) => setSnsInlineForm({ ...f, likes: Number(e.target.value) })} /> : integer.format(post.likes)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.comments} onChange={(e) => setSnsInlineForm({ ...f, comments: Number(e.target.value) })} /> : integer.format(post.comments)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.saves} onChange={(e) => setSnsInlineForm({ ...f, saves: Number(e.target.value) })} /> : integer.format(post.saves)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.shares} onChange={(e) => setSnsInlineForm({ ...f, shares: Number(e.target.value) })} /> : integer.format(post.shares)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.followerGrowth} onChange={(e) => setSnsInlineForm({ ...f, followerGrowth: Number(e.target.value) })} /> : integer.format(post.followerGrowth)}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  <button className="primary" onClick={saveSnsInline}>保存</button>
+                                  <button className="secondary" onClick={() => setSnsInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <button className="danger" onClick={async () => { await supabase.from('sns_posts').delete().eq('id', post.id); fetchPosts() }}>削除</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -471,36 +621,74 @@ function App() {
           </section>
         )}
 
+        {/* ===== 採用管理 ===== */}
         {activePage === 'recruitment' && (
           <section className="management-layout">
             <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>{recruitmentEditingId ? '採用データを編集' : '採用データを追加'}</h2><p>SNS流入から応募・採用までを記録</p></div></div>
+              <div className="panel-heading"><div><h2>採用データを追加</h2><p>SNS流入から応募・採用までを記録</p></div></div>
               <form className="data-form" onSubmit={handleRecruitmentSubmit}>
                 <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required />
-                <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((platform) => <option key={platform} value={platform}>{platform}</option>)}</select>
+                <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 <input placeholder="アカウント" value={recruitmentForm.account} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, account: e.target.value })} required />
                 <input type="number" min="0" placeholder="URLクリック数" value={recruitmentForm.urlClicks} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, urlClicks: Number(e.target.value) })} />
                 <input type="number" min="0" placeholder="応募数" value={recruitmentForm.applications} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, applications: Number(e.target.value) })} />
                 <input type="number" min="0" placeholder="採用数" value={recruitmentForm.hires} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, hires: Number(e.target.value) })} />
                 <div className="form-actions">
-                  <button type="submit" className="primary">{recruitmentEditingId ? '更新する' : '追加する'}</button>
-                  {recruitmentEditingId && <button type="button" className="secondary" onClick={() => { setRecruitmentEditingId(null); setRecruitmentForm(defaultRecruitmentForm) }}>キャンセル</button>}
+                  <button type="submit" className="primary">追加する</button>
                 </div>
               </form>
             </section>
 
             <section className="panel table-panel">
-              <div className="panel-heading"><div><h2>採用実績一覧</h2><p>URLクリック、応募、採用の推移</p></div></div>
+              <div className="panel-heading"><div><h2>採用実績一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>日付</th><th>SNS媒体</th><th>アカウント</th><th>URLクリック</th><th>応募数</th><th>採用数</th><th>操作</th></tr></thead>
+                  <thead>
+                    <tr><th>日付</th><th>SNS媒体</th><th>アカウント</th><th>URLクリック</th><th>応募数</th><th>採用数</th><th>操作</th></tr>
+                  </thead>
                   <tbody>
-                    {recruitment.map((record) => (
-                      <tr key={record.id}>
-                        <td>{record.date}</td><td>{record.platform}</td><td>{record.account}</td><td>{integer.format(record.urlClicks)}</td><td>{integer.format(record.applications)}</td><td>{integer.format(record.hires)}</td>
-                        <td><div className="row-actions"><button className="secondary" onClick={() => { setRecruitmentEditingId(record.id); setRecruitmentForm({ ...record }) }}>編集</button><button className="danger" onClick={async () => { await supabase.from('recruitment').delete().eq('id', record.id); fetchRecruitment() }}>削除</button></div></td>
-                      </tr>
-                    ))}
+                    {recruitment.map((record) => {
+                      const isEditing = recruitmentInlineId === record.id
+                      const f = recruitmentInlineForm
+                      return (
+                        <tr
+                          key={record.id}
+                          className={isEditing ? 'row-editing' : 'row-hoverable'}
+                          onClick={() => { if (!isEditing) startRecruitmentInline(record) }}
+                        >
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setRecruitmentInlineForm({ ...f, date: e.target.value })} /> : record.date}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <select className="inline-select" value={f.platform} onChange={(e) => setRecruitmentInlineForm({ ...f, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p}>{p}</option>)}</select> : record.platform}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.account} onChange={(e) => setRecruitmentInlineForm({ ...f, account: e.target.value })} /> : record.account}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.urlClicks} onChange={(e) => setRecruitmentInlineForm({ ...f, urlClicks: Number(e.target.value) })} /> : integer.format(record.urlClicks)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.applications} onChange={(e) => setRecruitmentInlineForm({ ...f, applications: Number(e.target.value) })} /> : integer.format(record.applications)}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="number" value={f.hires} onChange={(e) => setRecruitmentInlineForm({ ...f, hires: Number(e.target.value) })} /> : integer.format(record.hires)}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  <button className="primary" onClick={saveRecruitmentInline}>保存</button>
+                                  <button className="secondary" onClick={() => setRecruitmentInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <button className="danger" onClick={async () => { await supabase.from('recruitment').delete().eq('id', record.id); fetchRecruitment() }}>削除</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
