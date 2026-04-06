@@ -19,7 +19,29 @@ type Priority = '高' | '中' | '低'
 type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'members'
+type TaskItemStatus = '未着手' | '進行中' | '完了'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members'
+
+type TaskItem = {
+  id: string
+  created_at?: string
+  date: string
+  name: string
+  detail: string
+  priority: Priority
+  due_date: string
+  assignees: string[]
+  creator: string
+  status: TaskItemStatus
+  slack_notified?: boolean
+  completed_notified?: boolean
+}
+
+type Member = {
+  id: string
+  name: string
+  slack_user_id: string
+}
 
 type Task = {
   id: string
@@ -67,8 +89,20 @@ type CalendarEvent = { id: string; summary: string; start: string }
 const departments: Department[] = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他']
 const taskTypes: TaskType[] = ['単発', '継続']
 const taskStatuses: TaskStatus[] = ['未実施', '作業中', '完了']
+const taskItemStatuses: TaskItemStatus[] = ['未着手', '進行中', '完了']
 const priorityOptions: Priority[] = ['高', '中', '低']
 const assigneeOptions = ['泉', '坂本', '吉田', '新居']
+
+const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
+  date: new Date().toISOString().split('T')[0],
+  name: '',
+  detail: '',
+  priority: '中',
+  due_date: '',
+  assignees: [],
+  creator: '',
+  status: '未着手',
+}
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
 const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
@@ -133,6 +167,19 @@ function App() {
   const [recruitmentInlineId, setRecruitmentInlineId] = useState<string | null>(null)
   const [recruitmentInlineForm, setRecruitmentInlineForm] = useState<Omit<RecruitmentRecord, 'id'>>(defaultRecruitmentForm)
 
+  // タスク管理
+  const [taskItems, setTaskItems] = useState<TaskItem[]>([])
+  const [members, setMembers] = useState<Member[]>([])
+  const [taskItemForm, setTaskItemForm] = useState(defaultTaskItemForm)
+  const [taskItemInlineId, setTaskItemInlineId] = useState<string | null>(null)
+  const [taskItemInlineForm, setTaskItemInlineForm] = useState<Omit<TaskItem, 'id' | 'created_at'>>(defaultTaskItemForm)
+  const [taskSearch, setTaskSearch] = useState('')
+  const [taskFilter, setTaskFilter] = useState<'all' | '未着手' | '自分' | '期限切れ'>('all')
+  const [myName, setMyName] = useState(() => localStorage.getItem('myName') || '')
+  const [taskError, setTaskError] = useState<string | null>(null)
+  const [memberEditId, setMemberEditId] = useState<string | null>(null)
+  const [memberEditSlack, setMemberEditSlack] = useState('')
+
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
     if (data) setTasks(data as Task[])
@@ -148,10 +195,22 @@ function App() {
     if (data) setRecruitment(data as RecruitmentRecord[])
   }
 
+  async function fetchTaskItems() {
+    const { data } = await supabase.from('task_items').select('*').order('created_at', { ascending: false })
+    if (data) setTaskItems(data as TaskItem[])
+  }
+
+  async function fetchMembers() {
+    const { data } = await supabase.from('members').select('*').order('created_at')
+    if (data) setMembers(data as Member[])
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchPosts()
     fetchRecruitment()
+    fetchTaskItems()
+    fetchMembers()
 
     const channel = supabase
       .channel('db-changes')
@@ -233,12 +292,85 @@ function App() {
     { costReduction: 0 },
   )
 
+  // タスク管理 計算
+  const today = new Date().toISOString().split('T')[0]
+  const filteredTaskItems = taskItems
+    .filter((item) => {
+      if (taskSearch && !item.name.includes(taskSearch)) return false
+      if (taskFilter === '未着手' && item.status !== '未着手') return false
+      if (taskFilter === '自分' && myName && !item.assignees.includes(myName)) return false
+      if (taskFilter === '期限切れ') {
+        if (!item.due_date || item.status === '完了') return false
+        return item.due_date < today
+      }
+      return true
+    })
+    .sort((a, b) => {
+      const pOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
+      if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date.localeCompare(b.due_date)
+      if (a.due_date && !b.due_date) return -1
+      if (!a.due_date && b.due_date) return 1
+      const pd = pOrder[a.priority] - pOrder[b.priority]
+      if (pd !== 0) return pd
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    })
+
   // 新規追加ハンドラ
   const handleTaskSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await supabase.from('tasks').insert({ ...normalizeTask(taskForm), id: crypto.randomUUID() })
+    setTaskError(null)
+    const { error } = await supabase.from('tasks').insert({ ...normalizeTask(taskForm), id: crypto.randomUUID() })
+    if (error) { setTaskError(`追加失敗: ${error.message}`); return }
     setTaskForm(defaultTaskForm)
     fetchTasks()
+  }
+
+  const handleTaskItemSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const id = crypto.randomUUID()
+    const { error } = await supabase.from('task_items').insert({ ...taskItemForm, id })
+    if (error) { setTaskError(`追加失敗: ${error.message}`); return }
+    // Slack通知
+    try {
+      await fetch('/api/notify-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'new', taskName: taskItemForm.name, dueDate: taskItemForm.due_date, priority: taskItemForm.priority, assignees: taskItemForm.assignees, members }),
+      })
+    } catch { /* Slack未設定時は無視 */ }
+    setTaskItemForm({ ...defaultTaskItemForm, date: new Date().toISOString().split('T')[0] })
+    fetchTaskItems()
+  }
+
+  const updateTaskItemStatus = async (id: string, status: TaskItemStatus) => {
+    await supabase.from('task_items').update({ status }).eq('id', id)
+    if (status === '完了') {
+      const item = taskItems.find((t) => t.id === id)
+      if (item && !item.completed_notified) {
+        await supabase.from('task_items').update({ completed_notified: true }).eq('id', id)
+        try {
+          await fetch('/api/notify-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'completed', taskName: item.name, assignees: item.assignees, members }),
+          })
+        } catch { /* ignore */ }
+      }
+    }
+    fetchTaskItems()
+  }
+
+  const saveTaskItemInline = async () => {
+    if (!taskItemInlineId) return
+    await supabase.from('task_items').update(taskItemInlineForm).eq('id', taskItemInlineId)
+    setTaskItemInlineId(null)
+    fetchTaskItems()
+  }
+
+  const saveMemberSlack = async (id: string) => {
+    await supabase.from('members').update({ slack_user_id: memberEditSlack }).eq('id', id)
+    setMemberEditId(null)
+    fetchMembers()
   }
 
   const handleSnsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -339,6 +471,7 @@ function App() {
       <nav className="tab-nav" aria-label="主要メニュー">
         <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => setActivePage('dashboard')}>ダッシュボード</button>
         <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => setActivePage('tasks')}>案件管理</button>
+        <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => setActivePage('taskmanagement')}>タスク管理</button>
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => setActivePage('sns')}>SNS投稿管理</button>
         <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => setActivePage('recruitment')}>採用管理</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => setActivePage('members')}>メンバー</button>
@@ -581,6 +714,176 @@ function App() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            </section>
+          </section>
+        )}
+
+        {/* ===== タスク管理 ===== */}
+        {activePage === 'taskmanagement' && (
+          <section className="taskmanagement-page">
+            {/* ヘッダー: 検索・フィルター・自分設定 */}
+            <div className="tm-toolbar">
+              <div className="tm-filters">
+                {(['all', '未着手', '自分', '期限切れ'] as const).map((f) => (
+                  <button key={f} className={`tm-filter-btn ${taskFilter === f ? 'active' : ''}`} onClick={() => setTaskFilter(f)}>
+                    {f === 'all' ? 'すべて' : f === '自分' ? '自分の担当' : f}
+                  </button>
+                ))}
+              </div>
+              <input className="tm-search" placeholder="タスク名で検索..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
+              <div className="tm-myname">
+                <span>自分:</span>
+                <select value={myName} onChange={(e) => { setMyName(e.target.value); localStorage.setItem('myName', e.target.value) }}>
+                  <option value="">未設定</option>
+                  {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* 追加フォーム */}
+            <section className="panel tm-add-panel">
+              <div className="panel-heading"><div><h2>タスクを追加</h2></div></div>
+              {taskError && <p className="error-msg">{taskError}</p>}
+              <form className="tm-add-form" onSubmit={handleTaskItemSubmit}>
+                <input type="date" value={taskItemForm.date} onChange={(e) => setTaskItemForm({ ...taskItemForm, date: e.target.value })} required />
+                <input placeholder="タスク名 *" value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required className="tm-name-input" />
+                <input placeholder="タスク詳細" value={taskItemForm.detail} onChange={(e) => setTaskItemForm({ ...taskItemForm, detail: e.target.value })} />
+                <select value={taskItemForm.priority} onChange={(e) => setTaskItemForm({ ...taskItemForm, priority: e.target.value as Priority })}>
+                  {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <input type="date" value={taskItemForm.due_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, due_date: e.target.value })} />
+                <div className="checkbox-group">
+                  {members.map((m) => (
+                    <label key={m.id} className="checkbox-item">
+                      <input type="checkbox" checked={taskItemForm.assignees.includes(m.name)} onChange={(e) => {
+                        const next = e.target.checked ? [...taskItemForm.assignees, m.name] : taskItemForm.assignees.filter((x) => x !== m.name)
+                        setTaskItemForm({ ...taskItemForm, assignees: next })
+                      }} />{m.name}
+                    </label>
+                  ))}
+                </div>
+                <input placeholder="設定者" value={taskItemForm.creator} onChange={(e) => setTaskItemForm({ ...taskItemForm, creator: e.target.value })} />
+                <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
+                  {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button type="submit" className="primary">追加</button>
+              </form>
+            </section>
+
+            {/* タスク一覧テーブル */}
+            <section className="panel tm-table-panel">
+              <div className="table-wrap">
+                <table className="tm-table">
+                  <thead>
+                    <tr>
+                      <th>日付</th><th>タスク名</th><th>詳細</th><th>優先度</th><th>期日</th>
+                      <th>担当者</th><th>設定者</th><th>ステータス</th><th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTaskItems.length === 0 && (
+                      <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
+                    )}
+                    {filteredTaskItems.map((item) => {
+                      const isEditing = taskItemInlineId === item.id
+                      const f = taskItemInlineForm
+                      const overdue = item.due_date && item.due_date < today && item.status !== '完了'
+                      return (
+                        <tr key={item.id} className={`${isEditing ? 'row-editing' : 'row-hoverable'} ${overdue ? 'row-overdue' : ''}`}
+                          onClick={() => {
+                            if (!isEditing) {
+                              setTaskItemInlineId(item.id)
+                              setTaskItemInlineForm({ date: item.date || '', name: item.name, detail: item.detail || '', priority: item.priority || '中', due_date: item.due_date || '', assignees: item.assignees || [], creator: item.creator || '', status: item.status })
+                            }
+                          }}>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setTaskItemInlineForm({ ...f, date: e.target.value })} /> : item.date}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {overdue && <span className="tag-overdue">期限切れ</span>}
+                              {isEditing ? <input className="inline-input tm-name-input" value={f.name} onChange={(e) => setTaskItemInlineForm({ ...f, name: e.target.value })} /> : item.name}
+                            </div>
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.detail} onChange={(e) => setTaskItemInlineForm({ ...f, detail: e.target.value })} /> : <span className="cell-truncate" title={item.detail}>{item.detail}</span>}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.priority} onChange={(e) => setTaskItemInlineForm({ ...f, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p}>{p}</option>)}</select>
+                              : <span className={`priority priority-${item.priority}`}>{item.priority}</span>}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="date" value={f.due_date} onChange={(e) => setTaskItemInlineForm({ ...f, due_date: e.target.value })} /> : item.due_date}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <div className="inline-checkbox-group">{members.map((m) => (
+                                  <label key={m.id} className="inline-checkbox-item">
+                                    <input type="checkbox" checked={f.assignees.includes(m.name)} onChange={(e) => {
+                                      const next = e.target.checked ? [...f.assignees, m.name] : f.assignees.filter((x) => x !== m.name)
+                                      setTaskItemInlineForm({ ...f, assignees: next })
+                                    }} />{m.name}
+                                  </label>
+                                ))}</div>
+                              : (item.assignees || []).join('・')}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" value={f.creator} onChange={(e) => setTaskItemInlineForm({ ...f, creator: e.target.value })} /> : item.creator}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <select className={`status-select status-ti-${isEditing ? f.status : item.status}`}
+                              value={isEditing ? f.status : item.status}
+                              onChange={async (e) => {
+                                const s = e.target.value as TaskItemStatus
+                                if (isEditing) setTaskItemInlineForm({ ...f, status: s })
+                                else await updateTaskItemStatus(item.id, s)
+                              }}>
+                              {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  <button className="primary" onClick={saveTaskItemInline}>保存</button>
+                                  <button className="secondary" onClick={() => setTaskItemInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <button className="danger" onClick={async () => { await supabase.from('task_items').delete().eq('id', item.id); fetchTaskItems() }}>削除</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* メンバー管理 */}
+            <section className="panel">
+              <div className="panel-heading"><div><h2>メンバー設定</h2><p>SlackユーザーIDを設定すると@メンションで通知されます</p></div></div>
+              <div className="member-slack-list">
+                {members.map((m) => (
+                  <div key={m.id} className="member-slack-row">
+                    <span className="member-slack-name">{m.name}</span>
+                    {memberEditId === m.id ? (
+                      <>
+                        <input className="inline-input" placeholder="SlackユーザーID（例: U12345678）" value={memberEditSlack} onChange={(e) => setMemberEditSlack(e.target.value)} style={{ flex: 1 }} />
+                        <button className="primary" onClick={() => saveMemberSlack(m.id)}>保存</button>
+                        <button className="secondary" onClick={() => setMemberEditId(null)}>×</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="member-slack-id">{m.slack_user_id || '未設定'}</span>
+                        <button className="secondary" onClick={() => { setMemberEditId(m.id); setMemberEditSlack(m.slack_user_id) }}>編集</button>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
             </section>
           </section>
