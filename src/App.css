@@ -1102,3 +1102,16 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   background: var(--gray-200);
   color: var(--gray-900);
 }
+
+
+/* ===== 再接続ボタン ===== */
+.reconnect-btn {
+  background: #fff7ed;
+  color: #b45309;
+  border: 1.5px solid #fcd34d;
+  font-weight: 600;
+}
+.reconnect-btn:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}

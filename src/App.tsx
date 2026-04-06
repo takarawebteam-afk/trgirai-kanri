@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import {
   Bar,
@@ -1612,6 +1612,8 @@ function App() {
 
 const STORAGE_KEY = 'gcal_token'
 const STORAGE_EXPIRY_KEY = 'gcal_token_expiry'
+const STORAGE_HINT_KEY = 'gcal_hint'
+const STORAGE_EVER_LOGGED_IN_KEY = 'gcal_ever_logged_in'
 
 function getSavedToken(): string | null {
   try {
@@ -1641,10 +1643,14 @@ function clearToken() {
 
 function TodayTasksPanel() {
   const [accessToken, setAccessToken] = useState<string | null>(getSavedToken)
+  const [everLoggedIn, setEverLoggedIn] = useState(() => localStorage.getItem(STORAGE_EVER_LOGGED_IN_KEY) === '1')
+  const [silentFailed, setSilentFailed] = useState(false)
   const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
   const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
   const [calendarLoading, setCalendarLoading] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const silentLoginFnRef = useRef<(() => void) | null>(null)
 
   // Supabaseから今日のチェック状態を読み込む（3秒ごとにポーリングして他PCと同期）
   useEffect(() => {
@@ -1663,6 +1669,20 @@ function TodayTasksPanel() {
     const interval = setInterval(fetchChecked, 3000)
     return () => clearInterval(interval)
   }, [today])
+
+  // タイマークリーンアップ
+  useEffect(() => {
+    return () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current) }
+  }, [])
+
+  // トークン有効期限の3分前にsetAccessToken(null)して「再接続」ボタンを表示する
+  const scheduleRefresh = useCallback((expiresIn: number) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    const ms = Math.max(0, (expiresIn - 180) * 1000)
+    refreshTimerRef.current = setTimeout(() => {
+      setAccessToken(null)
+    }, ms)
+  }, [])
 
   const toggleCheck = async (key: string, checked: boolean) => {
     // 楽観的UI更新
@@ -1708,18 +1728,63 @@ function TodayTasksPanel() {
     setCalendarLoading(false)
   }, [])
 
-  // 保存済みトークンがあれば起動時に自動取得
+  // 保存済みトークンがあれば起動時に自動取得＆リフレッシュタイマーセット
   useEffect(() => {
     const saved = getSavedToken()
-    if (saved) fetchMemberEvents(saved)
-  }, [fetchMemberEvents])
+    if (saved) {
+      fetchMemberEvents(saved)
+      try {
+        const expiry = localStorage.getItem(STORAGE_EXPIRY_KEY)
+        if (expiry) {
+          const remaining = (Number(expiry) - Date.now()) / 1000
+          scheduleRefresh(remaining)
+        }
+      } catch { /* ignore */ }
+    }
+  }, [fetchMemberEvents, scheduleRefresh])
+
+  // prompt:none でGoogleUIを出さずに無音再認証
+  const silentLogin = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    prompt: 'none',
+    onSuccess: (res) => {
+      const expiresIn = res.expires_in ?? 3600
+      saveToken(res.access_token, expiresIn)
+      setAccessToken(res.access_token)
+      setSilentFailed(false)
+      fetchMemberEvents(res.access_token)
+      scheduleRefresh(expiresIn)
+    },
+    onError: () => {
+      // 無音再認証失敗→通常ログインボタンへ切り替え
+      clearToken()
+      setAccessToken(null)
+      setSilentFailed(true)
+    },
+  })
+
+  // silentLoginをrefに保持（タイマーコールバックから参照するため）
+  silentLoginFnRef.current = silentLogin
 
   const googleLogin = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
-    onSuccess: (res) => {
-      saveToken(res.access_token, res.expires_in ?? 3600)
+    onSuccess: async (res) => {
+      const expiresIn = res.expires_in ?? 3600
+      saveToken(res.access_token, expiresIn)
       setAccessToken(res.access_token)
+      setSilentFailed(false)
       fetchMemberEvents(res.access_token)
+      scheduleRefresh(expiresIn)
+      // メールアドレス（hint）を保存して次回の無音再認証に使う
+      try {
+        const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${res.access_token}` }
+        })
+        const userInfo = await userRes.json()
+        if (userInfo.email) localStorage.setItem(STORAGE_HINT_KEY, userInfo.email)
+      } catch { /* ignore */ }
+      localStorage.setItem(STORAGE_EVER_LOGGED_IN_KEY, '1')
+      setEverLoggedIn(true)
     },
   })
 
@@ -1731,14 +1796,19 @@ function TodayTasksPanel() {
           <p>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
         </div>
         {!accessToken
-          ? <button className="primary" onClick={() => googleLogin()}>Googleでログイン</button>
+          ? (everLoggedIn && !silentFailed)
+            ? <button className="secondary reconnect-btn" onClick={() => silentLogin()}>🔄 再接続</button>
+            : <button className="primary" onClick={() => googleLogin()}>Googleでログイン</button>
           : <button className="secondary" onClick={() => fetchMemberEvents(accessToken)}>再読み込み</button>
         }
       </div>
 
       {!accessToken && (
         <div className="calendar-login-prompt">
-          <p>「Googleでログイン」ボタンを押すと、各メンバーの今日の予定をカレンダーから取得します。</p>
+          <p>{(everLoggedIn && !silentFailed)
+            ? 'Googleカレンダーの接続が切れました。「再接続」を押すと自動で再ログインします。'
+            : '「Googleでログイン」ボタンを押すと、各メンバーの今日の予定をカレンダーから取得します。'
+          }</p>
         </div>
       )}
 
