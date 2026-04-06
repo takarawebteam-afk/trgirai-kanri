@@ -232,6 +232,7 @@ function App() {
   const [hankyoMediaFilter, setHankyoMediaFilter] = useState('all')
   const [hankyoStoreFilter, setHankyoStoreFilter] = useState('all')
   const [hankyoPage, setHankyoPage] = useState(1)
+  const [showModal, setShowModal] = useState(false)
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -382,6 +383,7 @@ function App() {
     if (error) { setTaskError(`追加失敗: ${error.message}`); return }
     setTaskForm(defaultTaskForm)
     fetchTasks()
+    setShowModal(false)
   }
 
   const handleTaskItemSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -399,6 +401,7 @@ function App() {
     } catch { /* Slack未設定時は無視 */ }
     setTaskItemForm({ ...defaultTaskItemForm, date: new Date().toISOString().split('T')[0] })
     fetchTaskItems()
+    setShowModal(false)
   }
 
   const updateTaskItemStatus = async (id: string, status: TaskItemStatus) => {
@@ -439,6 +442,7 @@ function App() {
     setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] })
     setHankyoPage(1)
     fetchHankyo()
+    setShowModal(false)
   }
 
   const startHankyoInline = (r: HankyoRecord) => {
@@ -479,7 +483,7 @@ function App() {
       area: r.area,
       note: r.note,
     })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setShowModal(true)
   }
 
   // 反響管理 フィルタリング & ページネーション
@@ -518,6 +522,7 @@ function App() {
     await supabase.from('sns_posts').insert({ ...normalizePost(snsForm), id: crypto.randomUUID() })
     setSnsForm(defaultSnsForm)
     fetchPosts()
+    setShowModal(false)
   }
 
   const handleRecruitmentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -525,6 +530,7 @@ function App() {
     await supabase.from('recruitment').insert({ ...normalizeRecruitment(recruitmentForm), id: crypto.randomUUID() })
     setRecruitmentForm(defaultRecruitmentForm)
     fetchRecruitment()
+    setShowModal(false)
   }
 
   // インライン編集 開始
@@ -609,13 +615,13 @@ function App() {
       </header>
 
       <nav className="tab-nav" aria-label="主要メニュー">
-        <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => setActivePage('dashboard')}>ダッシュボード</button>
-        <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => setActivePage('tasks')}>案件管理</button>
-        <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => setActivePage('taskmanagement')}>タスク管理</button>
-        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => setActivePage('sns')}>SNS投稿管理</button>
-        <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => setActivePage('recruitment')}>採用管理</button>
-        <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => setActivePage('hankyo')}>反響管理</button>
-        <button className={activePage === 'members' ? 'active' : ''} onClick={() => setActivePage('members')}>メンバー</button>
+        <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => { setActivePage('dashboard'); setShowModal(false) }}>ダッシュボード</button>
+        <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => { setActivePage('tasks'); setShowModal(false) }}>案件管理</button>
+        <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => { setActivePage('taskmanagement'); setShowModal(false) }}>タスク管理</button>
+        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
+        <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管理</button>
+        <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管理</button>
+        <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
       </nav>
 
       <main className="page-content">
@@ -752,59 +758,7 @@ function App() {
 
         {/* ===== 案件管理 ===== */}
         {activePage === 'tasks' && (
-          <section className="management-layout">
-            <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>案件を追加</h2><p>完了案件のみ削減額に反映されます。</p></div></div>
-              <form className="data-form" onSubmit={handleTaskSubmit}>
-                <label className="form-label">案件日
-                  <input type="date" value={taskForm.taskDate} onChange={(e) => setTaskForm({ ...taskForm, taskDate: e.target.value })} required />
-                </label>
-                <label className="form-label">担当者（複数選択可）
-                  <div className="checkbox-group">
-                    {assigneeOptions.map((a) => (
-                      <label key={a} className="checkbox-item">
-                        <input type="checkbox" checked={taskForm.assignees.includes(a)} onChange={(e) => {
-                          const next = e.target.checked ? [...taskForm.assignees, a] : taskForm.assignees.filter((x) => x !== a)
-                          setTaskForm({ ...taskForm, assignees: next })
-                        }} />
-                        {a}
-                      </label>
-                    ))}
-                  </div>
-                </label>
-                <label className="form-label">依頼部署
-                  <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
-                </label>
-                <label className="form-label">案件名
-                  <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
-                </label>
-                <label className="form-label">案件内容
-                  <textarea placeholder="案件の詳細内容" value={taskForm.content} onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })} rows={3} />
-                </label>
-                <label className="form-label">種類
-                  <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-                </label>
-                <label className="form-label">期日
-                  <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
-                </label>
-                <label className="form-label">優先度
-                  <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                </label>
-                <label className="form-label">現状
-                  <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-                </label>
-                <label className="form-label">削減額
-                  <input type="number" min="0" placeholder="削減額（例: 50000）" value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
-                </label>
-                <label className="form-label">補足
-                  <textarea placeholder="補足・メモ" value={taskForm.note} onChange={(e) => setTaskForm({ ...taskForm, note: e.target.value })} rows={2} />
-                </label>
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                </div>
-              </form>
-            </section>
-
+          <>
             <section className="panel table-panel">
               <div className="panel-heading">
                 <div><h2>案件一覧</h2><p>行をクリックして直接編集・現状はその場で変更可能</p></div>
@@ -903,7 +857,7 @@ function App() {
                 </table>
               </div>
             </section>
-          </section>
+          </>
         )}
 
         {/* ===== タスク管理 ===== */}
@@ -927,36 +881,6 @@ function App() {
                 </select>
               </div>
             </div>
-
-            {/* 追加フォーム */}
-            <section className="panel tm-add-panel">
-              <div className="panel-heading"><div><h2>タスクを追加</h2></div></div>
-              {taskError && <p className="error-msg">{taskError}</p>}
-              <form className="tm-add-form" onSubmit={handleTaskItemSubmit}>
-                <input type="date" value={taskItemForm.date} onChange={(e) => setTaskItemForm({ ...taskItemForm, date: e.target.value })} required />
-                <input placeholder="タスク名 *" value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required className="tm-name-input" />
-                <input placeholder="タスク詳細" value={taskItemForm.detail} onChange={(e) => setTaskItemForm({ ...taskItemForm, detail: e.target.value })} />
-                <select value={taskItemForm.priority} onChange={(e) => setTaskItemForm({ ...taskItemForm, priority: e.target.value as Priority })}>
-                  {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <input type="date" value={taskItemForm.due_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, due_date: e.target.value })} />
-                <div className="checkbox-group">
-                  {members.map((m) => (
-                    <label key={m.id} className="checkbox-item">
-                      <input type="checkbox" checked={taskItemForm.assignees.includes(m.name)} onChange={(e) => {
-                        const next = e.target.checked ? [...taskItemForm.assignees, m.name] : taskItemForm.assignees.filter((x) => x !== m.name)
-                        setTaskItemForm({ ...taskItemForm, assignees: next })
-                      }} />{m.name}
-                    </label>
-                  ))}
-                </div>
-                <input placeholder="設定者" value={taskItemForm.creator} onChange={(e) => setTaskItemForm({ ...taskItemForm, creator: e.target.value })} />
-                <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
-                  {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <button type="submit" className="primary">追加</button>
-              </form>
-            </section>
 
             {/* タスク一覧テーブル */}
             <section className="panel tm-table-panel">
@@ -1078,20 +1002,7 @@ function App() {
 
         {/* ===== SNS投稿管理 ===== */}
         {activePage === 'sns' && (
-          <section className="management-layout">
-            <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>投稿を追加</h2><p>TikTok / Instagram / Threads / YouTube の投稿指標を管理</p></div></div>
-              <form className="data-form" onSubmit={handleSnsSubmit}>
-                <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
-                <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                <select value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })}>{snsAccounts.map((a) => <option key={a} value={a}>{a}</option>)}</select>
-                <input type="number" min="0" placeholder="コメント数（例: 50）" value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
-                <input type="number" min="0" placeholder="保存数（例: 100）" value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                </div>
-              </form>
-            </section>
+          <>
             <section className="panel table-panel">
               <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
@@ -1143,26 +1054,12 @@ function App() {
                 </table>
               </div>
             </section>
-          </section>
+          </>
         )}
 
         {/* ===== 採用管理 ===== */}
         {activePage === 'recruitment' && (
-          <section className="management-layout">
-            <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>採用データを追加</h2><p>採用媒体・部署・職種・削減額を記録</p></div></div>
-              <form className="data-form" onSubmit={handleRecruitmentSubmit}>
-                <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required placeholder="応募日" />
-                <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                <select value={recruitmentForm.department} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, department: e.target.value as RecruitDepartment })}>{recruitDepartments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
-                <select value={recruitmentForm.jobType} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, jobType: e.target.value as JobType })}>{jobTypes.map((j) => <option key={j} value={j}>{j}</option>)}</select>
-                <input type="number" min="0" placeholder="削減額（例: 50000）" value={recruitmentForm.costReduction || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, costReduction: Number(e.target.value) || 0 })} />
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                </div>
-              </form>
-            </section>
-
+          <>
             <section className="panel table-panel">
               <div className="panel-heading"><div><h2>採用実績一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
@@ -1214,70 +1111,12 @@ function App() {
                 </table>
               </div>
             </section>
-          </section>
+          </>
         )}
 
         {/* ===== 反響管理 ===== */}
         {activePage === 'hankyo' && (
-          <section className="hankyo-layout">
-            {/* 入力フォーム */}
-            <section className="panel form-panel">
-              <div className="panel-heading"><div><h2>反響を追加</h2><p>複製ボタンで顧客名以外をコピーできます</p></div></div>
-              <form className="data-form" onSubmit={handleHankyoSubmit}>
-                <label className="form-label">反響日
-                  <input type="date" value={hankyoForm.inquiry_date} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_date: e.target.value })} required />
-                </label>
-                <label className="form-label">アカウント
-                  <select value={hankyoForm.account} onChange={(e) => setHankyoForm({ ...hankyoForm, account: e.target.value })}>
-                    {hankyoAccounts.map((a) => <option key={a}>{a}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">きっかけ
-                  <select value={hankyoForm.trigger} onChange={(e) => setHankyoForm({ ...hankyoForm, trigger: e.target.value })}>
-                    {hankyoTriggers.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">反響媒体
-                  <select value={hankyoForm.media} onChange={(e) => setHankyoForm({ ...hankyoForm, media: e.target.value })}>
-                    {hankyoMedias.map((m) => <option key={m}>{m}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">問合内容
-                  <select value={hankyoForm.inquiry_type} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_type: e.target.value })}>
-                    {hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">顧客名 <span className="required-badge">必須</span>
-                  <input placeholder="顧客名" value={hankyoForm.customer_name} onChange={(e) => setHankyoForm({ ...hankyoForm, customer_name: e.target.value })} required />
-                </label>
-                <label className="form-label">問合手段
-                  <select value={hankyoForm.contact_method} onChange={(e) => setHankyoForm({ ...hankyoForm, contact_method: e.target.value })}>
-                    {hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">入居希望時期
-                  <select value={hankyoForm.move_in_timing} onChange={(e) => setHankyoForm({ ...hankyoForm, move_in_timing: e.target.value })}>
-                    {hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">送客先店舗
-                  <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })}>
-                    {hankyoStores.map((s) => <option key={s}>{s}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">希望エリア
-                  <input placeholder="例: 大阪市、守口市" value={hankyoForm.area} onChange={(e) => setHankyoForm({ ...hankyoForm, area: e.target.value })} />
-                </label>
-                <label className="form-label">備考
-                  <textarea placeholder="備考・メモ" rows={2} value={hankyoForm.note} onChange={(e) => setHankyoForm({ ...hankyoForm, note: e.target.value })} />
-                </label>
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                  <button type="button" className="secondary" onClick={() => setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] })}>リセット</button>
-                </div>
-              </form>
-            </section>
-
+          <>
             {/* 一覧テーブル */}
             <section className="panel hankyo-table-panel">
               <div className="panel-heading">
@@ -1405,7 +1244,7 @@ function App() {
                 </div>
               )}
             </section>
-          </section>
+          </>
         )}
 
         {/* ===== メンバー ===== */}
@@ -1446,6 +1285,246 @@ function App() {
           </section>
         )}
       </main>
+
+      {/* ===== フローティング追加ボタン ===== */}
+      {activePage !== 'dashboard' && activePage !== 'members' && (
+        <button
+          className="fab"
+          onClick={() => setShowModal(true)}
+          aria-label="新規追加"
+          title="新規追加"
+        >
+          ＋
+        </button>
+      )}
+
+      {/* ===== 追加フォームモーダル ===== */}
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2 className="modal-title">
+                {activePage === 'tasks' && '案件を追加'}
+                {activePage === 'taskmanagement' && 'タスクを追加'}
+                {activePage === 'sns' && '投稿を追加'}
+                {activePage === 'recruitment' && '採用データを追加'}
+                {activePage === 'hankyo' && '反響を追加'}
+              </h2>
+              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+            </div>
+
+            {/* 案件管理フォーム */}
+            {activePage === 'tasks' && (
+              <form className="data-form" onSubmit={handleTaskSubmit}>
+                <label className="form-label">案件日
+                  <input type="date" value={taskForm.taskDate} onChange={(e) => setTaskForm({ ...taskForm, taskDate: e.target.value })} required />
+                </label>
+                <label className="form-label">担当者（複数選択可）
+                  <div className="checkbox-group">
+                    {assigneeOptions.map((a) => (
+                      <label key={a} className="checkbox-item">
+                        <input type="checkbox" checked={taskForm.assignees.includes(a)} onChange={(e) => {
+                          const next = e.target.checked ? [...taskForm.assignees, a] : taskForm.assignees.filter((x) => x !== a)
+                          setTaskForm({ ...taskForm, assignees: next })
+                        }} />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                </label>
+                <label className="form-label">依頼部署
+                  <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
+                </label>
+                <label className="form-label">案件名
+                  <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
+                </label>
+                <label className="form-label">案件内容
+                  <textarea placeholder="案件の詳細内容" value={taskForm.content} onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })} rows={3} />
+                </label>
+                <label className="form-label">種類
+                  <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                </label>
+                <label className="form-label">期日
+                  <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
+                </label>
+                <label className="form-label">優先度
+                  <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                </label>
+                <label className="form-label">現状
+                  <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+                </label>
+                <label className="form-label">削減額
+                  <input type="number" min="0" placeholder="削減額（例: 50000）" value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
+                </label>
+                <label className="form-label">補足
+                  <textarea placeholder="補足・メモ" value={taskForm.note} onChange={(e) => setTaskForm({ ...taskForm, note: e.target.value })} rows={2} />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => setShowModal(false)}>キャンセル</button>
+                </div>
+              </form>
+            )}
+
+            {/* タスク管理フォーム */}
+            {activePage === 'taskmanagement' && (
+              <>
+                {taskError && <p className="error-msg">{taskError}</p>}
+                <form className="data-form" onSubmit={handleTaskItemSubmit}>
+                  <label className="form-label">日付
+                    <input type="date" value={taskItemForm.date} onChange={(e) => setTaskItemForm({ ...taskItemForm, date: e.target.value })} required />
+                  </label>
+                  <label className="form-label">タスク名 <span className="required-badge">必須</span>
+                    <input placeholder="タスク名" value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required />
+                  </label>
+                  <label className="form-label">タスク詳細
+                    <input placeholder="タスク詳細" value={taskItemForm.detail} onChange={(e) => setTaskItemForm({ ...taskItemForm, detail: e.target.value })} />
+                  </label>
+                  <label className="form-label">優先度
+                    <select value={taskItemForm.priority} onChange={(e) => setTaskItemForm({ ...taskItemForm, priority: e.target.value as Priority })}>
+                      {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </label>
+                  <label className="form-label">期日
+                    <input type="date" value={taskItemForm.due_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, due_date: e.target.value })} />
+                  </label>
+                  <label className="form-label">担当者
+                    <div className="checkbox-group">
+                      {members.map((m) => (
+                        <label key={m.id} className="checkbox-item">
+                          <input type="checkbox" checked={taskItemForm.assignees.includes(m.name)} onChange={(e) => {
+                            const next = e.target.checked ? [...taskItemForm.assignees, m.name] : taskItemForm.assignees.filter((x) => x !== m.name)
+                            setTaskItemForm({ ...taskItemForm, assignees: next })
+                          }} />{m.name}
+                        </label>
+                      ))}
+                    </div>
+                  </label>
+                  <label className="form-label">設定者
+                    <input placeholder="設定者" value={taskItemForm.creator} onChange={(e) => setTaskItemForm({ ...taskItemForm, creator: e.target.value })} />
+                  </label>
+                  <label className="form-label">ステータス
+                    <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
+                      {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  <div className="form-actions">
+                    <button type="submit" className="primary">追加する</button>
+                    <button type="button" className="secondary" onClick={() => setShowModal(false)}>キャンセル</button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* SNS投稿管理フォーム */}
+            {activePage === 'sns' && (
+              <form className="data-form" onSubmit={handleSnsSubmit}>
+                <label className="form-label">投稿日
+                  <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
+                </label>
+                <label className="form-label">媒体
+                  <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                </label>
+                <label className="form-label">アカウント
+                  <select value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })}>{snsAccounts.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+                </label>
+                <label className="form-label">コメント数
+                  <input type="number" min="0" placeholder="コメント数（例: 50）" value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
+                </label>
+                <label className="form-label">保存数
+                  <input type="number" min="0" placeholder="保存数（例: 100）" value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => setShowModal(false)}>キャンセル</button>
+                </div>
+              </form>
+            )}
+
+            {/* 採用管理フォーム */}
+            {activePage === 'recruitment' && (
+              <form className="data-form" onSubmit={handleRecruitmentSubmit}>
+                <label className="form-label">応募日
+                  <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required />
+                </label>
+                <label className="form-label">媒体
+                  <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                </label>
+                <label className="form-label">部署
+                  <select value={recruitmentForm.department} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, department: e.target.value as RecruitDepartment })}>{recruitDepartments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
+                </label>
+                <label className="form-label">職種
+                  <select value={recruitmentForm.jobType} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, jobType: e.target.value as JobType })}>{jobTypes.map((j) => <option key={j} value={j}>{j}</option>)}</select>
+                </label>
+                <label className="form-label">削減額
+                  <input type="number" min="0" placeholder="削減額（例: 50000）" value={recruitmentForm.costReduction || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, costReduction: Number(e.target.value) || 0 })} />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => setShowModal(false)}>キャンセル</button>
+                </div>
+              </form>
+            )}
+
+            {/* 反響管理フォーム */}
+            {activePage === 'hankyo' && (
+              <form className="data-form" onSubmit={handleHankyoSubmit}>
+                <label className="form-label">反響日
+                  <input type="date" value={hankyoForm.inquiry_date} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_date: e.target.value })} required />
+                </label>
+                <label className="form-label">アカウント
+                  <select value={hankyoForm.account} onChange={(e) => setHankyoForm({ ...hankyoForm, account: e.target.value })}>
+                    {hankyoAccounts.map((a) => <option key={a}>{a}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">きっかけ
+                  <select value={hankyoForm.trigger} onChange={(e) => setHankyoForm({ ...hankyoForm, trigger: e.target.value })}>
+                    {hankyoTriggers.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">反響媒体
+                  <select value={hankyoForm.media} onChange={(e) => setHankyoForm({ ...hankyoForm, media: e.target.value })}>
+                    {hankyoMedias.map((m) => <option key={m}>{m}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">問合内容
+                  <select value={hankyoForm.inquiry_type} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_type: e.target.value })}>
+                    {hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">顧客名 <span className="required-badge">必須</span>
+                  <input placeholder="顧客名" value={hankyoForm.customer_name} onChange={(e) => setHankyoForm({ ...hankyoForm, customer_name: e.target.value })} required />
+                </label>
+                <label className="form-label">問合手段
+                  <select value={hankyoForm.contact_method} onChange={(e) => setHankyoForm({ ...hankyoForm, contact_method: e.target.value })}>
+                    {hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">入居希望時期
+                  <select value={hankyoForm.move_in_timing} onChange={(e) => setHankyoForm({ ...hankyoForm, move_in_timing: e.target.value })}>
+                    {hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">送客先店舗
+                  <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })}>
+                    {hankyoStores.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">希望エリア
+                  <input placeholder="例: 大阪市、守口市" value={hankyoForm.area} onChange={(e) => setHankyoForm({ ...hankyoForm, area: e.target.value })} />
+                </label>
+                <label className="form-label">備考
+                  <textarea placeholder="備考・メモ" rows={2} value={hankyoForm.note} onChange={(e) => setHankyoForm({ ...hankyoForm, note: e.target.value })} />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => { setShowModal(false); setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] }) }}>キャンセル</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

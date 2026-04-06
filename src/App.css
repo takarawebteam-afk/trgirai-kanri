@@ -957,3 +957,107 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   vertical-align: middle;
   margin-left: 4px;
 }
+
+/* ===== フローティング追加ボタン (FAB) ===== */
+.fab {
+  position: fixed;
+  bottom: 36px;
+  right: 36px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--blue-600);
+  color: var(--white);
+  border: none;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(26, 111, 230, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.fab:hover {
+  background: var(--blue-700);
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 10px 32px rgba(26, 111, 230, 0.55);
+}
+.fab:active {
+  transform: scale(0.97);
+}
+
+/* ===== モーダルオーバーレイ ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(13, 42, 110, 0.22);
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px 32px 32px;
+  position: relative;
+  animation: slideUp 0.18s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1.5px solid var(--gray-100);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--gray-900);
+  font-weight: 800;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.modal-close:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
