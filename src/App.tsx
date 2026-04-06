@@ -1153,15 +1153,21 @@ function App() {
                     <tr>
                       <th>反響日</th>
                       <th>顧客名</th>
+                      <th>アカウント</th>
+                      <th>きっかけ</th>
                       <th>媒体</th>
                       <th>問合内容</th>
+                      <th>問合手段</th>
+                      <th>入居時期</th>
                       <th>送客先店舗</th>
+                      <th>希望エリア</th>
+                      <th>備考</th>
                       <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedHankyo.length === 0 && (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      <tr><td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                     )}
                     {paginatedHankyo.map((r) => {
                       const isEditing = hankyoInlineId === r.id
@@ -1184,6 +1190,16 @@ function App() {
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
+                              ? <select className="inline-select" value={f.account} onChange={(e) => setHankyoInlineForm({ ...f, account: e.target.value })}>{hankyoAccounts.map((a) => <option key={a}>{a}</option>)}</select>
+                              : r.account}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.trigger} onChange={(e) => setHankyoInlineForm({ ...f, trigger: e.target.value })}>{hankyoTriggers.map((t) => <option key={t}>{t}</option>)}</select>
+                              : r.trigger}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
                               ? <select className="inline-select" value={f.media} onChange={(e) => setHankyoInlineForm({ ...f, media: e.target.value })}>{hankyoMedias.map((m) => <option key={m}>{m}</option>)}</select>
                               : r.media}
                           </td>
@@ -1194,22 +1210,33 @@ function App() {
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
+                              ? <select className="inline-select" value={f.contact_method} onChange={(e) => setHankyoInlineForm({ ...f, contact_method: e.target.value })}>{hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}</select>
+                              : r.contact_method}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.move_in_timing} onChange={(e) => setHankyoInlineForm({ ...f, move_in_timing: e.target.value })}>{hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}</select>
+                              : r.move_in_timing}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
                               ? <select className="inline-select" value={f.store} onChange={(e) => setHankyoInlineForm({ ...f, store: e.target.value })}>{hankyoStores.map((s) => <option key={s}>{s}</option>)}</select>
                               : r.store}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.area} onChange={(e) => setHankyoInlineForm({ ...f, area: e.target.value })} />
+                              : <span className="cell-truncate" title={r.area}>{r.area}</span>}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.note} onChange={(e) => setHankyoInlineForm({ ...f, note: e.target.value })} />
+                              : <span className="cell-truncate" title={r.note}>{r.note}</span>}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  {/* 編集モード時は全フィールド編集可 */}
-                                  <div className="hankyo-inline-extra" onClick={(e) => e.stopPropagation()}>
-                                    <label>アカウント<select className="inline-select" value={f.account} onChange={(e) => setHankyoInlineForm({ ...f, account: e.target.value })}>{hankyoAccounts.map((a) => <option key={a}>{a}</option>)}</select></label>
-                                    <label>きっかけ<select className="inline-select" value={f.trigger} onChange={(e) => setHankyoInlineForm({ ...f, trigger: e.target.value })}>{hankyoTriggers.map((t) => <option key={t}>{t}</option>)}</select></label>
-                                    <label>問合手段<select className="inline-select" value={f.contact_method} onChange={(e) => setHankyoInlineForm({ ...f, contact_method: e.target.value })}>{hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}</select></label>
-                                    <label>入居希望<select className="inline-select" value={f.move_in_timing} onChange={(e) => setHankyoInlineForm({ ...f, move_in_timing: e.target.value })}>{hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}</select></label>
-                                    <label>エリア<input className="inline-input" value={f.area} onChange={(e) => setHankyoInlineForm({ ...f, area: e.target.value })} /></label>
-                                    <label>備考<input className="inline-input" value={f.note} onChange={(e) => setHankyoInlineForm({ ...f, note: e.target.value })} /></label>
-                                  </div>
                                   <button className="primary" onClick={saveHankyoInline}>保存</button>
                                   <button className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
                                 </>
