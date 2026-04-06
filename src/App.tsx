@@ -293,9 +293,6 @@ function App() {
     .filter(Boolean)
     .sort((a, b) => b - a)
 
-  const filteredCompletedTasks = tasks.filter(
-    (task) => task.status === '完了' && matchesYearMonth(task.dueDate, selectedYear, selectedMonth),
-  )
   const filteredPosts = posts.filter((post) =>
     matchesYearMonth(post.postDate, selectedYear, selectedMonth),
   )
@@ -307,13 +304,14 @@ function App() {
     return matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
   })
 
-  const totalSavings = filteredCompletedTasks.reduce((sum, task) => sum + task.savings, 0)
+  // 単発は完了時一括・継続は月次累積で集計
+  const totalSavings = tasks.reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0)
   const departmentSavings = departments
     .map((department) => ({
       department,
-      savings: filteredCompletedTasks
+      savings: tasks
         .filter((task) => task.department === department)
-        .reduce((sum, task) => sum + task.savings, 0),
+        .reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0),
     }))
     .filter((entry) => entry.savings > 0)
 
@@ -562,7 +560,12 @@ function App() {
   // インライン編集 保存
   const saveTaskInline = async () => {
     if (!taskInlineId) return
-    await supabase.from('tasks').update(normalizeTask(taskInlineForm)).eq('id', taskInlineId)
+    let formToSave = { ...taskInlineForm }
+    // 継続案件を完了にした際、完了日が未設定なら今日をセット
+    if (formToSave.taskType === '継続' && formToSave.status === '完了' && !formToSave.dueDate) {
+      formToSave = { ...formToSave, dueDate: new Date().toISOString().split('T')[0] }
+    }
+    await supabase.from('tasks').update(normalizeTask(formToSave)).eq('id', taskInlineId)
     setTaskInlineId(null)
     fetchTasks()
   }
@@ -581,7 +584,13 @@ function App() {
 
   // ステータスのみ即時更新（行を編集モードにしなくてもOK）
   const updateTaskStatus = async (id: string, status: TaskStatus) => {
-    await supabase.from('tasks').update({ status }).eq('id', id)
+    const task = tasks.find((t) => t.id === id)
+    const updateData: Partial<Task> = { status }
+    // 継続案件を完了にした際、完了日が未設定なら今日をセット
+    if (status === '完了' && task?.taskType === '継続' && !task?.dueDate) {
+      updateData.dueDate = new Date().toISOString().split('T')[0]
+    }
+    await supabase.from('tasks').update(updateData).eq('id', id)
     fetchTasks()
   }
 
@@ -627,7 +636,7 @@ function App() {
       <main className="page-content">
         {activePage === 'dashboard' && (
           <section className="dashboard-grid">
-            <div className="stat-card strong"><span>総削減額</span><strong>{currency.format(totalSavings)}</strong><small>完了案件のみを集計</small></div>
+            <div className="stat-card strong"><span>総削減額</span><strong>{currency.format(totalSavings)}</strong><small>単発:完了時 / 継続:月次累計</small></div>
             <div className="stat-card"><span>SNS投稿数</span><strong>{integer.format(filteredPosts.length)}件</strong><small>選択期間の合計投稿</small></div>
             <div className="stat-card"><span>採用記録数</span><strong>{integer.format(filteredRecruitment.length)}件</strong><small>選択期間の合計</small></div>
             <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>選択期間の合計</small></div>
@@ -1369,11 +1378,16 @@ function App() {
                   <textarea placeholder="案件の詳細内容" value={taskForm.content} onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })} rows={3} />
                 </label>
                 <label className="form-label">種類
-                  <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                  <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType, dueDate: '' })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
                 </label>
-                <label className="form-label">期日
-                  <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
-                </label>
+                {taskForm.taskType === '単発' && (
+                  <label className="form-label">期日
+                    <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
+                  </label>
+                )}
+                {taskForm.taskType === '継続' && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--gray-400)', margin: '0' }}>※ 継続案件は期日不要。完了ステータスに変更した日が自動的に完了日になります。</p>
+                )}
                 <label className="form-label">優先度
                   <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 </label>
@@ -1745,6 +1759,41 @@ function matchesYearMonth(dateString: string, year: number, month: string) {
   return matchesYear && matchesMonth
 }
 
+
+/** 案件1件の削減額貢献額を返す
+ *  - 単発: 完了 & dueDate が選択期間内のみ計上
+ *  - 継続: taskDate から完了日(or今日)まで月×金額で累積。完了月が最終月 */
+function calcTaskSavings(task: Task, selectedYear: number, selectedMonth: string): number {
+  if (!task.savings || task.savings <= 0) return 0
+
+  if (task.taskType === '単発') {
+    return task.status === '完了' && matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
+      ? task.savings : 0
+  }
+
+  // ===== 継続 =====
+  if (!task.taskDate) return 0
+  const s = new Date(task.taskDate)
+  const startYM = new Date(s.getFullYear(), s.getMonth(), 1)
+  const e = task.status === '完了' && task.dueDate ? new Date(task.dueDate) : new Date()
+  const endYM = new Date(e.getFullYear(), e.getMonth(), 1)
+
+  if (selectedMonth === 'all') {
+    // 選択年内でアクティブだった月数 × 月額
+    const yearStart = new Date(selectedYear, 0, 1)
+    const yearEnd   = new Date(selectedYear, 11, 1)
+    const from = startYM > yearStart ? startYM : yearStart
+    const to   = endYM   < yearEnd   ? endYM   : yearEnd
+    if (from > to) return 0
+    const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1
+    return task.savings * Math.max(0, months)
+  }
+
+  // 特定月: その月にアクティブか判定
+  const selYM = new Date(selectedYear, Number(selectedMonth) - 1, 1)
+  if (startYM > selYM || endYM < selYM) return 0
+  return task.savings
+}
 
 function normalizeTask(task: Omit<Task, 'id'>): Omit<Task, 'id'> {
   return { ...task, savings: Number(task.savings) || 0 }
