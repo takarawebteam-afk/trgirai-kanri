@@ -204,6 +204,8 @@ function App() {
   // インライン編集
   const [taskInlineId, setTaskInlineId] = useState<string | null>(null)
   const [taskInlineForm, setTaskInlineForm] = useState<Omit<Task, 'id'>>(defaultTaskForm)
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all')
+  const [taskShowCompleted, setTaskShowCompleted] = useState(true)
   const [snsInlineId, setSnsInlineId] = useState<string | null>(null)
   const [snsInlineForm, setSnsInlineForm] = useState<Omit<SnsPost, 'id'>>(defaultSnsForm)
   const [recruitmentInlineId, setRecruitmentInlineId] = useState<string | null>(null)
@@ -303,6 +305,24 @@ function App() {
     if (task.status !== '作業中') return false
     return matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
   })
+
+  // 案件一覧: フィルター＋ソート（①優先度 ②期日近い順 ③案件日順）
+  const priorityOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
+  const filteredAndSortedTasks = tasks
+    .filter((task) => {
+      if (!taskShowCompleted && task.status === '完了') return false
+      if (taskAssigneeFilter !== 'all' && !(task.assignees || []).includes(taskAssigneeFilter)) return false
+      return true
+    })
+    .sort((a, b) => {
+      const pa = priorityOrder[a.priority] ?? 99
+      const pb = priorityOrder[b.priority] ?? 99
+      if (pa !== pb) return pa - pb
+      if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+      if (a.dueDate && !b.dueDate) return -1
+      if (!a.dueDate && b.dueDate) return 1
+      return (b.taskDate || '').localeCompare(a.taskDate || '')
+    })
 
   // 単発は完了時一括・継続は月次累積で集計
   const totalSavings = tasks.reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0)
@@ -771,6 +791,23 @@ function App() {
             <section className="panel table-panel">
               <div className="panel-heading">
                 <div><h2>案件一覧</h2><p>行をクリックして直接編集・現状はその場で変更可能</p></div>
+                <div className="task-toolbar">
+                  <select
+                    value={taskAssigneeFilter}
+                    onChange={(e) => setTaskAssigneeFilter(e.target.value)}
+                  >
+                    <option value="all">全担当者</option>
+                    {assigneeOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <label className="task-show-completed">
+                    <input
+                      type="checkbox"
+                      checked={taskShowCompleted}
+                      onChange={(e) => setTaskShowCompleted(e.target.checked)}
+                    />
+                    完了を表示
+                  </label>
+                </div>
               </div>
               <div className="table-wrap">
                 <table>
@@ -781,7 +818,10 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tasks.map((task) => {
+                    {filteredAndSortedTasks.length === 0 && (
+                      <tr><td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>該当する案件がありません</td></tr>
+                    )}
+                    {filteredAndSortedTasks.map((task) => {
                       const isEditing = taskInlineId === task.id
                       const f = taskInlineForm
                       return (
