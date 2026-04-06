@@ -20,7 +20,24 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo'
+
+type HankyoRecord = {
+  id: string
+  inquiry_date: string
+  account: string
+  trigger: string
+  media: string
+  inquiry_type: string
+  customer_name: string
+  contact_method: string
+  move_in_timing: string
+  store: string
+  area: string
+  note: string
+  created_at?: string
+  updated_at?: string
+}
 
 type TaskItem = {
   id: string
@@ -93,6 +110,15 @@ const taskItemStatuses: TaskItemStatus[] = ['未着手', '進行中', '完了']
 const priorityOptions: Priority[] = ['高', '中', '低']
 const assigneeOptions = ['泉', '坂本', '吉田', '新居']
 
+// 反響管理 マスターデータ
+const hankyoAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '外大', '摂南', '大商', '大経', '武庫女', '学生ポータル', '八尾', '売買', '採用', '管理', '店舗']
+const hankyoTriggers = ['検索', 'Karilun', 'TikTok', 'Instagram', 'threads', 'YouTube', '広告', '学生サイト', '学生ポータル', '地域サイト', '不明']
+const hankyoMedias = ['Karilun', '学生サイト', 'TikTok', 'Instagram', 'threads', 'YouTube', '地域サイト', '口コミ', '不明']
+const hankyoInquiryTypes = ['物件問合', 'アンケート', '来店予約', 'オンライン', '相談', 'その他']
+const hankyoContactMethods = ['LINE', 'メール', 'DM', 'コメント', '電話']
+const hankyoMoveInTimings = ['2週間以内', '1ヶ月以内', '2ヶ月以内', '3ヶ月以内', '4ヶ月以内', '時期先', '良いのがあれば', '時期未定', '不明']
+const hankyoStores = ['対象外', '店舗誘導済', '大阪店', '京橋店', '放出店', '淡路店', '長瀬店', '西北店', '枚方店', '八尾店', '塚口店', 'JR西宮店', '寝屋川店', '守口店', '高槻店', '長田店', '布施店', '小阪店', '瓢箪山店', '深井店', 'WEB', '反響C', '重複']
+
 const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   date: new Date().toISOString().split('T')[0],
   name: '',
@@ -138,6 +164,22 @@ const defaultRecruitmentForm: Omit<RecruitmentRecord, 'id'> = {
   costReduction: 0,
 }
 
+const defaultHankyoForm: Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'> = {
+  inquiry_date: new Date().toISOString().split('T')[0],
+  account: 'Karilun',
+  trigger: '検索',
+  media: 'Karilun',
+  inquiry_type: '物件問合',
+  customer_name: '',
+  contact_method: 'LINE',
+  move_in_timing: '不明',
+  store: '対象外',
+  area: '',
+  note: '',
+}
+
+const HANKYO_PAGE_SIZE = 20
+
 const currency = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
   currency: 'JPY',
@@ -180,6 +222,17 @@ function App() {
   const [memberEditId, setMemberEditId] = useState<string | null>(null)
   const [memberEditSlack, setMemberEditSlack] = useState('')
 
+  // 反響管理
+  const [hankyoRecords, setHankyoRecords] = useState<HankyoRecord[]>([])
+  const [hankyoForm, setHankyoForm] = useState(defaultHankyoForm)
+  const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
+  const [hankyoInlineForm, setHankyoInlineForm] = useState<Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>>(defaultHankyoForm)
+  const [hankyoSearch, setHankyoSearch] = useState('')
+  const [hankyoMonthFilter, setHankyoMonthFilter] = useState('all')
+  const [hankyoMediaFilter, setHankyoMediaFilter] = useState('all')
+  const [hankyoStoreFilter, setHankyoStoreFilter] = useState('all')
+  const [hankyoPage, setHankyoPage] = useState(1)
+
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
     if (data) setTasks(data as Task[])
@@ -205,12 +258,18 @@ function App() {
     if (data) setMembers(data as Member[])
   }
 
+  async function fetchHankyo() {
+    const { data } = await supabase.from('hankyo').select('*').order('inquiry_date', { ascending: false }).order('created_at', { ascending: false })
+    if (data) setHankyoRecords(data as HankyoRecord[])
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchPosts()
     fetchRecruitment()
     fetchTaskItems()
     fetchMembers()
+    fetchHankyo()
 
     const channel = supabase
       .channel('db-changes')
@@ -373,6 +432,87 @@ function App() {
     fetchMembers()
   }
 
+  // 反響管理ハンドラー
+  const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await supabase.from('hankyo').insert({ ...hankyoForm, id: crypto.randomUUID() })
+    setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] })
+    setHankyoPage(1)
+    fetchHankyo()
+  }
+
+  const startHankyoInline = (r: HankyoRecord) => {
+    setHankyoInlineId(r.id)
+    setHankyoInlineForm({
+      inquiry_date: r.inquiry_date || '',
+      account: r.account || '',
+      trigger: r.trigger || '',
+      media: r.media || '',
+      inquiry_type: r.inquiry_type || '',
+      customer_name: r.customer_name || '',
+      contact_method: r.contact_method || '',
+      move_in_timing: r.move_in_timing || '',
+      store: r.store || '',
+      area: r.area || '',
+      note: r.note || '',
+    })
+  }
+
+  const saveHankyoInline = async () => {
+    if (!hankyoInlineId) return
+    await supabase.from('hankyo').update({ ...hankyoInlineForm, updated_at: new Date().toISOString() }).eq('id', hankyoInlineId)
+    setHankyoInlineId(null)
+    fetchHankyo()
+  }
+
+  const duplicateHankyo = (r: HankyoRecord) => {
+    setHankyoForm({
+      inquiry_date: new Date().toISOString().split('T')[0],
+      account: r.account,
+      trigger: r.trigger,
+      media: r.media,
+      inquiry_type: r.inquiry_type,
+      customer_name: '',
+      contact_method: r.contact_method,
+      move_in_timing: r.move_in_timing,
+      store: r.store,
+      area: r.area,
+      note: r.note,
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // 反響管理 フィルタリング & ページネーション
+  const filteredHankyo = hankyoRecords.filter((r) => {
+    if (hankyoSearch && !r.customer_name.includes(hankyoSearch)) return false
+    if (hankyoMonthFilter !== 'all' && r.inquiry_date) {
+      const m = new Date(r.inquiry_date).getMonth() + 1
+      if (String(m) !== hankyoMonthFilter) return false
+    }
+    if (hankyoMediaFilter !== 'all' && r.media !== hankyoMediaFilter) return false
+    if (hankyoStoreFilter !== 'all' && r.store !== hankyoStoreFilter) return false
+    return true
+  })
+  const hankyoTotalPages = Math.max(1, Math.ceil(filteredHankyo.length / HANKYO_PAGE_SIZE))
+  const paginatedHankyo = filteredHankyo.slice((hankyoPage - 1) * HANKYO_PAGE_SIZE, hankyoPage * HANKYO_PAGE_SIZE)
+
+  // ダッシュボード用 反響集計
+  const hankyoMonthlyData = (() => {
+    const now = new Date()
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const count = hankyoRecords.filter((r) => r.inquiry_date?.startsWith(ym)).length
+      return { month: `${d.getMonth() + 1}月`, count }
+    })
+  })()
+  const hankyoByMedia = Object.entries(
+    hankyoRecords.reduce<Record<string, number>>((acc, r) => { acc[r.media || '不明'] = (acc[r.media || '不明'] || 0) + 1; return acc }, {})
+  ).map(([media, count]) => ({ media, count })).sort((a, b) => b.count - a.count)
+  const hankyoByStore = Object.entries(
+    hankyoRecords.filter(r => r.store && r.store !== '対象外').reduce<Record<string, number>>((acc, r) => { acc[r.store] = (acc[r.store] || 0) + 1; return acc }, {})
+  ).map(([store, count]) => ({ store, count })).sort((a, b) => b.count - a.count).slice(0, 10)
+
   const handleSnsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('sns_posts').insert({ ...normalizePost(snsForm), id: crypto.randomUUID() })
@@ -474,6 +614,7 @@ function App() {
         <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => setActivePage('taskmanagement')}>タスク管理</button>
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => setActivePage('sns')}>SNS投稿管理</button>
         <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => setActivePage('recruitment')}>採用管理</button>
+        <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => setActivePage('hankyo')}>反響管理</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => setActivePage('members')}>メンバー</button>
       </nav>
 
@@ -484,6 +625,7 @@ function App() {
             <div className="stat-card"><span>SNS投稿数</span><strong>{integer.format(filteredPosts.length)}件</strong><small>選択期間の合計投稿</small></div>
             <div className="stat-card"><span>採用記録数</span><strong>{integer.format(filteredRecruitment.length)}件</strong><small>選択期間の合計</small></div>
             <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>選択期間の合計</small></div>
+            <div className="stat-card"><span>反響総数</span><strong>{integer.format(hankyoRecords.length)}件</strong><small>全期間累計</small></div>
 
             <section className="panel chart-panel">
               <div className="panel-heading"><div><h2>部署別削減額</h2><p>完了案件の削減額を部署別に表示</p></div></div>
@@ -542,6 +684,51 @@ function App() {
                         <td>{integer.format(r.count)}件</td>
                         <td>{currency.format(r.costReduction)}</td>
                       </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="panel chart-panel">
+              <div className="panel-heading"><div><h2>月別反響数</h2><p>直近6ヶ月の反響件数</p></div></div>
+              <div className="chart-box">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hankyoMonthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="count" name="反響数" fill="#7c3aed" radius={[6,6,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading"><div><h2>媒体別反響数</h2><p>全期間の媒体ごとの件数</p></div></div>
+              <div className="mini-table">
+                <table>
+                  <thead><tr><th>媒体</th><th>件数</th></tr></thead>
+                  <tbody>
+                    {hankyoByMedia.length === 0 && <tr><td colSpan={2}>データがありません。</td></tr>}
+                    {hankyoByMedia.map((r) => (
+                      <tr key={r.media}><td>{r.media}</td><td>{r.count}件</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading"><div><h2>店舗別送客数</h2><p>送客先（対象外除く）TOP10</p></div></div>
+              <div className="mini-table">
+                <table>
+                  <thead><tr><th>店舗</th><th>件数</th></tr></thead>
+                  <tbody>
+                    {hankyoByStore.length === 0 && <tr><td colSpan={2}>データがありません。</td></tr>}
+                    {hankyoByStore.map((r) => (
+                      <tr key={r.store}><td>{r.store}</td><td>{r.count}件</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -1026,6 +1213,197 @@ function App() {
                   </tbody>
                 </table>
               </div>
+            </section>
+          </section>
+        )}
+
+        {/* ===== 反響管理 ===== */}
+        {activePage === 'hankyo' && (
+          <section className="hankyo-layout">
+            {/* 入力フォーム */}
+            <section className="panel form-panel">
+              <div className="panel-heading"><div><h2>反響を追加</h2><p>複製ボタンで顧客名以外をコピーできます</p></div></div>
+              <form className="data-form" onSubmit={handleHankyoSubmit}>
+                <label className="form-label">反響日
+                  <input type="date" value={hankyoForm.inquiry_date} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_date: e.target.value })} required />
+                </label>
+                <label className="form-label">アカウント
+                  <select value={hankyoForm.account} onChange={(e) => setHankyoForm({ ...hankyoForm, account: e.target.value })}>
+                    {hankyoAccounts.map((a) => <option key={a}>{a}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">きっかけ
+                  <select value={hankyoForm.trigger} onChange={(e) => setHankyoForm({ ...hankyoForm, trigger: e.target.value })}>
+                    {hankyoTriggers.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">反響媒体
+                  <select value={hankyoForm.media} onChange={(e) => setHankyoForm({ ...hankyoForm, media: e.target.value })}>
+                    {hankyoMedias.map((m) => <option key={m}>{m}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">問合内容
+                  <select value={hankyoForm.inquiry_type} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_type: e.target.value })}>
+                    {hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">顧客名 <span className="required-badge">必須</span>
+                  <input placeholder="顧客名" value={hankyoForm.customer_name} onChange={(e) => setHankyoForm({ ...hankyoForm, customer_name: e.target.value })} required />
+                </label>
+                <label className="form-label">問合手段
+                  <select value={hankyoForm.contact_method} onChange={(e) => setHankyoForm({ ...hankyoForm, contact_method: e.target.value })}>
+                    {hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">入居希望時期
+                  <select value={hankyoForm.move_in_timing} onChange={(e) => setHankyoForm({ ...hankyoForm, move_in_timing: e.target.value })}>
+                    {hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">送客先店舗
+                  <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })}>
+                    {hankyoStores.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">希望エリア
+                  <input placeholder="例: 大阪市、守口市" value={hankyoForm.area} onChange={(e) => setHankyoForm({ ...hankyoForm, area: e.target.value })} />
+                </label>
+                <label className="form-label">備考
+                  <textarea placeholder="備考・メモ" rows={2} value={hankyoForm.note} onChange={(e) => setHankyoForm({ ...hankyoForm, note: e.target.value })} />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] })}>リセット</button>
+                </div>
+              </form>
+            </section>
+
+            {/* 一覧テーブル */}
+            <section className="panel hankyo-table-panel">
+              <div className="panel-heading">
+                <div><h2>反響一覧</h2><p>全{filteredHankyo.length}件 / {hankyoRecords.length}件中</p></div>
+              </div>
+
+              {/* 検索・フィルター */}
+              <div className="hankyo-toolbar">
+                <input
+                  className="hankyo-search"
+                  placeholder="顧客名で検索..."
+                  value={hankyoSearch}
+                  onChange={(e) => { setHankyoSearch(e.target.value); setHankyoPage(1) }}
+                />
+                <select value={hankyoMonthFilter} onChange={(e) => { setHankyoMonthFilter(e.target.value); setHankyoPage(1) }}>
+                  <option value="all">全月</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={String(m)}>{m}月</option>
+                  ))}
+                </select>
+                <select value={hankyoMediaFilter} onChange={(e) => { setHankyoMediaFilter(e.target.value); setHankyoPage(1) }}>
+                  <option value="all">全媒体</option>
+                  {hankyoMedias.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={hankyoStoreFilter} onChange={(e) => { setHankyoStoreFilter(e.target.value); setHankyoPage(1) }}>
+                  <option value="all">全店舗</option>
+                  {hankyoStores.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>反響日</th>
+                      <th>顧客名</th>
+                      <th>媒体</th>
+                      <th>問合内容</th>
+                      <th>送客先店舗</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedHankyo.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                    )}
+                    {paginatedHankyo.map((r) => {
+                      const isEditing = hankyoInlineId === r.id
+                      const f = hankyoInlineForm
+                      return (
+                        <tr
+                          key={r.id}
+                          className={isEditing ? 'row-editing' : 'row-hoverable'}
+                          onClick={() => { if (!isEditing) startHankyoInline(r) }}
+                        >
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" type="date" value={f.inquiry_date} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_date: e.target.value })} />
+                              : r.inquiry_date}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.customer_name} onChange={(e) => setHankyoInlineForm({ ...f, customer_name: e.target.value })} />
+                              : r.customer_name}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.media} onChange={(e) => setHankyoInlineForm({ ...f, media: e.target.value })}>{hankyoMedias.map((m) => <option key={m}>{m}</option>)}</select>
+                              : r.media}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.inquiry_type} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_type: e.target.value })}>{hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}</select>
+                              : r.inquiry_type}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.store} onChange={(e) => setHankyoInlineForm({ ...f, store: e.target.value })}>{hankyoStores.map((s) => <option key={s}>{s}</option>)}</select>
+                              : r.store}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  {/* 編集モード時は全フィールド編集可 */}
+                                  <div className="hankyo-inline-extra" onClick={(e) => e.stopPropagation()}>
+                                    <label>アカウント<select className="inline-select" value={f.account} onChange={(e) => setHankyoInlineForm({ ...f, account: e.target.value })}>{hankyoAccounts.map((a) => <option key={a}>{a}</option>)}</select></label>
+                                    <label>きっかけ<select className="inline-select" value={f.trigger} onChange={(e) => setHankyoInlineForm({ ...f, trigger: e.target.value })}>{hankyoTriggers.map((t) => <option key={t}>{t}</option>)}</select></label>
+                                    <label>問合手段<select className="inline-select" value={f.contact_method} onChange={(e) => setHankyoInlineForm({ ...f, contact_method: e.target.value })}>{hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}</select></label>
+                                    <label>入居希望<select className="inline-select" value={f.move_in_timing} onChange={(e) => setHankyoInlineForm({ ...f, move_in_timing: e.target.value })}>{hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}</select></label>
+                                    <label>エリア<input className="inline-input" value={f.area} onChange={(e) => setHankyoInlineForm({ ...f, area: e.target.value })} /></label>
+                                    <label>備考<input className="inline-input" value={f.note} onChange={(e) => setHankyoInlineForm({ ...f, note: e.target.value })} /></label>
+                                  </div>
+                                  <button className="primary" onClick={saveHankyoInline}>保存</button>
+                                  <button className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
+                                  <button className="danger" onClick={async () => { await supabase.from('hankyo').delete().eq('id', r.id); fetchHankyo() }}>削除</button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ページネーション */}
+              {hankyoTotalPages > 1 && (
+                <div className="hankyo-pagination">
+                  <button onClick={() => setHankyoPage(1)} disabled={hankyoPage === 1}>«</button>
+                  <button onClick={() => setHankyoPage(p => Math.max(1, p - 1))} disabled={hankyoPage === 1}>‹</button>
+                  {Array.from({ length: hankyoTotalPages }, (_, i) => i + 1)
+                    .filter((p) => Math.abs(p - hankyoPage) <= 2)
+                    .map((p) => (
+                      <button key={p} className={p === hankyoPage ? 'active' : ''} onClick={() => setHankyoPage(p)}>{p}</button>
+                    ))}
+                  <button onClick={() => setHankyoPage(p => Math.min(hankyoTotalPages, p + 1))} disabled={hankyoPage === hankyoTotalPages}>›</button>
+                  <button onClick={() => setHankyoPage(hankyoTotalPages)} disabled={hankyoPage === hankyoTotalPages}>»</button>
+                  <span className="hankyo-page-info">{hankyoPage} / {hankyoTotalPages}ページ</span>
+                </div>
+              )}
             </section>
           </section>
         )}

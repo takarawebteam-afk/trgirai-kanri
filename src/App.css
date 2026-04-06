@@ -820,3 +820,140 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   color: var(--gray-600);
   font-family: monospace;
 }
+
+/* ===== 反響管理 ===== */
+.hankyo-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .hankyo-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hankyo-table-panel {
+  min-width: 0;
+}
+
+.hankyo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.hankyo-search {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--gray-900);
+  background: var(--white);
+}
+.hankyo-search:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px var(--blue-100);
+}
+
+.hankyo-toolbar select {
+  padding: 8px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--gray-900);
+  background: var(--white);
+  cursor: pointer;
+}
+.hankyo-toolbar select:focus {
+  outline: none;
+  border-color: var(--blue-500);
+}
+
+.hankyo-dup-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1.5px solid #7c3aed;
+  background: transparent;
+  color: #7c3aed;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.hankyo-dup-btn:hover {
+  background: #7c3aed;
+  color: var(--white);
+}
+
+.hankyo-inline-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.hankyo-inline-extra label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.72rem;
+  color: var(--gray-600);
+  font-weight: 600;
+}
+
+.hankyo-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--gray-200);
+  flex-wrap: wrap;
+}
+.hankyo-pagination button {
+  padding: 4px 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--gray-600);
+  font-size: 0.82rem;
+  cursor: pointer;
+  min-width: 32px;
+}
+.hankyo-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.hankyo-pagination button.active {
+  background: var(--blue-600);
+  color: var(--white);
+  border-color: var(--blue-600);
+  font-weight: 700;
+}
+.hankyo-pagination button:hover:not(:disabled):not(.active) {
+  background: var(--gray-100);
+}
+.hankyo-page-info {
+  margin-left: 8px;
+  font-size: 0.8rem;
+  color: var(--gray-400);
+}
+
+.required-badge {
+  font-size: 0.7rem;
+  background: var(--red-100);
+  color: var(--red-700);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 600;
+  vertical-align: middle;
+  margin-left: 4px;
+}
