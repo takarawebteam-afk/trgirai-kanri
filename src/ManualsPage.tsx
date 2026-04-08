@@ -1,4 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Node, mergeAttributes } from '@tiptap/core'
+import Color from '@tiptap/extension-color'
+import Image from '@tiptap/extension-image'
+import Link from '@tiptap/extension-link'
+import { Table } from '@tiptap/extension-table'
+import TableCell from '@tiptap/extension-table-cell'
+import TableHeader from '@tiptap/extension-table-header'
+import TableRow from '@tiptap/extension-table-row'
+import { TextStyle } from '@tiptap/extension-text-style'
+import StarterKit from '@tiptap/starter-kit'
+import {
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  useEditor,
+  type NodeViewProps,
+} from '@tiptap/react'
 import { supabase } from './supabase'
 
 type ManualPageRecord = {
@@ -32,6 +49,82 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 const MANUAL_IMAGE_BUCKET = 'manual-images'
 const EMPTY_CONTENT = '<p></p>'
 
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: 480,
+        parseHTML: (element) => Number.parseInt(element.getAttribute('data-width') || element.getAttribute('width') || '480', 10) || 480,
+        renderHTML: (attributes) => ({
+          'data-width': attributes.width,
+          width: String(attributes.width),
+        }),
+      },
+    }
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView)
+  },
+})
+
+function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
+
+  const startResize = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    startXRef.current = event.clientX
+    startWidthRef.current = Number(node.attrs.width) || 480
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.max(120, startWidthRef.current + moveEvent.clientX - startXRef.current)
+      updateAttributes({ width: nextWidth })
+    }
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }
+
+  return (
+    <NodeViewWrapper className={`manual-image-node ${selected ? 'is-selected' : ''}`}>
+      <img
+        src={node.attrs.src}
+        alt={node.attrs.alt || ''}
+        title={node.attrs.title || ''}
+        style={{ width: `${Number(node.attrs.width) || 480}px` }}
+      />
+      <button
+        type="button"
+        className="manual-image-resize-handle"
+        contentEditable={false}
+        onMouseDown={startResize}
+        aria-label="画像サイズを変更"
+        title="画像サイズを変更"
+      />
+    </NodeViewWrapper>
+  )
+}
+
+const ManualParagraph = Node.create({
+  name: 'manualParagraph',
+  group: 'block',
+  content: 'inline*',
+  parseHTML() {
+    return [{ tag: 'p' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['p', mergeAttributes(HTMLAttributes), 0]
+  },
+})
+
 function ManualsPage() {
   const [pages, setPages] = useState<ManualPageRecord[]>([])
   const [categories, setCategories] = useState<ManualCategoryRecord[]>([])
@@ -44,10 +137,47 @@ function ManualsPage() {
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('未保存の変更はありません')
   const [loading, setLoading] = useState(true)
-  const editorRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const autosaveTimerRef = useRef<number | null>(null)
   const lastSavedSignatureRef = useRef('')
-  const lastSelectionRef = useRef<Range | null>(null)
+  const draftRef = useRef<ManualPageDraft | null>(null)
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit.configure({
+        paragraph: false,
+      }),
+      ManualParagraph,
+      TextStyle,
+      Color,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      ResizableImage,
+    ],
+    content: EMPTY_CONTENT,
+    onUpdate: ({ editor: currentEditor }) => {
+      setDraft((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          content: currentEditor.getHTML(),
+        }
+      })
+    },
+  })
+
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
 
   const loadManualData = async () => {
     setLoading(true)
@@ -88,9 +218,9 @@ function ManualsPage() {
   }
 
   useEffect(() => {
-    loadManualData()
+    void loadManualData()
 
-    const pagesChannel = supabase
+    const channel = supabase
       .channel('manual-pages-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_pages' }, loadManualData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_categories' }, loadManualData)
@@ -101,7 +231,7 @@ function ManualsPage() {
       if (autosaveTimerRef.current) {
         window.clearTimeout(autosaveTimerRef.current)
       }
-      supabase.removeChannel(pagesChannel)
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -123,8 +253,8 @@ function ManualsPage() {
   useEffect(() => {
     if (!selectedPage) {
       setDraft(null)
-      if (editorRef.current) editorRef.current.innerHTML = EMPTY_CONTENT
       lastSavedSignatureRef.current = ''
+      editor?.commands.setContent(EMPTY_CONTENT, { emitUpdate: false })
       return
     }
 
@@ -134,15 +264,13 @@ function ManualsPage() {
       content: selectedPage.content || EMPTY_CONTENT,
       categoryIds: selectedPageCategoryIds,
     }
-    setDraft(nextDraft)
+
     lastSavedSignatureRef.current = JSON.stringify(nextDraft)
+    setDraft(nextDraft)
     setSaveState('idle')
     setSaveMessage('未保存の変更はありません')
-
-    if (editorRef.current) {
-      editorRef.current.innerHTML = nextDraft.content || EMPTY_CONTENT
-    }
-  }, [selectedPage, selectedPageCategoryIds])
+    editor?.commands.setContent(nextDraft.content || EMPTY_CONTENT, { emitUpdate: false })
+  }, [editor, selectedPage, selectedPageCategoryIds])
 
   const filteredPages = useMemo(() => {
     const keyword = search.trim().toLowerCase()
@@ -166,49 +294,6 @@ function ManualsPage() {
     })
   }, [activeCategoryFilters, categoryNameMap, pageCategories, pages, search])
 
-  const updateDraft = (updater: (current: ManualPageDraft) => ManualPageDraft) => {
-    setDraft((current) => {
-      if (!current) return current
-      return updater(current)
-    })
-  }
-
-  const flushPendingSave = async () => {
-    if (!draft) return
-    const signature = JSON.stringify(draft)
-    if (signature === lastSavedSignatureRef.current) return
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current)
-    }
-    await savePage(draft)
-  }
-
-  const syncEditorToDraft = () => {
-    const html = editorRef.current?.innerHTML || EMPTY_CONTENT
-    updateDraft((current) => ({ ...current, content: html }))
-  }
-
-  const rememberSelection = () => {
-    const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return
-    lastSelectionRef.current = selection.getRangeAt(0)
-  }
-
-  const restoreSelection = () => {
-    if (!lastSelectionRef.current) return
-    const selection = window.getSelection()
-    if (!selection) return
-    selection.removeAllRanges()
-    selection.addRange(lastSelectionRef.current)
-  }
-
-  const applyCommand = (command: string, value?: string) => {
-    editorRef.current?.focus()
-    restoreSelection()
-    document.execCommand(command, false, value)
-    syncEditorToDraft()
-  }
-
   const savePage = async (pageToSave: ManualPageDraft) => {
     setSaveState('saving')
     setSaveMessage('自動保存中...')
@@ -220,11 +305,7 @@ function ManualsPage() {
       updated_at: timestamp,
     }
 
-    const pageResult = await supabase
-      .from('manual_pages')
-      .update(pagePayload)
-      .eq('id', pageToSave.id)
-
+    const pageResult = await supabase.from('manual_pages').update(pagePayload).eq('id', pageToSave.id)
     if (pageResult.error) {
       setSaveState('error')
       setSaveMessage(`保存に失敗しました: ${pageResult.error.message}`)
@@ -245,7 +326,6 @@ function ManualsPage() {
           category_id: categoryId,
         })),
       )
-
       if (insertResult.error) {
         setSaveState('error')
         setSaveMessage(`カテゴリ保存に失敗しました: ${insertResult.error.message}`)
@@ -267,6 +347,17 @@ function ManualsPage() {
     setSaveMessage(`保存済み ${new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`)
   }
 
+  const flushPendingSave = async () => {
+    const currentDraft = draftRef.current
+    if (!currentDraft) return
+    const signature = JSON.stringify(currentDraft)
+    if (signature === lastSavedSignatureRef.current) return
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current)
+    }
+    await savePage(currentDraft)
+  }
+
   useEffect(() => {
     if (!draft) return
 
@@ -282,7 +373,7 @@ function ManualsPage() {
 
     autosaveTimerRef.current = window.setTimeout(() => {
       void savePage(draft)
-    }, 900)
+    }, 800)
 
     return () => {
       if (autosaveTimerRef.current) {
@@ -311,18 +402,20 @@ function ManualsPage() {
   }
 
   const handleDeletePage = async () => {
-    if (!draft) return
-    const confirmed = window.confirm(`「${draft.title || '無題'}」を削除しますか？`)
+    const currentDraft = draftRef.current
+    if (!currentDraft) return
+
+    const confirmed = window.confirm(`「${currentDraft.title || '無題'}」を削除しますか？`)
     if (!confirmed) return
 
-    const deleteCategories = await supabase.from('manual_page_categories').delete().eq('page_id', draft.id)
+    const deleteCategories = await supabase.from('manual_page_categories').delete().eq('page_id', currentDraft.id)
     if (deleteCategories.error) {
       setSaveState('error')
       setSaveMessage(`カテゴリ削除に失敗しました: ${deleteCategories.error.message}`)
       return
     }
 
-    const deletePage = await supabase.from('manual_pages').delete().eq('id', draft.id)
+    const deletePage = await supabase.from('manual_pages').delete().eq('id', currentDraft.id)
     if (deletePage.error) {
       setSaveState('error')
       setSaveMessage(`ページ削除に失敗しました: ${deletePage.error.message}`)
@@ -358,6 +451,13 @@ function ManualsPage() {
     await loadManualData()
   }
 
+  const updateDraft = (updater: (current: ManualPageDraft) => ManualPageDraft) => {
+    setDraft((current) => {
+      if (!current) return current
+      return updater(current)
+    })
+  }
+
   const toggleCategoryForDraft = (categoryId: string) => {
     updateDraft((current) => ({
       ...current,
@@ -375,22 +475,29 @@ function ManualsPage() {
     )
   }
 
-  const insertLink = () => {
-    const url = window.prompt('リンクURLを入力してください')
-    if (!url) return
-    applyCommand('createLink', url)
+  const setLink = () => {
+    const previousUrl = editor?.getAttributes('link').href as string | undefined
+    const url = window.prompt('リンクURLを入力してください', previousUrl || 'https://')
+    if (!editor || url === null) return
+
+    if (!url.trim()) {
+      editor.chain().focus().unsetLink().run()
+      return
+    }
+
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run()
   }
 
-  const insertTable = () => {
-    applyCommand(
-      'insertHTML',
-      '<table><tbody><tr><th>項目</th><th>内容</th></tr><tr><td>サンプル</td><td>ここに入力</td></tr></tbody></table><p></p>',
-    )
-  }
+  const handleImageUpload = async (file: File) => {
+    const currentDraft = draftRef.current
+    if (!editor || !currentDraft) return
 
-  const uploadImage = async (file: File) => {
+    setSaveState('saving')
+    setSaveMessage('画像をアップロード中...')
+
     const extension = file.name.split('.').pop() || 'png'
-    const filePath = `${draft?.id || 'manual'}/${crypto.randomUUID()}.${extension}`
+    const filePath = `${currentDraft.id}/${crypto.randomUUID()}.${extension}`
+
     const uploadResult = await supabase.storage.from(MANUAL_IMAGE_BUCKET).upload(filePath, file, {
       cacheControl: '3600',
       upsert: false,
@@ -403,10 +510,17 @@ function ManualsPage() {
     }
 
     const { data } = supabase.storage.from(MANUAL_IMAGE_BUCKET).getPublicUrl(filePath)
-    applyCommand('insertImage', data.publicUrl)
+    editor.chain().focus().setImage({ src: data.publicUrl, width: 480 }).run()
   }
 
-  const handlePaste = async (event: ClipboardEvent<HTMLDivElement>) => {
+  const handleImagePickerChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    await handleImageUpload(file)
+    event.target.value = ''
+  }
+
+  const handleEditorPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
     const file = Array.from(event.clipboardData.items)
       .find((item) => item.type.startsWith('image/'))
       ?.getAsFile()
@@ -414,8 +528,22 @@ function ManualsPage() {
     if (!file) return
 
     event.preventDefault()
-    await uploadImage(file)
+    await handleImageUpload(file)
   }
+
+  const insertTable = () => {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+  }
+
+  const tableActions = [
+    { label: '行+上', onClick: () => editor?.chain().focus().addRowBefore().run() },
+    { label: '行+下', onClick: () => editor?.chain().focus().addRowAfter().run() },
+    { label: '列+左', onClick: () => editor?.chain().focus().addColumnBefore().run() },
+    { label: '列+右', onClick: () => editor?.chain().focus().addColumnAfter().run() },
+    { label: '行削除', onClick: () => editor?.chain().focus().deleteRow().run() },
+    { label: '列削除', onClick: () => editor?.chain().focus().deleteColumn().run() },
+    { label: '表削除', onClick: () => editor?.chain().focus().deleteTable().run() },
+  ]
 
   return (
     <section className="manuals-page">
@@ -552,31 +680,43 @@ function ManualsPage() {
                 </div>
               </div>
 
-              <div className="manual-editor-toolbar" onMouseUp={rememberSelection}>
-                <button type="button" className="secondary" onClick={() => applyCommand('formatBlock', '<h1>')}>H1</button>
-                <button type="button" className="secondary" onClick={() => applyCommand('formatBlock', '<h2>')}>H2</button>
-                <button type="button" className="secondary" onClick={() => applyCommand('formatBlock', '<h3>')}>H3</button>
-                <button type="button" className="secondary" onClick={() => applyCommand('bold')}>太字</button>
+              <div className="manual-editor-toolbar">
+                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
+                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
+                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleBold().run()}>太字</button>
                 <label className="manual-color-picker">
                   文字色
-                  <input type="color" onChange={(event) => applyCommand('foreColor', event.target.value)} />
+                  <input type="color" onChange={(event) => editor?.chain().focus().setColor(event.target.value).run()} />
                 </label>
-                <button type="button" className="secondary" onClick={() => applyCommand('insertUnorderedList')}>箇条書き</button>
-                <button type="button" className="secondary" onClick={insertLink}>リンク</button>
-                <button type="button" className="secondary" onClick={insertTable}>表</button>
+                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleBulletList().run()}>箇条書き</button>
+                <button type="button" className="secondary" onClick={setLink}>リンク</button>
+                <button type="button" className="secondary" onClick={insertTable}>表を追加</button>
+                <button type="button" className="secondary" onClick={() => fileInputRef.current?.click()}>画像を追加</button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  hidden
+                  onChange={handleImagePickerChange}
+                />
               </div>
 
-              <div
-                ref={editorRef}
-                className="manual-rich-editor"
-                contentEditable
-                suppressContentEditableWarning
-                onInput={syncEditorToDraft}
-                onPaste={handlePaste}
-                onKeyUp={rememberSelection}
-                onMouseUp={rememberSelection}
-              />
-              <p className="manual-editor-note">画像は貼り付けでSupabase Storageに保存されます。バケット名は `manual-images` を想定しています。</p>
+              <div className="manual-table-toolbar">
+                {tableActions.map((action) => (
+                  <button key={action.label} type="button" className="secondary" onClick={action.onClick}>
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="manual-editor-surface" onPaste={handleEditorPaste}>
+                <EditorContent editor={editor} className="manual-rich-editor" />
+              </div>
+
+              <p className="manual-editor-note">
+                表は列境界ドラッグで幅変更できます。画像はボタン追加と貼り付けの両方に対応し、右下ハンドルでサイズ変更できます。
+              </p>
             </>
           )}
         </div>
