@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Node, mergeAttributes } from '@tiptap/core'
 import Color from '@tiptap/extension-color'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -9,13 +8,7 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
-import {
-  EditorContent,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-  useEditor,
-  type NodeViewProps,
-} from '@tiptap/react'
+import { EditorContent, useEditor } from '@tiptap/react'
 import { supabase } from './supabase'
 
 type ManualPageRecord = {
@@ -49,7 +42,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 const MANUAL_IMAGE_BUCKET = 'manual-images'
 const EMPTY_CONTENT = '<p></p>'
 
-const ResizableImage = Image.extend({
+const ManualImage = Image.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -62,66 +55,6 @@ const ResizableImage = Image.extend({
         }),
       },
     }
-  },
-  addNodeView() {
-    return ReactNodeViewRenderer(ResizableImageView)
-  },
-})
-
-function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
-  const startXRef = useRef(0)
-  const startWidthRef = useRef(0)
-
-  const startResize = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-
-    startXRef.current = event.clientX
-    startWidthRef.current = Number(node.attrs.width) || 480
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(120, startWidthRef.current + moveEvent.clientX - startXRef.current)
-      updateAttributes({ width: nextWidth })
-    }
-
-    const handleMouseUp = () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-  }
-
-  return (
-    <NodeViewWrapper className={`manual-image-node ${selected ? 'is-selected' : ''}`}>
-      <img
-        src={node.attrs.src}
-        alt={node.attrs.alt || ''}
-        title={node.attrs.title || ''}
-        style={{ width: `${Number(node.attrs.width) || 480}px` }}
-      />
-      <button
-        type="button"
-        className="manual-image-resize-handle"
-        contentEditable={false}
-        onMouseDown={startResize}
-        aria-label="画像サイズを変更"
-        title="画像サイズを変更"
-      />
-    </NodeViewWrapper>
-  )
-}
-
-const ManualParagraph = Node.create({
-  name: 'manualParagraph',
-  group: 'block',
-  content: 'inline*',
-  parseHTML() {
-    return [{ tag: 'p' }]
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ['p', mergeAttributes(HTMLAttributes), 0]
   },
 })
 
@@ -145,10 +78,7 @@ function ManualsPage() {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({
-        paragraph: false,
-      }),
-      ManualParagraph,
+      StarterKit,
       TextStyle,
       Color,
       Link.configure({
@@ -161,7 +91,7 @@ function ManualsPage() {
       TableRow,
       TableHeader,
       TableCell,
-      ResizableImage,
+      ManualImage,
     ],
     content: EMPTY_CONTENT,
     onUpdate: ({ editor: currentEditor }) => {
@@ -293,6 +223,13 @@ function ManualsPage() {
       )
     })
   }, [activeCategoryFilters, categoryNameMap, pageCategories, pages, search])
+
+  const updateDraft = (updater: (current: ManualPageDraft) => ManualPageDraft) => {
+    setDraft((current) => {
+      if (!current) return current
+      return updater(current)
+    })
+  }
 
   const savePage = async (pageToSave: ManualPageDraft) => {
     setSaveState('saving')
@@ -451,13 +388,6 @@ function ManualsPage() {
     await loadManualData()
   }
 
-  const updateDraft = (updater: (current: ManualPageDraft) => ManualPageDraft) => {
-    setDraft((current) => {
-      if (!current) return current
-      return updater(current)
-    })
-  }
-
   const toggleCategoryForDraft = (categoryId: string) => {
     updateDraft((current) => ({
       ...current,
@@ -535,6 +465,10 @@ function ManualsPage() {
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
   }
 
+  const resizeSelectedImage = (width: number) => {
+    editor?.chain().focus().updateAttributes('image', { width }).run()
+  }
+
   const tableActions = [
     { label: '行+上', onClick: () => editor?.chain().focus().addRowBefore().run() },
     { label: '行+下', onClick: () => editor?.chain().focus().addRowAfter().run() },
@@ -543,6 +477,12 @@ function ManualsPage() {
     { label: '行削除', onClick: () => editor?.chain().focus().deleteRow().run() },
     { label: '列削除', onClick: () => editor?.chain().focus().deleteColumn().run() },
     { label: '表削除', onClick: () => editor?.chain().focus().deleteTable().run() },
+  ]
+
+  const imageSizeActions = [
+    { label: '画像 小', width: 240 },
+    { label: '画像 中', width: 480 },
+    { label: '画像 大', width: 720 },
   ]
 
   return (
@@ -708,6 +648,11 @@ function ManualsPage() {
                     {action.label}
                   </button>
                 ))}
+                {imageSizeActions.map((action) => (
+                  <button key={action.label} type="button" className="secondary" onClick={() => resizeSelectedImage(action.width)}>
+                    {action.label}
+                  </button>
+                ))}
               </div>
 
               <div className="manual-editor-surface" onPaste={handleEditorPaste}>
@@ -715,7 +660,7 @@ function ManualsPage() {
               </div>
 
               <p className="manual-editor-note">
-                表は列境界ドラッグで幅変更できます。画像はボタン追加と貼り付けの両方に対応し、右下ハンドルでサイズ変更できます。
+                表は列境界ドラッグで幅変更できます。画像はボタン追加と貼り付けの両方に対応し、画像選択後にサイズボタンで幅変更できます。
               </p>
             </>
           )}

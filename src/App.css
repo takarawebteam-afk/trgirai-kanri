@@ -1395,35 +1395,12 @@ button.manual-chip {
   cursor: col-resize;
 }
 
-.manual-image-node {
-  position: relative;
-  display: inline-flex;
-  margin: 16px 0;
-  max-width: 100%;
-}
-
-.manual-image-node img {
+.manual-rich-editor .tiptap img {
   max-width: min(100%, 920px);
   border-radius: 12px;
   display: block;
+  margin: 16px 0;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-}
-
-.manual-image-node.is-selected img {
-  box-shadow: 0 0 0 3px rgba(59, 140, 240, 0.25), 0 10px 24px rgba(15, 23, 42, 0.12);
-}
-
-.manual-image-resize-handle {
-  position: absolute;
-  right: -8px;
-  bottom: -8px;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 999px;
-  background: var(--blue-600);
-  box-shadow: 0 4px 12px rgba(26, 111, 230, 0.35);
-  cursor: nwse-resize;
 }
 
 .manual-editor-note {
