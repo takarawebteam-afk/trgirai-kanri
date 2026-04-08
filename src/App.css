@@ -1261,16 +1261,158 @@ button.manual-chip {
 .manual-editor-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid var(--gray-200);
   border-bottom: none;
   border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: #ffffff;
 }
 
-.manual-table-toolbar {
+.manual-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--gray-200);
+}
+
+.manual-toolbar-select {
+  min-width: 132px;
+  padding: 7px 28px 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--gray-900);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.manual-toolbar-select:focus {
+  outline: none;
+  border-color: var(--blue-400);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(59, 140, 240, 0.14);
+}
+
+.manual-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gray-600);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.manual-tool-button:hover,
+.manual-insert-menu summary:hover {
+  background: #f8fafc;
+  color: var(--gray-900);
+}
+
+.manual-tool-button.active {
+  background: #e8f0fe;
+  color: var(--blue-700);
+}
+
+.manual-tool-color {
+  position: relative;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.manual-tool-color input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.manual-color-dot {
+  width: 12px;
+  height: 12px;
+  background: #111827;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+
+.manual-toolbar-insert {
+  position: relative;
+}
+
+.manual-insert-menu {
+  position: relative;
+}
+
+.manual-insert-menu summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--gray-600);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manual-insert-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.manual-insert-menu[open] summary {
+  background: #f8fafc;
+  color: var(--gray-900);
+}
+
+.manual-insert-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  min-width: 160px;
+  padding: 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.manual-insert-item {
+  display: flex;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gray-900);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.manual-insert-item:hover {
+  background: #f8fafc;
+}
+
+.manual-context-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1279,27 +1421,38 @@ button.manual-chip {
   border-left: 1px solid var(--gray-200);
   border-right: 1px solid var(--gray-200);
   border-bottom: 1px solid var(--gray-200);
-  background: #fcfdff;
+  background: #fafcff;
 }
 
-.manual-color-picker {
-  display: inline-flex;
+.manual-context-group {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--gray-100);
-  color: var(--gray-900);
-  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.manual-context-label {
+  color: var(--gray-400);
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
-.manual-color-picker input {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  background: transparent;
+.manual-context-button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #dce5f0;
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--gray-600);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manual-context-button:hover {
+  border-color: var(--blue-300);
+  color: var(--blue-700);
+  background: #f8fbff;
 }
 
 .manual-editor-surface {

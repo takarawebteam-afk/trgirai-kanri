@@ -485,6 +485,30 @@ function ManualsPage() {
     { label: '画像 大', width: 720 },
   ]
 
+  const activeHeadingLevel = editor?.isActive('heading', { level: 1 })
+    ? 'h1'
+    : editor?.isActive('heading', { level: 2 })
+      ? 'h2'
+      : editor?.isActive('heading', { level: 3 })
+        ? 'h3'
+        : 'paragraph'
+
+  const showTableTools = !!editor?.isActive('table')
+  const showImageTools = !!editor?.isActive('image')
+
+  const handleHeadingChange = (value: string) => {
+    if (!editor) return
+
+    const chain = editor.chain().focus()
+    if (value === 'paragraph') {
+      chain.setParagraph().run()
+      return
+    }
+
+    const levelMap = { h1: 1, h2: 2, h3: 3 } as const
+    chain.toggleHeading({ level: levelMap[value as keyof typeof levelMap] }).run()
+  }
+
   return (
     <section className="manuals-page">
       <div className="manuals-layout">
@@ -621,18 +645,67 @@ function ManualsPage() {
               </div>
 
               <div className="manual-editor-toolbar">
-                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
-                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
-                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleBold().run()}>太字</button>
-                <label className="manual-color-picker">
-                  文字色
-                  <input type="color" onChange={(event) => editor?.chain().focus().setColor(event.target.value).run()} />
-                </label>
-                <button type="button" className="secondary" onClick={() => editor?.chain().focus().toggleBulletList().run()}>箇条書き</button>
-                <button type="button" className="secondary" onClick={setLink}>リンク</button>
-                <button type="button" className="secondary" onClick={insertTable}>表を追加</button>
-                <button type="button" className="secondary" onClick={() => fileInputRef.current?.click()}>画像を追加</button>
+                <div className="manual-toolbar-group">
+                  <select
+                    className="manual-toolbar-select"
+                    value={activeHeadingLevel}
+                    onChange={(event) => handleHeadingChange(event.target.value)}
+                  >
+                    <option value="paragraph">標準テキスト</option>
+                    <option value="h1">見出し1</option>
+                    <option value="h2">見出し2</option>
+                    <option value="h3">見出し3</option>
+                  </select>
+                </div>
+
+                <div className="manual-toolbar-divider" />
+
+                <div className="manual-toolbar-group">
+                  <button
+                    type="button"
+                    className={`manual-tool-button ${editor?.isActive('bold') ? 'active' : ''}`}
+                    onClick={() => editor?.chain().focus().toggleBold().run()}
+                  >
+                    B
+                  </button>
+                  <label className="manual-tool-button manual-tool-color" title="文字色">
+                    A
+                    <span className="manual-color-dot" />
+                    <input type="color" onChange={(event) => editor?.chain().focus().setColor(event.target.value).run()} />
+                  </label>
+                  <button
+                    type="button"
+                    className={`manual-tool-button ${editor?.isActive('bulletList') ? 'active' : ''}`}
+                    onClick={() => editor?.chain().focus().toggleBulletList().run()}
+                  >
+                    箇条書き
+                  </button>
+                </div>
+
+                <div className="manual-toolbar-divider" />
+
+                <div className="manual-toolbar-group">
+                  <button
+                    type="button"
+                    className={`manual-tool-button ${editor?.isActive('link') ? 'active' : ''}`}
+                    onClick={setLink}
+                  >
+                    リンク
+                  </button>
+                </div>
+
+                <div className="manual-toolbar-divider" />
+
+                <div className="manual-toolbar-group manual-toolbar-insert">
+                  <details className="manual-insert-menu">
+                    <summary>挿入</summary>
+                    <div className="manual-insert-popover">
+                      <button type="button" className="manual-insert-item" onClick={insertTable}>表を追加</button>
+                      <button type="button" className="manual-insert-item" onClick={() => fileInputRef.current?.click()}>画像を追加</button>
+                    </div>
+                  </details>
+                </div>
+
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -642,18 +715,36 @@ function ManualsPage() {
                 />
               </div>
 
-              <div className="manual-table-toolbar">
-                {tableActions.map((action) => (
-                  <button key={action.label} type="button" className="secondary" onClick={action.onClick}>
-                    {action.label}
-                  </button>
-                ))}
-                {imageSizeActions.map((action) => (
-                  <button key={action.label} type="button" className="secondary" onClick={() => resizeSelectedImage(action.width)}>
-                    {action.label}
-                  </button>
-                ))}
-              </div>
+              {(showTableTools || showImageTools) && (
+                <div className="manual-context-toolbar">
+                  {showTableTools && (
+                    <div className="manual-context-group">
+                      <span className="manual-context-label">表</span>
+                      {tableActions.map((action) => (
+                        <button key={action.label} type="button" className="manual-context-button" onClick={action.onClick}>
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {showImageTools && (
+                    <div className="manual-context-group">
+                      <span className="manual-context-label">画像</span>
+                      {imageSizeActions.map((action) => (
+                        <button
+                          key={action.label}
+                          type="button"
+                          className="manual-context-button"
+                          onClick={() => resizeSelectedImage(action.width)}
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="manual-editor-surface" onPaste={handleEditorPaste}>
                 <EditorContent editor={editor} className="manual-rich-editor" />
