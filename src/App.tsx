@@ -21,7 +21,7 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm'
 
 type HankyoRecord = {
   id: string
@@ -38,6 +38,16 @@ type HankyoRecord = {
   note: string
   created_at?: string
   updated_at?: string
+}
+
+type DMRecord = {
+  id: string
+  date: string
+  account: string
+  sns: string
+  area: string
+  property_number: string
+  created_at?: string
 }
 
 type TaskItem = {
@@ -111,6 +121,10 @@ const taskItemStatuses: TaskItemStatus[] = ['未着手', '進行中', '完了']
 const priorityOptions: Priority[] = ['高', '中', '低']
 const assigneeOptions = ['泉', '坂本', '吉田', '新居']
 
+// DM管理 マスターデータ
+const dmAccounts = ['Karilun', '京阪Karilun', '西宮Karilun', '近鉄八尾店', '近大一人暮らし', '関学一人暮らし']
+const dmSnsList = ['TikTok', 'Instagram', 'Threads', 'YouTube']
+
 // 反響管理 マスターデータ
 const hankyoAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '外大', '摂南', '大商', '大経', '武庫女', '学生ポータル', '八尾', '売買', '採用', '管理', '店舗']
 const hankyoTriggers = ['検索', 'Karilun', 'TikTok', 'Instagram', 'threads', 'YouTube', '広告', '学生サイト', '学生ポータル', '地域サイト', '不明']
@@ -180,6 +194,15 @@ const defaultHankyoForm: Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'> 
 }
 
 const HANKYO_PAGE_SIZE = 20
+const DM_PAGE_SIZE = 20
+
+const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
+  date: new Date().toISOString().split('T')[0],
+  account: 'Karilun',
+  sns: 'TikTok',
+  area: '',
+  property_number: '',
+}
 
 const currency = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -237,6 +260,16 @@ function App() {
   const [hankyoPage, setHankyoPage] = useState(1)
   const [showModal, setShowModal] = useState(false)
 
+  // DM管理
+  const [dmRecords, setDmRecords] = useState<DMRecord[]>([])
+  const [dmForm, setDmForm] = useState(defaultDmForm)
+  const [dmInlineId, setDmInlineId] = useState<string | null>(null)
+  const [dmInlineForm, setDmInlineForm] = useState<Omit<DMRecord, 'id' | 'created_at'>>(defaultDmForm)
+  const [dmMonthFilter, setDmMonthFilter] = useState('all')
+  const [dmAccountFilter, setDmAccountFilter] = useState('all')
+  const [dmPage, setDmPage] = useState(1)
+  const [dmAreaLoading, setDmAreaLoading] = useState(false)
+
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
     if (data) setTasks(data as Task[])
@@ -267,6 +300,11 @@ function App() {
     if (data) setHankyoRecords(data as HankyoRecord[])
   }
 
+  async function fetchDm() {
+    const { data } = await supabase.from('dm').select('*').order('date', { ascending: false }).order('created_at', { ascending: false })
+    if (data) setDmRecords(data as DMRecord[])
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchPosts()
@@ -274,6 +312,7 @@ function App() {
     fetchTaskItems()
     fetchMembers()
     fetchHankyo()
+    fetchDm()
 
     const channel = supabase
       .channel('db-changes')
@@ -454,6 +493,103 @@ function App() {
     fetchMembers()
   }
 
+  // ===== Google Sheets からエリアを取得 =====
+  async function fetchAreaFromSheets(account: string, propertyNumber: string): Promise<string> {
+    if (!propertyNumber) return ''
+
+    // アカウント固定値
+    if (account === '西宮Karilun') return '西宮市'
+    if (account === '近鉄八尾店') return '八尾市'
+    if (account === '近大一人暮らし') return '近大近く'
+    if (account === '関学一人暮らし') return '関学近く'
+
+    const SPREADSHEET_ID = '1Ddk6QM4-S4MPcc4kEcfkWVM-iWcKHhrQUExltO1IPZ8'
+    const API_KEY = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY as string | undefined
+
+    if (!API_KEY) return '不明'
+
+    let sheetName = ''
+    if (account === 'Karilun') {
+      const prefix = propertyNumber.charAt(0).toUpperCase()
+      if (prefix === 'K') sheetName = 'TikTok(K000)'
+      else if (prefix === 'G') sheetName = 'INSUTA(G000)'
+      else if (prefix === 'R' || prefix === 'Y') return ''
+      else return '不明'
+    } else if (account === '京阪Karilun') {
+      sheetName = '京阪'
+    } else {
+      return '不明'
+    }
+
+    try {
+      const range = encodeURIComponent(`${sheetName}!A:F`)
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?key=${API_KEY}`
+      const res = await fetch(url)
+      if (!res.ok) return '不明'
+      const json = await res.json()
+      const rows: string[][] = json.values || []
+      // E列(index 4)に物件番号 → B列(index 1)がエリア
+      for (const row of rows) {
+        if (row[4] === propertyNumber) return row[1] || '不明'
+      }
+      return '不明'
+    } catch {
+      return '不明'
+    }
+  }
+
+  // ===== DM管理ハンドラー =====
+  const handleDmSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await supabase.from('dm').insert({ ...dmForm, id: crypto.randomUUID() })
+    setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] })
+    setDmPage(1)
+    fetchDm()
+  }
+
+  const handleDmAccountChange = async (account: string) => {
+    const updated = { ...dmForm, account, area: '' }
+    setDmForm(updated)
+    if (updated.property_number) {
+      setDmAreaLoading(true)
+      try {
+        const area = await fetchAreaFromSheets(account, updated.property_number)
+        setDmForm(f => ({ ...f, area }))
+      } finally {
+        setDmAreaLoading(false)
+      }
+    }
+  }
+
+  const handleDmPropertyBlur = async (propertyNumber: string) => {
+    if (!propertyNumber) return
+    setDmAreaLoading(true)
+    try {
+      const area = await fetchAreaFromSheets(dmForm.account, propertyNumber)
+      setDmForm(f => ({ ...f, property_number: propertyNumber, area }))
+    } finally {
+      setDmAreaLoading(false)
+    }
+  }
+
+  const startDmInline = (r: DMRecord) => {
+    setDmInlineId(r.id)
+    setDmInlineForm({
+      date: r.date || '',
+      account: r.account || '',
+      sns: r.sns || '',
+      area: r.area || '',
+      property_number: r.property_number || '',
+    })
+  }
+
+  const saveDmInline = async () => {
+    if (!dmInlineId) return
+    await supabase.from('dm').update(dmInlineForm).eq('id', dmInlineId)
+    setDmInlineId(null)
+    fetchDm()
+  }
+
   // 反響管理ハンドラー
   const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -504,6 +640,18 @@ function App() {
     })
     setShowModal(true)
   }
+
+  // DM管理 フィルタリング & ページネーション
+  const filteredDm = dmRecords.filter((r) => {
+    if (dmMonthFilter !== 'all' && r.date) {
+      const m = new Date(r.date).getMonth() + 1
+      if (String(m) !== dmMonthFilter) return false
+    }
+    if (dmAccountFilter !== 'all' && r.account !== dmAccountFilter) return false
+    return true
+  })
+  const dmTotalPages = Math.max(1, Math.ceil(filteredDm.length / DM_PAGE_SIZE))
+  const paginatedDm = filteredDm.slice((dmPage - 1) * DM_PAGE_SIZE, dmPage * DM_PAGE_SIZE)
 
   // 反響管理 フィルタリング & ページネーション
   const filteredHankyo = hankyoRecords.filter((r) => {
@@ -651,6 +799,7 @@ function App() {
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
         <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管理</button>
         <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管理</button>
+        <button className={activePage === 'dm' ? 'active' : ''} onClick={() => { setActivePage('dm'); setShowModal(false) }}>DM管理</button>
         <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>ルール・マニュアル</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
       </nav>
@@ -1325,6 +1474,187 @@ function App() {
           </>
         )}
 
+        {/* ===== DM管理 ===== */}
+        {activePage === 'dm' && (
+          <div className="dm-layout">
+            {/* 左：入力フォーム */}
+            <section className="panel dm-form-panel">
+              <div className="panel-heading">
+                <div><h2>DM追加</h2><p>新しいDMを登録</p></div>
+              </div>
+              <form className="data-form" onSubmit={handleDmSubmit}>
+                <label className="form-label">日付
+                  <input type="date" value={dmForm.date} onChange={(e) => setDmForm({ ...dmForm, date: e.target.value })} required />
+                </label>
+
+                <div className="form-label">アカウント名
+                  <div className="radio-group">
+                    {dmAccounts.map((a) => (
+                      <label key={a} className="radio-item">
+                        <input
+                          type="radio"
+                          name="dm-account"
+                          value={a}
+                          checked={dmForm.account === a}
+                          onChange={() => handleDmAccountChange(a)}
+                        />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-label">SNS
+                  <div className="radio-group">
+                    {dmSnsList.map((s) => (
+                      <label key={s} className="radio-item">
+                        <input
+                          type="radio"
+                          name="dm-sns"
+                          value={s}
+                          checked={dmForm.sns === s}
+                          onChange={() => setDmForm({ ...dmForm, sns: s })}
+                        />
+                        {s}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="form-label">反響物件番号
+                  <input
+                    placeholder="例: K001"
+                    value={dmForm.property_number}
+                    onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })}
+                    onBlur={(e) => handleDmPropertyBlur(e.target.value)}
+                  />
+                </label>
+
+                <label className="form-label">
+                  エリア
+                  {dmAreaLoading && <span className="dm-area-loading">取得中…</span>}
+                  <input
+                    placeholder="物件番号入力で自動取得"
+                    value={dmForm.area}
+                    onChange={(e) => setDmForm({ ...dmForm, area: e.target.value })}
+                  />
+                </label>
+
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] })}>リセット</button>
+                </div>
+              </form>
+            </section>
+
+            {/* 右：一覧テーブル */}
+            <section className="panel hankyo-table-panel">
+              <div className="panel-heading">
+                <div><h2>DM一覧</h2><p>全{filteredDm.length}件 / {dmRecords.length}件中</p></div>
+              </div>
+
+              {/* フィルター */}
+              <div className="hankyo-toolbar">
+                <select value={dmMonthFilter} onChange={(e) => { setDmMonthFilter(e.target.value); setDmPage(1) }}>
+                  <option value="all">全月</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={String(m)}>{m}月</option>
+                  ))}
+                </select>
+                <select value={dmAccountFilter} onChange={(e) => { setDmAccountFilter(e.target.value); setDmPage(1) }}>
+                  <option value="all">全アカウント</option>
+                  {dmAccounts.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>日付</th>
+                      <th>アカウント名</th>
+                      <th>SNS</th>
+                      <th>エリア</th>
+                      <th>反響物件番号</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedDm.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                    )}
+                    {paginatedDm.map((r) => {
+                      const isEditing = dmInlineId === r.id
+                      const f = dmInlineForm
+                      return (
+                        <tr
+                          key={r.id}
+                          className={isEditing ? 'row-editing' : 'row-hoverable'}
+                          onClick={() => { if (!isEditing) startDmInline(r) }}
+                        >
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setDmInlineForm({ ...f, date: e.target.value })} />
+                              : r.date}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.account} onChange={(e) => setDmInlineForm({ ...f, account: e.target.value })}>{dmAccounts.map((a) => <option key={a}>{a}</option>)}</select>
+                              : r.account}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <select className="inline-select" value={f.sns} onChange={(e) => setDmInlineForm({ ...f, sns: e.target.value })}>{dmSnsList.map((s) => <option key={s}>{s}</option>)}</select>
+                              : r.sns}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.area} onChange={(e) => setDmInlineForm({ ...f, area: e.target.value })} />
+                              : <span className="cell-truncate" title={r.area}>{r.area}</span>}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing
+                              ? <input className="inline-input" value={f.property_number} onChange={(e) => setDmInlineForm({ ...f, property_number: e.target.value })} />
+                              : r.property_number}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  <button className="primary" onClick={saveDmInline}>保存</button>
+                                  <button className="secondary" onClick={() => setDmInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <button className="danger" onClick={async () => { await supabase.from('dm').delete().eq('id', r.id); fetchDm() }}>削除</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ページネーション */}
+              {dmTotalPages > 1 && (
+                <div className="hankyo-pagination">
+                  <button onClick={() => setDmPage(1)} disabled={dmPage === 1}>«</button>
+                  <button onClick={() => setDmPage(p => Math.max(1, p - 1))} disabled={dmPage === 1}>‹</button>
+                  {Array.from({ length: dmTotalPages }, (_, i) => i + 1)
+                    .filter((p) => Math.abs(p - dmPage) <= 2)
+                    .map((p) => (
+                      <button key={p} className={p === dmPage ? 'active' : ''} onClick={() => setDmPage(p)}>{p}</button>
+                    ))}
+                  <button onClick={() => setDmPage(p => Math.min(dmTotalPages, p + 1))} disabled={dmPage === dmTotalPages}>›</button>
+                  <button onClick={() => setDmPage(dmTotalPages)} disabled={dmPage === dmTotalPages}>»</button>
+                  <span className="hankyo-page-info">{dmPage} / {dmTotalPages}ページ</span>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
         {/* ===== メンバー ===== */}
         {activePage === 'members' && (
           <section className="members-page">
@@ -1367,7 +1697,7 @@ function App() {
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'dm' && (
         <button
           className="fab"
           onClick={() => setShowModal(true)}
@@ -1379,7 +1709,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'dm' && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div className="modal-content">
             <div className="modal-header">

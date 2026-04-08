@@ -1422,3 +1422,69 @@ button.manual-chip {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== DM管理 ===== */
+.dm-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .dm-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dm-form-panel {
+  position: sticky;
+  top: 20px;
+}
+
+/* ラジオボタングループ */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--gray-900);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.radio-item:hover {
+  background: var(--blue-50);
+}
+
+.radio-item input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--blue-600);
+  flex-shrink: 0;
+}
+
+/* エリア取得中インジケーター */
+.dm-area-loading {
+  font-size: 0.75rem;
+  color: var(--blue-500);
+  font-weight: 500;
+  margin-left: 6px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
