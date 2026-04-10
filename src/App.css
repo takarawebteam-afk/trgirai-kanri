@@ -7,9 +7,10 @@
   --blue-400: #60a5fa;
   --blue-100: #dbeafe;
   --blue-50:  #eff6ff;
-  --gray-900: #0f172a;
-  --gray-600: #475569;
-  --gray-400: #94a3b8;
+  --gray-900: #111827;
+  --gray-600: #374151;
+  --gray-500: #4b5563;
+  --gray-400: #6b7280;
   --gray-200: #e2e8f0;
   --gray-100: #f1f5f9;
   --white:    #ffffff;
@@ -251,7 +252,7 @@ th {
 th:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
 th:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
-td { font-size: 0.9rem; color: var(--gray-900); }
+td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .table-wrap { overflow-x: auto; }
 

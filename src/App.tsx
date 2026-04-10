@@ -204,6 +204,42 @@ const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
   property_number: '',
 }
 
+const DM_ACCOUNT_KARILUN = dmAccounts[0]
+const DM_ACCOUNT_KEIHAN = dmAccounts[1]
+const DM_ACCOUNT_NISHINOMIYA = dmAccounts[2]
+const DM_ACCOUNT_YAO = dmAccounts[3]
+const DM_ACCOUNT_KINDAI = dmAccounts[4]
+const DM_ACCOUNT_KANGAKU = dmAccounts[5]
+
+type DmAreaLookup =
+  | { mode: 'fixed'; area: string }
+  | { mode: 'sheet'; sheetName: string }
+  | { mode: 'blank' }
+  | { mode: 'unknown' }
+
+function getDmAreaLookup(account: string, propertyNumber: string): DmAreaLookup {
+  const normalizedPropertyNumber = propertyNumber.trim().toUpperCase()
+
+  if (account === DM_ACCOUNT_NISHINOMIYA) return { mode: 'fixed', area: '西宮市' }
+  if (account === DM_ACCOUNT_YAO) return { mode: 'fixed', area: '八尾市' }
+  if (account === DM_ACCOUNT_KINDAI) return { mode: 'fixed', area: '近大近く' }
+  if (account === DM_ACCOUNT_KANGAKU) return { mode: 'fixed', area: '関学近く' }
+
+  if (account === DM_ACCOUNT_KEIHAN) {
+    return { mode: 'sheet', sheetName: '京阪' }
+  }
+
+  if (account === DM_ACCOUNT_KARILUN) {
+    const prefix = normalizedPropertyNumber.charAt(0)
+    if (prefix === 'K') return { mode: 'sheet', sheetName: 'TikTok(K000)' }
+    if (prefix === 'G') return { mode: 'sheet', sheetName: 'INSUTA(G000)' }
+    if (prefix === 'R' || prefix === 'Y') return { mode: 'blank' }
+    return { mode: 'unknown' }
+  }
+
+  return { mode: 'unknown' }
+}
+
 const currency = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
   currency: 'JPY',
@@ -247,6 +283,7 @@ function App() {
   const [taskError, setTaskError] = useState<string | null>(null)
   const [memberEditId, setMemberEditId] = useState<string | null>(null)
   const [memberEditSlack, setMemberEditSlack] = useState('')
+  const [memberSettingOpen, setMemberSettingOpen] = useState(false)
 
   // 反響管理
   const [hankyoRecords, setHankyoRecords] = useState<HankyoRecord[]>([])
@@ -495,46 +532,26 @@ function App() {
 
   // ===== Google Sheets からエリアを取得 =====
   async function fetchAreaFromSheets(account: string, propertyNumber: string): Promise<string> {
-    if (!propertyNumber) return ''
+    const normalizedPropertyNumber = propertyNumber.trim()
+    if (!normalizedPropertyNumber) return ''
 
-    // アカウント固定値
-    if (account === '西宮Karilun') return '西宮市'
-    if (account === '近鉄八尾店') return '八尾市'
-    if (account === '近大一人暮らし') return '近大近く'
-    if (account === '関学一人暮らし') return '関学近く'
+    const lookup = getDmAreaLookup(account, normalizedPropertyNumber)
 
-    const SPREADSHEET_ID = '1Ddk6QM4-S4MPcc4kEcfkWVM-iWcKHhrQUExltO1IPZ8'
-    const API_KEY = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY as string | undefined
-
-    if (!API_KEY) return '不明'
-
-    let sheetName = ''
-    if (account === 'Karilun') {
-      const prefix = propertyNumber.charAt(0).toUpperCase()
-      if (prefix === 'K') sheetName = 'TikTok(K000)'
-      else if (prefix === 'G') sheetName = 'INSUTA(G000)'
-      else if (prefix === 'R' || prefix === 'Y') return ''
-      else return '不明'
-    } else if (account === '京阪Karilun') {
-      sheetName = '京阪'
-    } else {
-      return '不明'
-    }
+    if (lookup.mode === 'fixed') return lookup.area
+    if (lookup.mode === 'blank') return ''
+    if (lookup.mode === 'unknown') return '\u4e0d\u660e'
 
     try {
-      const range = encodeURIComponent(`${sheetName}!A:F`)
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?key=${API_KEY}`
-      const res = await fetch(url)
-      if (!res.ok) return '不明'
-      const json = await res.json()
-      const rows: string[][] = json.values || []
-      // E列(index 4)に物件番号 → B列(index 1)がエリア
-      for (const row of rows) {
-        if (row[4] === propertyNumber) return row[1] || '不明'
-      }
-      return '不明'
+      const params = new URLSearchParams({
+        sheetName: lookup.sheetName,
+        propertyNumber: normalizedPropertyNumber,
+      })
+      const response = await fetch(`/api/dm-area?${params.toString()}`)
+      if (!response.ok) return '\u4e0d\u660e'
+      const data = await response.json() as { area?: string }
+      return (data.area || '').trim() || '\u4e0d\u660e'
     } catch {
-      return '不明'
+      return '\u4e0d\u660e'
     }
   }
 
@@ -547,30 +564,10 @@ function App() {
     fetchDm()
   }
 
-  const handleDmAccountChange = async (account: string) => {
-    const updated = { ...dmForm, account, area: '' }
-    setDmForm(updated)
-    if (updated.property_number) {
-      setDmAreaLoading(true)
-      try {
-        const area = await fetchAreaFromSheets(account, updated.property_number)
-        setDmForm(f => ({ ...f, area }))
-      } finally {
-        setDmAreaLoading(false)
-      }
-    }
+  const handleDmAccountChange = (account: string) => {
+    setDmForm((current) => ({ ...current, account, area: '' }))
   }
 
-  const handleDmPropertyBlur = async (propertyNumber: string) => {
-    if (!propertyNumber) return
-    setDmAreaLoading(true)
-    try {
-      const area = await fetchAreaFromSheets(dmForm.account, propertyNumber)
-      setDmForm(f => ({ ...f, property_number: propertyNumber, area }))
-    } finally {
-      setDmAreaLoading(false)
-    }
-  }
 
   const startDmInline = (r: DMRecord) => {
     setDmInlineId(r.id)
@@ -589,6 +586,38 @@ function App() {
     setDmInlineId(null)
     fetchDm()
   }
+
+  useEffect(() => {
+    const propertyNumber = dmForm.property_number.trim()
+
+    if (!propertyNumber) {
+      setDmAreaLoading(false)
+      setDmForm((current) => (current.area ? { ...current, area: '' } : current))
+      return
+    }
+
+    let cancelled = false
+    setDmAreaLoading(true)
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const area = await fetchAreaFromSheets(dmForm.account, propertyNumber)
+        if (!cancelled) {
+          setDmForm((current) => {
+            if (current.property_number.trim() !== propertyNumber || current.account !== dmForm.account) return current
+            return { ...current, area }
+          })
+        }
+      } finally {
+        if (!cancelled) setDmAreaLoading(false)
+      }
+    }, 400)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [dmForm.account, dmForm.property_number])
 
   // 反響管理ハンドラー
   const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1176,26 +1205,36 @@ function App() {
 
             {/* メンバー管理 */}
             <section className="panel">
-              <div className="panel-heading"><div><h2>メンバー設定</h2><p>SlackユーザーIDを設定すると@メンションで通知されます</p></div></div>
-              <div className="member-slack-list">
-                {members.map((m) => (
-                  <div key={m.id} className="member-slack-row">
-                    <span className="member-slack-name">{m.name}</span>
-                    {memberEditId === m.id ? (
-                      <>
-                        <input className="inline-input" placeholder="SlackユーザーID（例: U12345678）" value={memberEditSlack} onChange={(e) => setMemberEditSlack(e.target.value)} style={{ flex: 1 }} />
-                        <button className="primary" onClick={() => saveMemberSlack(m.id)}>保存</button>
-                        <button className="secondary" onClick={() => setMemberEditId(null)}>×</button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="member-slack-id">{m.slack_user_id || '未設定'}</span>
-                        <button className="secondary" onClick={() => { setMemberEditId(m.id); setMemberEditSlack(m.slack_user_id) }}>編集</button>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <h2 style={{ margin: '0 0 4px' }}>メンバー設定</h2>
+              <p style={{ margin: '0 0 12px', color: 'var(--gray-400)', fontSize: '0.82rem' }}>SlackユーザーIDを設定すると@メンションで通知されます</p>
+              <button
+                className="secondary"
+                onClick={() => setMemberSettingOpen(o => !o)}
+                style={{ marginBottom: memberSettingOpen ? '16px' : '0' }}
+              >
+                {memberSettingOpen ? '▲ メンバー一覧を閉じる' : '▼ メンバー一覧を開く'}
+              </button>
+              {memberSettingOpen && (
+                <div className="member-slack-list">
+                  {members.map((m) => (
+                    <div key={m.id} className="member-slack-row">
+                      <span className="member-slack-name">{m.name}</span>
+                      {memberEditId === m.id ? (
+                        <>
+                          <input className="inline-input" placeholder="SlackユーザーID（例: U12345678）" value={memberEditSlack} onChange={(e) => setMemberEditSlack(e.target.value)} style={{ flex: 1 }} />
+                          <button className="primary" onClick={() => saveMemberSlack(m.id)}>保存</button>
+                          <button className="secondary" onClick={() => setMemberEditId(null)}>×</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="member-slack-id">{m.slack_user_id || '未設定'}</span>
+                          <button className="secondary" onClick={() => { setMemberEditId(m.id); setMemberEditSlack(m.slack_user_id) }}>編集</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           </section>
         )}
@@ -1526,7 +1565,6 @@ function App() {
                     placeholder="例: K001"
                     value={dmForm.property_number}
                     onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })}
-                    onBlur={(e) => handleDmPropertyBlur(e.target.value)}
                   />
                 </label>
 
