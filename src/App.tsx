@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useGoogleLogin } from '@react-oauth/google'
 import {
   Bar,
   BarChart,
@@ -103,6 +104,15 @@ type RecruitmentRecord = {
   costReduction: number
 }
 
+const TEAM_MEMBERS = [
+  { name: '新居', calendarId: 'trg.yshini@gmail.com', color: '#374151' },
+  { name: '泉', calendarId: 'izumiyurina2322@gmail.com', color: '#7c3aed' },
+  { name: '坂本', calendarId: 'takarabaito3@gmail.com', color: '#1d4ed8' },
+  { name: '吉田', calendarId: 'takarabaito1@gmail.com', color: '#db2777' },
+  { name: 'WEBチーム', calendarId: 'takara.webteam@gmail.com', color: '#0ea5e9' },
+]
+
+type CalendarEvent = { id: string; summary: string; start: string }
 
 const departments: Department[] = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他']
 const taskTypes: TaskType[] = ['単発', '継続']
@@ -1617,6 +1627,17 @@ function App() {
         {activePage === 'members' && (
           <section className="members-page">
 
+            {/* 今日のタスク */}
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID
+              ? <TodayTasksPanel />
+              : (
+                <div className="panel">
+                  <div className="panel-heading"><div><h2>今日のタスク</h2></div></div>
+                  <div className="calendar-login-prompt"><p>Google Calendar連携を有効にするにはVercelに環境変数を設定してください。</p></div>
+                </div>
+              )
+            }
+
             {/* カレンダー埋め込み */}
             <div className="panel">
               <div className="panel-heading">
@@ -1926,6 +1947,212 @@ function App() {
               </form>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const STORAGE_KEY = 'gcal_token'
+const STORAGE_EXPIRY_KEY = 'gcal_token_expiry'
+
+function getSavedToken(): string | null {
+  try {
+    const expiry = localStorage.getItem(STORAGE_EXPIRY_KEY)
+    if (!expiry || Date.now() > Number(expiry)) {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(STORAGE_EXPIRY_KEY)
+      return null
+    }
+    return localStorage.getItem(STORAGE_KEY)
+  } catch { return null }
+}
+
+function saveToken(token: string, expiresIn: number) {
+  try {
+    localStorage.setItem(STORAGE_KEY, token)
+    localStorage.setItem(STORAGE_EXPIRY_KEY, String(Date.now() + expiresIn * 1000))
+  } catch { /* ignore */ }
+}
+
+function clearToken() {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(STORAGE_EXPIRY_KEY)
+  } catch { /* ignore */ }
+}
+
+function TodayTasksPanel() {
+  const [accessToken, setAccessToken] = useState<string | null>(getSavedToken)
+  const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
+  const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const silentLoginFnRef = useRef<(() => void) | null>(null)
+
+  // Supabaseから今日のチェック状態を読み込む（3秒ごとにポーリングして他PCと同期）
+  useEffect(() => {
+    const fetchChecked = async () => {
+      const { data } = await supabase
+        .from('checked_events')
+        .select('event_key')
+        .eq('event_date', today)
+      if (data) {
+        const map: Record<string, boolean> = {}
+        data.forEach((row: { event_key: string }) => { map[row.event_key] = true })
+        setCheckedEvents(map)
+      }
+    }
+    fetchChecked()
+    const interval = setInterval(fetchChecked, 3000)
+    return () => clearInterval(interval)
+  }, [today])
+
+  // タイマークリーンアップ
+  useEffect(() => {
+    return () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current) }
+  }, [])
+
+  // トークン有効期限の3分前にsetAccessToken(null)して「再接続」ボタンを表示する
+  const scheduleRefresh = useCallback((expiresIn: number) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    const ms = Math.max(0, (expiresIn - 180) * 1000)
+    refreshTimerRef.current = setTimeout(() => {
+      setAccessToken(null)
+    }, ms)
+  }, [])
+
+  const toggleCheck = async (key: string, checked: boolean) => {
+    // 楽観的UI更新
+    setCheckedEvents(prev => checked ? (() => { const n = { ...prev }; delete n[key]; return n })() : { ...prev, [key]: true })
+    if (checked) {
+      await supabase.from('checked_events').delete().eq('event_key', key)
+    } else {
+      await supabase.from('checked_events').upsert({ event_key: key, event_date: today })
+    }
+  }
+
+  const fetchMemberEvents = useCallback(async (token: string) => {
+    setCalendarLoading(true)
+    const now = new Date()
+    const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString()
+    const results: Record<string, CalendarEvent[]> = {}
+    await Promise.all(
+      TEAM_MEMBERS.map(async (member) => {
+        try {
+          const res = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          if (res.status === 401) {
+            clearToken()
+            setAccessToken(null)
+            setCalendarLoading(false)
+            return
+          }
+          const data = await res.json()
+          results[member.calendarId] = (data.items || []).map((e: any) => ({
+            id: e.id,
+            summary: e.summary || '（タイトルなし）',
+            start: e.start?.dateTime || e.start?.date || '',
+          }))
+        } catch {
+          results[member.calendarId] = []
+        }
+      })
+    )
+    setMemberEvents(results)
+    setCalendarLoading(false)
+  }, [])
+
+  // 保存済みトークンがあれば起動時に自動取得＆リフレッシュタイマーセット
+  useEffect(() => {
+    const saved = getSavedToken()
+    if (saved) {
+      fetchMemberEvents(saved)
+      try {
+        const expiry = localStorage.getItem(STORAGE_EXPIRY_KEY)
+        if (expiry) {
+          const remaining = (Number(expiry) - Date.now()) / 1000
+          scheduleRefresh(remaining)
+        }
+      } catch { /* ignore */ }
+    }
+  }, [fetchMemberEvents, scheduleRefresh])
+
+  // prompt:none でGoogleUIを出さずに無音再認証
+  const silentLogin = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    prompt: 'none',
+    onSuccess: (res) => {
+      const expiresIn = res.expires_in ?? 3600
+      saveToken(res.access_token, expiresIn)
+      setAccessToken(res.access_token)
+      fetchMemberEvents(res.access_token)
+      scheduleRefresh(expiresIn)
+    },
+    onError: () => {
+      // 無音再認証失敗→通常ログインボタンへ切り替え
+      clearToken()
+      setAccessToken(null)
+    },
+  })
+
+  // silentLoginをrefに保持（タイマーコールバックから参照するため）
+  silentLoginFnRef.current = silentLogin
+
+  return (
+    <div className="panel">
+      <div className="panel-heading">
+        <div>
+          <h2>今日のタスク</h2>
+          <p>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
+        </div>
+        {accessToken && (
+          <button className="secondary" onClick={() => fetchMemberEvents(accessToken)}>再読み込み</button>
+        )}
+      </div>
+
+      {calendarLoading && (
+        <div className="calendar-login-prompt"><p>読み込み中...</p></div>
+      )}
+
+      {accessToken && !calendarLoading && (
+        <div className="today-tasks-grid">
+          {TEAM_MEMBERS.filter(m => m.name !== 'WEBチーム').map((member) => {
+            const events = memberEvents[member.calendarId] || []
+            return (
+              <div key={member.calendarId} className="member-task-card">
+                <div className="member-task-header" style={{ borderLeft: `4px solid ${member.color}` }}>
+                  <span className="member-name">{member.name}</span>
+                  <span className="member-event-count">{events.length}件</span>
+                </div>
+                {events.length === 0 ? (
+                  <p className="no-events">予定なし</p>
+                ) : (
+                  <ul className="event-checklist">
+                    {events.map((ev) => {
+                      const key = `${member.calendarId}:${ev.id}`
+                      const checked = !!checkedEvents[key]
+                      const time = ev.start.includes('T')
+                        ? new Date(ev.start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                        : '終日'
+                      return (
+                        <li key={ev.id} className={`event-item ${checked ? 'checked' : ''}`}
+                          onClick={() => toggleCheck(key, checked)}>
+                          <span className="event-checkbox">{checked ? '✓' : ''}</span>
+                          <span className="event-time">{time}</span>
+                          <span className="event-title" title={ev.summary}>{ev.summary}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
