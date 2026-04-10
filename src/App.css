@@ -195,15 +195,8 @@ h1 {
   padding: 24px;
 }
 
-.chart-panel:nth-of-type(1),
-.chart-panel:nth-of-type(2) {
+.chart-panel {
   grid-column: span 6;
-}
-
-.dashboard-grid > .panel:nth-last-child(2),
-.dashboard-grid > .panel:last-child,
-.dashboard-grid > .panel:nth-last-child(3) {
-  grid-column: span 4;
 }
 
 .panel-heading {
@@ -626,11 +619,8 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 /* ===== レスポンシブ ===== */
 @media (max-width: 1120px) {
   .stat-card { grid-column: span 6; }
-  .chart-panel:nth-of-type(1),
-  .chart-panel:nth-of-type(2),
-  .dashboard-grid > .panel:nth-last-child(2),
-  .dashboard-grid > .panel:last-child,
-  .dashboard-grid > .panel:nth-last-child(3) { grid-column: span 12; }
+  .chart-panel,
+  .dashboard-grid > .panel { grid-column: span 12 !important; }
   .management-layout { grid-template-columns: 1fr; }
 }
 

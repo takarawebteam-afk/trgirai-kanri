@@ -886,7 +886,7 @@ function App() {
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel" style={{ gridColumn: 'span 6' }}>
               <div className="panel-heading"><div><h2>部署別採用実績</h2><p>選択期間の部署単位の件数・削減額</p></div></div>
               <div className="mini-table">
                 <table>
@@ -920,7 +920,7 @@ function App() {
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel" style={{ gridColumn: 'span 3' }}>
               <div className="panel-heading"><div><h2>媒体別反響数</h2><p>全期間の媒体ごとの件数</p></div></div>
               <div className="mini-table">
                 <table>
@@ -935,7 +935,7 @@ function App() {
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel" style={{ gridColumn: 'span 3' }}>
               <div className="panel-heading"><div><h2>店舗別送客数</h2><p>送客先（対象外除く）TOP10</p></div></div>
               <div className="mini-table">
                 <table>
@@ -950,7 +950,7 @@ function App() {
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel" style={{ gridColumn: 'span 12' }}>
               <div className="panel-heading"><div><h2>進行中案件</h2><p>ステータスが「作業中」の案件一覧</p></div></div>
               <div className="ongoing-list">
                 {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません。</p>}
