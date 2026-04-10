@@ -1627,17 +1627,6 @@ function App() {
         {activePage === 'members' && (
           <section className="members-page">
 
-            {/* 今日のタスク */}
-            {import.meta.env.VITE_GOOGLE_CLIENT_ID
-              ? <TodayTasksPanel />
-              : (
-                <div className="panel">
-                  <div className="panel-heading"><div><h2>今日のタスク</h2></div></div>
-                  <div className="calendar-login-prompt"><p>Google Calendar連携を有効にするにはVercelに環境変数を設定してください。</p></div>
-                </div>
-              )
-            }
-
             {/* カレンダー埋め込み */}
             <div className="panel">
               <div className="panel-heading">
