@@ -2103,6 +2103,22 @@ function TodayTasksPanel() {
   // silentLoginをrefに保持（タイマーコールバックから参照するため）
   silentLoginFnRef.current = silentLogin
 
+  const googleLogin = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    onSuccess: async (res) => {
+      const expiresIn = res.expires_in ?? 3600
+      saveToken(res.access_token, expiresIn)
+      setAccessToken(res.access_token)
+      fetchMemberEvents(res.access_token)
+      scheduleRefresh(expiresIn)
+      try {
+        const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${res.access_token}` } })
+        const userInfo = await userRes.json()
+        if (userInfo.email) localStorage.setItem('gcal_hint', userInfo.email)
+      } catch { /* ignore */ }
+    },
+  })
+
   return (
     <div className="panel">
       <div className="panel-heading">
@@ -2110,9 +2126,10 @@ function TodayTasksPanel() {
           <h2>今日のタスク</h2>
           <p>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
         </div>
-        {accessToken && (
-          <button className="secondary" onClick={() => fetchMemberEvents(accessToken)}>再読み込み</button>
-        )}
+        {!accessToken
+          ? <button className="primary" onClick={() => googleLogin()}>Googleでログイン</button>
+          : <button className="secondary" onClick={() => fetchMemberEvents(accessToken)}>再読み込み</button>
+        }
       </div>
 
       {calendarLoading && (
