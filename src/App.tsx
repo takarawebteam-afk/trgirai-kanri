@@ -1515,78 +1515,8 @@ function App() {
 
         {/* ===== DM管理 ===== */}
         {activePage === 'dm' && (
-          <div className="dm-layout">
-            {/* 左：入力フォーム */}
-            <section className="panel dm-form-panel">
-              <div className="panel-heading">
-                <div><h2>DM追加</h2><p>新しいDMを登録</p></div>
-              </div>
-              <form className="data-form" onSubmit={handleDmSubmit}>
-                <label className="form-label">日付
-                  <input type="date" value={dmForm.date} onChange={(e) => setDmForm({ ...dmForm, date: e.target.value })} required />
-                </label>
-
-                <div className="form-label">アカウント名
-                  <div className="radio-group">
-                    {dmAccounts.map((a) => (
-                      <label key={a} className="radio-item">
-                        <input
-                          type="radio"
-                          name="dm-account"
-                          value={a}
-                          checked={dmForm.account === a}
-                          onChange={() => handleDmAccountChange(a)}
-                        />
-                        {a}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-label">SNS
-                  <div className="radio-group">
-                    {dmSnsList.map((s) => (
-                      <label key={s} className="radio-item">
-                        <input
-                          type="radio"
-                          name="dm-sns"
-                          value={s}
-                          checked={dmForm.sns === s}
-                          onChange={() => setDmForm({ ...dmForm, sns: s })}
-                        />
-                        {s}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <label className="form-label">反響物件番号
-                  <input
-                    placeholder="例: K001"
-                    value={dmForm.property_number}
-                    onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })}
-                  />
-                </label>
-
-                <label className="form-label">
-                  エリア
-                  {dmAreaLoading && <span className="dm-area-loading">取得中…</span>}
-                  <input
-                    placeholder="物件番号入力で自動取得"
-                    value={dmForm.area}
-                    onChange={(e) => setDmForm({ ...dmForm, area: e.target.value })}
-                  />
-                </label>
-
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                  <button type="button" className="secondary" onClick={() => setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] })}>リセット</button>
-                </div>
-              </form>
-            </section>
-
-            {/* 右：一覧テーブル */}
-            <section className="panel hankyo-table-panel">
+          <>
+            <section className="panel table-panel">
               <div className="panel-heading">
                 <div><h2>DM一覧</h2><p>全{filteredDm.length}件 / {dmRecords.length}件中</p></div>
               </div>
@@ -1690,7 +1620,7 @@ function App() {
                 </div>
               )}
             </section>
-          </div>
+          </>
         )}
 
         {/* ===== メンバー ===== */}
@@ -1735,7 +1665,7 @@ function App() {
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'dm' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && (
         <button
           className="fab"
           onClick={() => setShowModal(true)}
@@ -1747,7 +1677,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'dm' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div className="modal-content">
             <div className="modal-header">
@@ -1757,6 +1687,7 @@ function App() {
                 {activePage === 'sns' && '投稿を追加'}
                 {activePage === 'recruitment' && '採用データを追加'}
                 {activePage === 'hankyo' && '反響を追加'}
+                {activePage === 'dm' && 'DMを追加'}
               </h2>
               <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
@@ -1972,6 +1903,46 @@ function App() {
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                   <button type="button" className="secondary" onClick={() => { setShowModal(false); setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] }) }}>キャンセル</button>
+                </div>
+              </form>
+            )}
+
+            {/* DM管理フォーム */}
+            {activePage === 'dm' && (
+              <form className="data-form" onSubmit={(e) => { handleDmSubmit(e); setShowModal(false) }}>
+                <label className="form-label">日付
+                  <input type="date" value={dmForm.date} onChange={(e) => setDmForm({ ...dmForm, date: e.target.value })} required />
+                </label>
+                <div className="form-label">アカウント名
+                  <div className="radio-group">
+                    {dmAccounts.map((a) => (
+                      <label key={a} className="radio-item">
+                        <input type="radio" name="dm-account" value={a} checked={dmForm.account === a} onChange={() => handleDmAccountChange(a)} />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-label">SNS
+                  <div className="radio-group">
+                    {dmSnsList.map((s) => (
+                      <label key={s} className="radio-item">
+                        <input type="radio" name="dm-sns" value={s} checked={dmForm.sns === s} onChange={() => setDmForm({ ...dmForm, sns: s })} />
+                        {s}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <label className="form-label">反響物件番号
+                  <input placeholder="例: K001" value={dmForm.property_number} onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })} />
+                </label>
+                <label className="form-label">エリア
+                  {dmAreaLoading && <span className="dm-area-loading">取得中…</span>}
+                  <input placeholder="物件番号入力で自動取得" value={dmForm.area} onChange={(e) => setDmForm({ ...dmForm, area: e.target.value })} />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => { setShowModal(false); setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] }) }}>キャンセル</button>
                 </div>
               </form>
             )}
