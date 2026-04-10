@@ -21,7 +21,17 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock'
+
+type StockRecord = {
+  id: string
+  deadline: string
+  required_count: number
+  label: string
+  note: string
+  achieved_count: number
+  created_at?: string
+}
 
 type HankyoRecord = {
   id: string
@@ -204,6 +214,8 @@ const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
   property_number: '',
 }
 
+const defaultStockForm = { deadline: '', required_count: 1, label: '', note: '', achieved_count: 0 }
+
 const DM_ACCOUNT_KARILUN = dmAccounts[0]
 const DM_ACCOUNT_KEIHAN = dmAccounts[1]
 const DM_ACCOUNT_NISHINOMIYA = dmAccounts[2]
@@ -307,6 +319,16 @@ function App() {
   const [dmPage, setDmPage] = useState(1)
   const [dmAreaLoading, setDmAreaLoading] = useState(false)
 
+  // ストック管理
+  const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
+  const [stockForm, setStockForm] = useState(defaultStockForm)
+  const [stockInlineId, setStockInlineId] = useState<string | null>(null)
+  const [stockInlineForm, setStockInlineForm] = useState(defaultStockForm)
+  const [stockCalendarMonth, setStockCalendarMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
     if (data) setTasks(data as Task[])
@@ -342,6 +364,11 @@ function App() {
     if (data) setDmRecords(data as DMRecord[])
   }
 
+  async function fetchStock() {
+    const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
+    if (data) setStockRecords(data as StockRecord[])
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchPosts()
@@ -350,6 +377,7 @@ function App() {
     fetchMembers()
     fetchHankyo()
     fetchDm()
+    fetchStock()
 
     const channel = supabase
       .channel('db-changes')
@@ -585,6 +613,33 @@ function App() {
     await supabase.from('dm').update(dmInlineForm).eq('id', dmInlineId)
     setDmInlineId(null)
     fetchDm()
+  }
+
+  // ===== ストック管理ハンドラー =====
+  const handleStockSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await supabase.from('stock').insert({ ...stockForm, id: crypto.randomUUID() })
+    setStockForm(defaultStockForm)
+    setShowModal(false)
+    fetchStock()
+  }
+
+  const startStockInline = (r: StockRecord) => {
+    setStockInlineId(r.id)
+    setStockInlineForm({ deadline: r.deadline, required_count: r.required_count, label: r.label, note: r.note, achieved_count: r.achieved_count })
+  }
+
+  const saveStockInline = async () => {
+    if (!stockInlineId) return
+    await supabase.from('stock').update(stockInlineForm).eq('id', stockInlineId)
+    setStockInlineId(null)
+    fetchStock()
+  }
+
+  const moveStockMonth = (delta: number) => {
+    const [y, m] = stockCalendarMonth.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setStockCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
   useEffect(() => {
@@ -829,6 +884,7 @@ function App() {
         <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管理</button>
         <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管理</button>
         <button className={activePage === 'dm' ? 'active' : ''} onClick={() => { setActivePage('dm'); setShowModal(false) }}>DM管理</button>
+        <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック</button>
         <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>ルール・マニュアル</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
       </nav>
@@ -1662,6 +1718,112 @@ function App() {
         )}
 
         {activePage === 'manuals' && <ManualsPage />}
+
+        {/* ===== ストック管理 ===== */}
+        {activePage === 'stock' && (() => {
+          const [calYear, calMonth] = stockCalendarMonth.split('-').map(Number)
+          const firstDay = new Date(calYear, calMonth - 1, 1)
+          const lastDay = new Date(calYear, calMonth, 0)
+          const today2 = new Date().toISOString().split('T')[0]
+          type CalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; stocks: StockRecord[] }
+          const cells: CalCell[] = []
+          for (let i = 0; i < firstDay.getDay(); i++) {
+            const d = new Date(calYear, calMonth - 2, new Date(calYear, calMonth - 1, 0).getDate() - firstDay.getDay() + i + 1)
+            cells.push({ day: d.getDate(), date: '', isOtherMonth: true, isToday: false, stocks: [] })
+          }
+          for (let d = 1; d <= lastDay.getDate(); d++) {
+            const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: stockRecords.filter(r => r.deadline === dateStr) })
+          }
+          const remaining = (7 - (cells.length % 7)) % 7
+          for (let i = 1; i <= remaining; i++) cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, stocks: [] })
+
+          return (
+            <>
+              {/* カレンダー */}
+              <section className="panel" style={{ gridColumn: 'span 12' }}>
+                <div className="panel-heading">
+                  <div><h2>ストックカレンダー</h2><p>締切日ごとの必要件数を管理</p></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button className="secondary" onClick={() => moveStockMonth(-1)}>◀</button>
+                    <span style={{ fontWeight: 700, fontSize: '1rem' }}>{calYear}年{calMonth}月</span>
+                    <button className="secondary" onClick={() => moveStockMonth(1)}>▶</button>
+                  </div>
+                </div>
+                <div className="stock-calendar-grid">
+                  {['日','月','火','水','木','金','土'].map(w => (
+                    <div key={w} className="cal-weekday" style={{ color: w === '日' ? '#ef4444' : w === '土' ? '#3b82f6' : undefined }}>{w}</div>
+                  ))}
+                  {cells.map((cell, i) => (
+                    <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
+                      <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
+                      {cell.stocks.map(s => {
+                        const done = s.achieved_count >= s.required_count
+                        return (
+                          <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
+                            <span className="stock-badge-label">{s.label}</span>
+                            <span className="stock-badge-count">{s.achieved_count}/{s.required_count}件</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* 一覧 */}
+              <section className="panel table-panel" style={{ gridColumn: 'span 12' }}>
+                <div className="panel-heading"><div><h2>ストック一覧</h2><p>行をクリックして直接編集</p></div></div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>状態</th><th>メモ</th><th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockRecords.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
+                      {stockRecords.map(r => {
+                        const isEditing = stockInlineId === r.id
+                        const f = stockInlineForm
+                        const done = r.achieved_count >= r.required_count
+                        return (
+                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startStockInline(r) }}>
+                            <td onClick={e => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" type="date" value={f.deadline} onChange={e => setStockInlineForm({ ...f, deadline: e.target.value })} /> : r.deadline}
+                            </td>
+                            <td onClick={e => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.label} onChange={e => setStockInlineForm({ ...f, label: e.target.value })} /> : r.label}
+                            </td>
+                            <td onClick={e => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" type="number" min="1" value={f.required_count} onChange={e => setStockInlineForm({ ...f, required_count: Number(e.target.value) })} /> : `${r.required_count}件`}
+                            </td>
+                            <td onClick={e => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" type="number" min="0" value={f.achieved_count} onChange={e => setStockInlineForm({ ...f, achieved_count: Number(e.target.value) })} /> : `${r.achieved_count}件`}
+                            </td>
+                            <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.78rem', background: done ? '#dcfce7' : '#fef9c3', color: done ? '#166534' : '#713f12' }}>{done ? '達成' : '未達'}</span></td>
+                            <td onClick={e => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.note} onChange={e => setStockInlineForm({ ...f, note: e.target.value })} /> : r.note}
+                            </td>
+                            <td onClick={e => e.stopPropagation()}>
+                              <div className="row-actions">
+                                {isEditing ? (
+                                  <><button className="primary" onClick={saveStockInline}>保存</button><button className="secondary" onClick={() => setStockInlineId(null)}>×</button></>
+                                ) : (
+                                  <button className="danger" onClick={async () => { await supabase.from('stock').delete().eq('id', r.id); fetchStock() }}>削除</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )
+        })()}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
@@ -1688,6 +1850,7 @@ function App() {
                 {activePage === 'recruitment' && '採用データを追加'}
                 {activePage === 'hankyo' && '反響を追加'}
                 {activePage === 'dm' && 'DMを追加'}
+                {activePage === 'stock' && 'ストックを追加'}
               </h2>
               <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
@@ -1943,6 +2106,31 @@ function App() {
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                   <button type="button" className="secondary" onClick={() => { setShowModal(false); setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] }) }}>キャンセル</button>
+                </div>
+              </form>
+            )}
+
+            {/* ストック管理フォーム */}
+            {activePage === 'stock' && (
+              <form className="data-form" onSubmit={handleStockSubmit}>
+                <label className="form-label">締切日
+                  <input type="date" value={stockForm.deadline} onChange={e => setStockForm({ ...stockForm, deadline: e.target.value })} required />
+                </label>
+                <label className="form-label">ラベル（例：仲介、管理）
+                  <input placeholder="例: 仲介" value={stockForm.label} onChange={e => setStockForm({ ...stockForm, label: e.target.value })} required />
+                </label>
+                <label className="form-label">必要件数
+                  <input type="number" min="1" value={stockForm.required_count} onChange={e => setStockForm({ ...stockForm, required_count: Number(e.target.value) })} required />
+                </label>
+                <label className="form-label">達成件数
+                  <input type="number" min="0" value={stockForm.achieved_count} onChange={e => setStockForm({ ...stockForm, achieved_count: Number(e.target.value) })} />
+                </label>
+                <label className="form-label">メモ
+                  <input value={stockForm.note} onChange={e => setStockForm({ ...stockForm, note: e.target.value })} placeholder="任意" />
+                </label>
+                <div className="form-actions">
+                  <button type="submit" className="primary">追加する</button>
+                  <button type="button" className="secondary" onClick={() => { setShowModal(false); setStockForm(defaultStockForm) }}>キャンセル</button>
                 </div>
               </form>
             )}
