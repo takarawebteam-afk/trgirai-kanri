@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import {
   Bar,
@@ -21,7 +21,7 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho'
 
 type StockRecord = {
   id: string
@@ -31,6 +31,29 @@ type StockRecord = {
   note: string
   achieved_count: number
   created_at?: string
+}
+
+const DEPARTMENTS = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他'] as const
+
+type BushoSchedule = {
+  id: string
+  created_at: string
+  date: string
+  title: string
+  department: string
+  note: string
+}
+
+const defaultBushoForm = { date: '', title: '', department: '人事', note: '' }
+
+const DEPT_COLORS: Record<string, string> = {
+  人事: '#4f86c6',
+  総務: '#6ab04c',
+  仲介: '#f0932b',
+  管理: '#eb4d4b',
+  売買: '#9b59b6',
+  本社: '#1abc9c',
+  その他: '#95a5a6',
 }
 
 type HankyoRecord = {
@@ -328,6 +351,13 @@ function App() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
+  const [bushoForm, setBushoForm] = useState(defaultBushoForm)
+  const [bushoCalendarMonth, setBushoCalendarMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [bushoFilterDept, setBushoFilterDept] = useState<string>('全て')
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -369,6 +399,11 @@ function App() {
     if (data) setStockRecords(data as StockRecord[])
   }
 
+  async function fetchBusho() {
+    const { data } = await supabase.from('busho_schedules').select('*').order('date', { ascending: true })
+    if (data) setBushoSchedules(data as BushoSchedule[])
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchPosts()
@@ -378,6 +413,7 @@ function App() {
     fetchHankyo()
     fetchDm()
     fetchStock()
+    fetchBusho()
 
     const channel = supabase
       .channel('db-changes')
@@ -622,6 +658,14 @@ function App() {
     setStockForm(defaultStockForm)
     setShowModal(false)
     fetchStock()
+  }
+
+  const handleBushoSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    await supabase.from('busho_schedules').insert({ ...bushoForm, id: crypto.randomUUID() })
+    setBushoForm(defaultBushoForm)
+    setShowModal(false)
+    fetchBusho()
   }
 
   const startStockInline = (r: StockRecord) => {
@@ -887,6 +931,7 @@ function App() {
         <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック</button>
         <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>ルール・マニュアル</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
+        <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
       </nav>
 
       <main className="page-content">
@@ -1824,6 +1869,124 @@ function App() {
             </>
           )
         })()}
+
+        {/* ===== 部署予定 ===== */}
+        {activePage === 'busho' && (() => {
+          const [calYear, calMonth] = bushoCalendarMonth.split('-').map(Number)
+          const firstDay = new Date(calYear, calMonth - 1, 1).getDay()
+          const daysInMonth = new Date(calYear, calMonth, 0).getDate()
+          const todayStr = new Date().toISOString().slice(0, 10)
+          type BushoCalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; schedules: BushoSchedule[] }
+          const cells: BushoCalCell[] = []
+          for (let i = 0; i < firstDay; i++) {
+            cells.push({ day: 0, date: '', isOtherMonth: true, isToday: false, schedules: [] })
+          }
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+            const filtered = bushoFilterDept === '全て'
+              ? bushoSchedules.filter((r) => r.date === dateStr)
+              : bushoSchedules.filter((r) => r.date === dateStr && r.department === bushoFilterDept)
+            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === todayStr, schedules: filtered })
+          }
+          const remaining = (7 - (cells.length % 7)) % 7
+          for (let i = 1; i <= remaining; i++) {
+            cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, schedules: [] })
+          }
+          return (
+            <>
+              <section className="panel">
+                <div className="panel-heading">
+                  <div><h2>部署予定カレンダー</h2><p>部署ごとの予定を管理</p></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <select
+                      value={bushoFilterDept}
+                      onChange={(e) => setBushoFilterDept(e.target.value)}
+                      style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #ccc' }}
+                    >
+                      <option value="全て">全て</option>
+                      {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <button onClick={() => {
+                      const [y, m] = bushoCalendarMonth.split('-').map(Number)
+                      const pm = m === 1 ? 12 : m - 1
+                      const py = m === 1 ? y - 1 : y
+                      setBushoCalendarMonth(`${py}-${String(pm).padStart(2, '0')}`)
+                    }}>◀</button>
+                    <span style={{ fontWeight: 600, minWidth: 80, textAlign: 'center' }}>{calYear}年{calMonth}月</span>
+                    <button onClick={() => {
+                      const [y, m] = bushoCalendarMonth.split('-').map(Number)
+                      const nm = m === 12 ? 1 : m + 1
+                      const ny = m === 12 ? y + 1 : y
+                      setBushoCalendarMonth(`${ny}-${String(nm).padStart(2, '0')}`)
+                    }}>▶</button>
+                  </div>
+                </div>
+                <div className="stock-calendar-grid">
+                  {['日', '月', '火', '水', '木', '金', '土'].map((d) => (
+                    <div key={d} className="cal-header-cell">{d}</div>
+                  ))}
+                  {cells.map((cell, i) => (
+                    <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
+                      <span className="cal-day-num">{cell.isOtherMonth ? '' : cell.day}</span>
+                      {cell.schedules.map((s) => (
+                        <div
+                          key={s.id}
+                          className="busho-badge"
+                          style={{ backgroundColor: DEPT_COLORS[s.department] || '#95a5a6' }}
+                          title={s.note}
+                        >
+                          <span className="busho-badge-dept">{s.department}</span>
+                          <span className="busho-badge-title">{s.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="panel">
+                <div className="panel-heading">
+                  <div><h2>予定一覧</h2><p>登録された部署予定</p></div>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>日付</th>
+                        <th>部署</th>
+                        <th>タイトル</th>
+                        <th>メモ</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bushoSchedules.length === 0 && (
+                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      )}
+                      {bushoSchedules.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.date}</td>
+                          <td>
+                            <span className="dept-badge" style={{ backgroundColor: DEPT_COLORS[r.department] || '#95a5a6' }}>
+                              {r.department}
+                            </span>
+                          </td>
+                          <td>{r.title}</td>
+                          <td>{r.note}</td>
+                          <td>
+                            <button className="danger" onClick={async () => {
+                              await supabase.from('busho_schedules').delete().eq('id', r.id)
+                              fetchBusho()
+                            }}>削除</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )
+        })()}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
@@ -1851,6 +2014,7 @@ function App() {
                 {activePage === 'hankyo' && '反響を追加'}
                 {activePage === 'dm' && 'DMを追加'}
                 {activePage === 'stock' && 'ストックを追加'}
+                {activePage === 'busho' && '予定を追加'}
               </h2>
               <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
@@ -2132,6 +2296,46 @@ function App() {
                   <button type="submit" className="primary">追加する</button>
                   <button type="button" className="secondary" onClick={() => { setShowModal(false); setStockForm(defaultStockForm) }}>キャンセル</button>
                 </div>
+              </form>
+            )}
+
+            {activePage === 'busho' && (
+              <form className="data-form" onSubmit={handleBushoSubmit}>
+                <label className="form-label">日付
+                  <input
+                    type="date"
+                    value={bushoForm.date}
+                    onChange={(e) => setBushoForm({ ...bushoForm, date: e.target.value })}
+                    required
+                  />
+                </label>
+                <label className="form-label">部署
+                  <select
+                    value={bushoForm.department}
+                    onChange={(e) => setBushoForm({ ...bushoForm, department: e.target.value })}
+                    required
+                  >
+                    {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </label>
+                <label className="form-label">タイトル
+                  <input
+                    type="text"
+                    value={bushoForm.title}
+                    onChange={(e) => setBushoForm({ ...bushoForm, title: e.target.value })}
+                    required
+                    placeholder="予定のタイトル"
+                  />
+                </label>
+                <label className="form-label">メモ
+                  <textarea
+                    value={bushoForm.note}
+                    onChange={(e) => setBushoForm({ ...bushoForm, note: e.target.value })}
+                    rows={3}
+                    placeholder="備考など"
+                  />
+                </label>
+                <button type="submit" className="primary">追加</button>
               </form>
             )}
           </div>
@@ -2433,3 +2637,4 @@ function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<Recru
 }
 
 export default App
+
