@@ -1979,6 +1979,11 @@ button.manual-chip {
     margin: 8mm 8mm 8mm 8mm;
   }
 
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
   .app-header,
   .tab-nav,
   .fab,
@@ -1987,15 +1992,27 @@ button.manual-chip {
     display: none !important;
   }
 
+  .page-content {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
   .page-content > *:not(#jisha-print-area) {
     display: none !important;
   }
 
   #jisha-print-area {
-    box-shadow: none;
-    border: none;
-    border-radius: 0;
-    padding: 0;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
   }
 
   .jisha-table-wrap {
@@ -2030,9 +2047,5 @@ button.manual-chip {
   .jisha-cell-editable:hover {
     background: white;
     outline: none;
-  }
-
-  .fab {
-    display: none !important;
   }
 }
