@@ -2031,21 +2031,29 @@ button.manual-chip {
   }
 
   .jisha-table {
-    font-size: 0.68rem;
+    font-size: 0.62rem;
     page-break-inside: avoid;
     width: 100%;
   }
 
   .jisha-th, .jisha-th-media {
-    padding: 3px 4px;
+    padding: 2px 3px;
+    font-size: 0.6rem;
   }
 
   .jisha-cell, .jisha-label-cell {
-    padding: 2px 4px;
+    padding: 1px 3px;
   }
 
   .jisha-cell-editable:hover {
     background: white;
     outline: none;
+  }
+
+  .app-shell {
+    min-height: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    background: white !important;
   }
 }
