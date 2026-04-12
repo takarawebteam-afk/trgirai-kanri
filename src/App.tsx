@@ -1876,21 +1876,34 @@ function App() {
           const firstDay = new Date(calYear, calMonth - 1, 1).getDay()
           const daysInMonth = new Date(calYear, calMonth, 0).getDate()
           const todayStr = new Date().toISOString().slice(0, 10)
-          type BushoCalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; schedules: BushoSchedule[] }
+          type BushoCalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; dayOfWeek: number; isHoliday: boolean; schedules: BushoSchedule[] }
           const cells: BushoCalCell[] = []
+          const JP_HOLIDAYS = new Set([
+            // 2025年
+            '2025-01-01', '2025-01-13', '2025-02-11', '2025-02-23', '2025-02-24',
+            '2025-03-20', '2025-04-29', '2025-05-03', '2025-05-04', '2025-05-05', '2025-05-06',
+            '2025-07-21', '2025-08-11', '2025-09-15', '2025-09-22', '2025-09-23',
+            '2025-10-13', '2025-11-03', '2025-11-23', '2025-11-24',
+            // 2026年
+            '2026-01-01', '2026-01-12', '2026-02-11', '2026-02-23',
+            '2026-03-20', '2026-04-29', '2026-05-03', '2026-05-04', '2026-05-05', '2026-05-06',
+            '2026-07-20', '2026-08-11', '2026-09-21', '2026-09-22', '2026-09-23',
+            '2026-10-12', '2026-11-03', '2026-11-23',
+          ])
           for (let i = 0; i < firstDay; i++) {
-            cells.push({ day: 0, date: '', isOtherMonth: true, isToday: false, schedules: [] })
+            cells.push({ day: 0, date: '', isOtherMonth: true, isToday: false, dayOfWeek: 0, isHoliday: false, schedules: [] })
           }
           for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
             const filtered = bushoFilterDept === '全て'
               ? bushoSchedules.filter((r) => r.date === dateStr)
               : bushoSchedules.filter((r) => r.date === dateStr && r.department === bushoFilterDept)
-            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === todayStr, schedules: filtered })
+            const dow = new Date(calYear, calMonth - 1, d).getDay()
+            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === todayStr, dayOfWeek: dow, isHoliday: JP_HOLIDAYS.has(dateStr), schedules: filtered })
           }
           const remaining = (7 - (cells.length % 7)) % 7
           for (let i = 1; i <= remaining; i++) {
-            cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, schedules: [] })
+            cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, dayOfWeek: 0, isHoliday: false, schedules: [] })
           }
           return (
             <>
@@ -1922,11 +1935,11 @@ function App() {
                   </div>
                 </div>
                 <div className="stock-calendar-grid">
-                  {['日', '月', '火', '水', '木', '金', '土'].map((d) => (
-                    <div key={d} className="cal-header-cell">{d}</div>
+                  {['日', '月', '火', '水', '木', '金', '土'].map((d, idx) => (
+                    <div key={d} className={`cal-header-cell${idx === 0 ? ' cal-header-sunday' : ''}${idx === 6 ? ' cal-header-saturday' : ''}`}>{d}</div>
                   ))}
                   {cells.map((cell, i) => (
-                    <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
+                    <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}${!cell.isOtherMonth && (cell.dayOfWeek === 0 || cell.isHoliday) ? ' holiday-cell' : ''}${!cell.isOtherMonth && cell.dayOfWeek === 6 && !cell.isHoliday ? ' saturday-cell' : ''}`}>
                       <span className="cal-day-num">{cell.isOtherMonth ? '' : cell.day}</span>
                       {cell.schedules.map((s) => (
                         <div

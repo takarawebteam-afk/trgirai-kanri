@@ -1680,6 +1680,24 @@ button.manual-chip {
   line-height: 1;
 }
 
+/* 日曜・祝日：赤 */
+.cal-cell.holiday-cell .cal-day-num {
+  color: #dc2626;
+}
+
+.cal-header-cell.cal-header-sunday {
+  color: #dc2626;
+}
+
+/* 土曜：青 */
+.cal-cell.saturday-cell .cal-day-num {
+  color: #2563eb;
+}
+
+.cal-header-cell.cal-header-saturday {
+  color: #2563eb;
+}
+
 .stock-badge {
   background: #dbeafe;
   color: #1e40af;
