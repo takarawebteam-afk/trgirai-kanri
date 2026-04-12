@@ -2238,7 +2238,9 @@ function App() {
                 </div>
               </div>
               <div className="jisha-table-wrap">
-                <div className="print-title">{jishaYear}年 自社集客実績　{viewLabel}</div>
+                <div className="jisha-table-title">
+                  {jishaViewMode === '累計' ? `${jishaYear}年累計 自社集客実績` : `${jishaYear}年${jishaMonth}月 自社集客実績`}
+                </div>
                 <table className="jisha-table">
                   <thead>
                     <tr>

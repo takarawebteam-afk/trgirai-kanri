@@ -1832,15 +1832,15 @@ button.manual-chip {
 
 .jisha-table-wrap {
   overflow-x: auto;
-  padding: 0 0 8px 0;
+  padding: 12px 20px 12px 20px;
 }
 
-.print-title {
-  display: none;
-  font-size: 1.1rem;
+.jisha-table-title {
+  font-size: 1rem;
   font-weight: 700;
-  padding: 8px 12px;
   color: var(--gray-900);
+  padding: 0 0 10px 0;
+  letter-spacing: 0.04em;
 }
 
 .jisha-table {
@@ -1859,6 +1859,8 @@ button.manual-chip {
   border: 1px solid #2d4f7a;
   white-space: nowrap;
   min-width: 80px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .jisha-th {
@@ -1870,6 +1872,8 @@ button.manual-chip {
   border: 1px solid #2d4f7a;
   white-space: nowrap;
   min-width: 60px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .jisha-media-cell {
@@ -1882,6 +1886,8 @@ button.manual-chip {
   width: 28px;
   padding: 4px 3px;
   color: white;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .jisha-media-karilun { background: #1a56a4; }
@@ -1995,12 +2001,19 @@ button.manual-chip {
     display: none !important;
   }
 
-  .print-title {
-    display: block !important;
-  }
-
   .jisha-table-wrap {
     overflow: visible;
+    padding: 8px 12px;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .jisha-table-title {
+    font-size: 1.1rem;
+    padding: 0 0 8px 0;
   }
 
   .jisha-table {
