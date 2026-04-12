@@ -21,7 +21,7 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku'
 
 type StockRecord = {
   id: string
@@ -42,6 +42,22 @@ type BushoSchedule = {
   title: string
   department: string
   note: string
+}
+
+type JishaShukyakuMedia = 'Karilun' | '学生サイト' | 'SNS' | '地域サイト' | '口コミ'
+type JishaShukyakuRowType = '予算' | '実績' | '前年'
+type JishaShukyakuRecord = {
+  id: string
+  year: number
+  month: number
+  media: JishaShukyakuMedia
+  row_type: JishaShukyakuRowType
+  hankyo_count: number
+  hankyo_raikyo: number
+  shinki_count: number
+  keiyaku_count: number
+  koken_uriaage: number
+  created_at?: string
 }
 
 const defaultBushoForm = { date: '', title: '', department: '人事', note: '' }
@@ -358,6 +374,12 @@ function App() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [bushoFilterDept, setBushoFilterDept] = useState<string>('全て')
+  const [jishaShukyakuRecords, setJishaShukyakuRecords] = useState<JishaShukyakuRecord[]>([])
+  const [jishaViewMode, setJishaViewMode] = useState<'単月' | '累計'>('累計')
+  const [jishaYear, setJishaYear] = useState(new Date().getFullYear())
+  const [jishaMonth, setJishaMonth] = useState(new Date().getMonth() + 1)
+  const [jishaCellEditing, setJishaCellEditing] = useState<string | null>(null)
+  const [jishaCellValue, setJishaCellValue] = useState('')
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -404,6 +426,11 @@ function App() {
     if (data) setBushoSchedules(data as BushoSchedule[])
   }
 
+  async function fetchJishaShukyaku() {
+    const { data } = await supabase.from('jisha_shukyaku').select('*')
+    if (data) setJishaShukyakuRecords(data as JishaShukyakuRecord[])
+  }
+
   useEffect(() => {
     fetchTasks()
     fetchPosts()
@@ -414,6 +441,7 @@ function App() {
     fetchDm()
     fetchStock()
     fetchBusho()
+    fetchJishaShukyaku()
 
     const channel = supabase
       .channel('db-changes')
@@ -932,6 +960,7 @@ function App() {
         <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>ルール・マニュアル</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
         <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
+        <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
       </nav>
 
       <main className="page-content">
@@ -2000,10 +2029,251 @@ function App() {
             </>
           )
         })()}
+        {/* ===== 自社集客売上 ===== */}
+        {activePage === 'jishashukyaku' && (() => {
+          const JISHA_MEDIAS: JishaShukyakuMedia[] = ['Karilun', '学生サイト', 'SNS', '地域サイト', '口コミ']
+          const JISHA_ROW_TYPES: JishaShukyakuRowType[] = ['予算', '実績', '前年']
+
+          function getJishaData(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType): { hankyo_count: number; hankyo_raikyo: number; shinki_count: number; keiyaku_count: number; koken_uriaage: number } {
+            let records: JishaShukyakuRecord[]
+            if (jishaViewMode === '単月') {
+              records = jishaShukyakuRecords.filter(r => r.year === jishaYear && r.month === jishaMonth && r.media === media && r.row_type === rowType)
+            } else {
+              records = jishaShukyakuRecords.filter(r => r.year === jishaYear && r.month <= jishaMonth && r.media === media && r.row_type === rowType)
+            }
+            return {
+              hankyo_count: records.reduce((s, r) => s + r.hankyo_count, 0),
+              hankyo_raikyo: records.reduce((s, r) => s + r.hankyo_raikyo, 0),
+              shinki_count: records.reduce((s, r) => s + r.shinki_count, 0),
+              keiyaku_count: records.reduce((s, r) => s + r.keiyaku_count, 0),
+              koken_uriaage: records.reduce((s, r) => s + r.koken_uriaage, 0),
+            }
+          }
+
+          function calcRates(d: { hankyo_count: number; hankyo_raikyo: number; shinki_count: number; keiyaku_count: number; koken_uriaage: number }) {
+            return {
+              raikyo_rate: d.hankyo_count > 0 ? (d.hankyo_raikyo / d.hankyo_count * 100) : 0,
+              keiyaku_rate: d.shinki_count > 0 ? (d.keiyaku_count / d.shinki_count * 100) : 0,
+              seiyaku_rate: d.hankyo_count > 0 ? (d.keiyaku_count / d.hankyo_count * 100) : 0,
+              keiyaku_tanka: d.keiyaku_count > 0 ? Math.round(d.koken_uriaage / d.keiyaku_count) : 0,
+            }
+          }
+
+          function pct(v: number) { return v === 0 ? '0.0%' : `${v.toFixed(1)}%` }
+
+          async function handleCellSave(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType, field: string, rawValue: string) {
+            const numValue = Number(rawValue.replace(/,/g, '')) || 0
+            const targetMonth = jishaMonth
+            const existing = jishaShukyakuRecords.find(r => r.year === jishaYear && r.month === targetMonth && r.media === media && r.row_type === rowType)
+            const update: Record<string, number> = {}
+            update[field] = numValue
+            if (existing) {
+              const { data } = await supabase.from('jisha_shukyaku').update(update).eq('id', existing.id).select().single()
+              if (data) setJishaShukyakuRecords(prev => prev.map(r => r.id === existing.id ? { ...r, ...update } : r))
+            } else {
+              const newRec = {
+                year: jishaYear,
+                month: targetMonth,
+                media,
+                row_type: rowType,
+                hankyo_count: 0,
+                hankyo_raikyo: 0,
+                shinki_count: 0,
+                keiyaku_count: 0,
+                koken_uriaage: 0,
+                [field]: numValue,
+              }
+              const { data } = await supabase.from('jisha_shukyaku').insert(newRec).select().single()
+              if (data) setJishaShukyakuRecords(prev => [...prev, data as JishaShukyakuRecord])
+            }
+            setJishaCellEditing(null)
+          }
+
+          function getTotalData(rowType: JishaShukyakuRowType) {
+            return JISHA_MEDIAS.reduce((acc, m) => {
+              const d = getJishaData(m, rowType)
+              return {
+                hankyo_count: acc.hankyo_count + d.hankyo_count,
+                hankyo_raikyo: acc.hankyo_raikyo + d.hankyo_raikyo,
+                shinki_count: acc.shinki_count + d.shinki_count,
+                keiyaku_count: acc.keiyaku_count + d.keiyaku_count,
+                koken_uriaage: acc.koken_uriaage + d.koken_uriaage,
+              }
+            }, { hankyo_count: 0, hankyo_raikyo: 0, shinki_count: 0, keiyaku_count: 0, koken_uriaage: 0 })
+          }
+
+          function renderEditableCell(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType, field: string, value: number) {
+            const cellKey = `${media}-${rowType}-${field}`
+            const isEditing = jishaCellEditing === cellKey
+            if (isEditing) {
+              return (
+                <td key={field} className="jisha-cell jisha-cell-editing">
+                  <input
+                    className="jisha-input"
+                    type="number"
+                    value={jishaCellValue}
+                    autoFocus
+                    onChange={e => setJishaCellValue(e.target.value)}
+                    onBlur={() => handleCellSave(media, rowType, field, jishaCellValue)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleCellSave(media, rowType, field, jishaCellValue)
+                      if (e.key === 'Escape') setJishaCellEditing(null)
+                    }}
+                  />
+                </td>
+              )
+            }
+            return (
+              <td key={field} className="jisha-cell jisha-cell-editable" onClick={() => { setJishaCellEditing(cellKey); setJishaCellValue(String(value)) }}>
+                {value.toLocaleString('ja-JP')}
+              </td>
+            )
+          }
+
+          function renderRatioRow(rowLabel: string, numeratorType: JishaShukyakuRowType, denominatorType: JishaShukyakuRowType, media: JishaShukyakuMedia | 'total', colorClass: string) {
+            const numData = media === 'total' ? getTotalData(numeratorType) : getJishaData(media as JishaShukyakuMedia, numeratorType)
+            const denData = media === 'total' ? getTotalData(denominatorType) : getJishaData(media as JishaShukyakuMedia, denominatorType)
+            const numRates = calcRates(numData)
+            const denRates = calcRates(denData)
+            function r(num: number, den: number) {
+              if (den === 0) return '-'
+              return `${(num / den * 100).toFixed(1)}%`
+            }
+            return (
+              <tr key={`${media}-${rowLabel}`} className={`jisha-ratio-row ${colorClass}`}>
+                <td className="jisha-label-cell jisha-sub-label">{rowLabel}</td>
+                <td className="jisha-cell">{r(numData.hankyo_count, denData.hankyo_count)}</td>
+                <td className="jisha-cell">{r(numData.hankyo_raikyo, denData.hankyo_raikyo)}</td>
+                <td className="jisha-cell">{r(numRates.raikyo_rate, denRates.raikyo_rate)}</td>
+                <td className="jisha-cell">{r(numData.shinki_count, denData.shinki_count)}</td>
+                <td className="jisha-cell">{r(numData.keiyaku_count, denData.keiyaku_count)}</td>
+                <td className="jisha-cell">{r(numRates.keiyaku_rate, denRates.keiyaku_rate)}</td>
+                <td className="jisha-cell">{r(numRates.seiyaku_rate, denRates.seiyaku_rate)}</td>
+                <td className="jisha-cell">{r(numData.koken_uriaage, denData.koken_uriaage)}</td>
+                <td className="jisha-cell">{r(numRates.keiyaku_tanka, denRates.keiyaku_tanka)}</td>
+              </tr>
+            )
+          }
+
+          function renderMediaSection(media: JishaShukyakuMedia, mediaLabel: string, bgClass: string) {
+            const rows = JISHA_ROW_TYPES.map((rowType, idx) => {
+              const d = getJishaData(media, rowType)
+              const rates = calcRates(d)
+              const rowClass = rowType === '予算' ? 'jisha-yosan-row' : rowType === '実績' ? 'jisha-jisseki-row' : 'jisha-zennen-row'
+              return (
+                <tr key={`${media}-${rowType}`} className={rowClass}>
+                  {idx === 0 && (
+                    <td className={`jisha-media-cell ${bgClass}`} rowSpan={5}>
+                      <span>{mediaLabel}</span>
+                    </td>
+                  )}
+                  <td className="jisha-label-cell">{rowType}</td>
+                  {renderEditableCell(media, rowType, 'hankyo_count', d.hankyo_count)}
+                  {renderEditableCell(media, rowType, 'hankyo_raikyo', d.hankyo_raikyo)}
+                  <td className="jisha-cell jisha-calc">{pct(rates.raikyo_rate)}</td>
+                  {renderEditableCell(media, rowType, 'shinki_count', d.shinki_count)}
+                  {renderEditableCell(media, rowType, 'keiyaku_count', d.keiyaku_count)}
+                  <td className="jisha-cell jisha-calc">{pct(rates.keiyaku_rate)}</td>
+                  <td className="jisha-cell jisha-calc">{pct(rates.seiyaku_rate)}</td>
+                  {renderEditableCell(media, rowType, 'koken_uriaage', d.koken_uriaage)}
+                  <td className="jisha-cell jisha-calc">{rates.keiyaku_tanka > 0 ? rates.keiyaku_tanka.toLocaleString('ja-JP') : '0'}</td>
+                </tr>
+              )
+            })
+            const yosanBiRow = renderRatioRow('予算比', '実績', '予算', media, 'jisha-yosan-hi-row')
+            const nenBiRow = renderRatioRow('前年比', '実績', '前年', media, 'jisha-nen-hi-row')
+            return [...rows, yosanBiRow, nenBiRow]
+          }
+
+          function renderTotalSection() {
+            return JISHA_ROW_TYPES.map((rowType, idx) => {
+              const d = getTotalData(rowType)
+              const rates = calcRates(d)
+              const rowClass = rowType === '予算' ? 'jisha-yosan-row jisha-total-row' : rowType === '実績' ? 'jisha-jisseki-row jisha-total-row' : 'jisha-zennen-row jisha-total-row'
+              return (
+                <tr key={`total-${rowType}`} className={rowClass}>
+                  {idx === 0 && (
+                    <td className="jisha-media-cell jisha-media-total" rowSpan={5}>
+                      <span>自社集客合計</span>
+                    </td>
+                  )}
+                  <td className="jisha-label-cell">{rowType}</td>
+                  <td className="jisha-cell jisha-total-num">{d.hankyo_count.toLocaleString('ja-JP')}</td>
+                  <td className="jisha-cell jisha-total-num">{d.hankyo_raikyo.toLocaleString('ja-JP')}</td>
+                  <td className="jisha-cell jisha-calc jisha-total-num">{pct(rates.raikyo_rate)}</td>
+                  <td className="jisha-cell jisha-total-num">{d.shinki_count.toLocaleString('ja-JP')}</td>
+                  <td className="jisha-cell jisha-total-num">{d.keiyaku_count.toLocaleString('ja-JP')}</td>
+                  <td className="jisha-cell jisha-calc jisha-total-num">{pct(rates.keiyaku_rate)}</td>
+                  <td className="jisha-cell jisha-calc jisha-total-num">{pct(rates.seiyaku_rate)}</td>
+                  <td className="jisha-cell jisha-total-num">{d.koken_uriaage.toLocaleString('ja-JP')}</td>
+                  <td className="jisha-cell jisha-calc jisha-total-num">{rates.keiyaku_tanka > 0 ? rates.keiyaku_tanka.toLocaleString('ja-JP') : '0'}</td>
+                </tr>
+              )
+            })
+          }
+
+          const totalYosanBiRow = renderRatioRow('予算比', '実績', '予算', 'total', 'jisha-yosan-hi-row jisha-total-row')
+          const totalNenBiRow = renderRatioRow('前年比', '実績', '前年', 'total', 'jisha-nen-hi-row jisha-total-row')
+          const viewLabel = jishaViewMode === '累計' ? `${jishaYear}年 1〜${jishaMonth}月 累計` : `${jishaYear}年${jishaMonth}月`
+
+          return (
+            <section className="panel jisha-panel" id="jisha-print-area">
+              <div className="panel-heading no-print">
+                <div className="jisha-heading-text">
+                  <h2>自社集客実績</h2>
+                  <p>メディア別集客・成約データ（セルをクリックして編集）</p>
+                </div>
+                <div className="jisha-controls">
+                  <div className="jisha-toggle">
+                    <button className={jishaViewMode === '単月' ? 'active' : ''} onClick={() => setJishaViewMode('単月')}>単月</button>
+                    <button className={jishaViewMode === '累計' ? 'active' : ''} onClick={() => setJishaViewMode('累計')}>累計</button>
+                  </div>
+                  <select value={jishaYear} onChange={e => setJishaYear(Number(e.target.value))}>
+                    {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}年</option>)}
+                  </select>
+                  <select value={jishaMonth} onChange={e => setJishaMonth(Number(e.target.value))}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
+                  </select>
+                  <button className="secondary" style={{ fontSize: '0.82rem', padding: '5px 10px' }} onClick={() => window.print()}>🖨 印刷</button>
+                </div>
+              </div>
+              <div className="jisha-table-wrap">
+                <div className="print-title">{jishaYear}年 自社集客実績　{viewLabel}</div>
+                <table className="jisha-table">
+                  <thead>
+                    <tr>
+                      <th className="jisha-th-media" colSpan={2}>{viewLabel}</th>
+                      <th className="jisha-th">反響数</th>
+                      <th className="jisha-th">反響来店</th>
+                      <th className="jisha-th">反来率</th>
+                      <th className="jisha-th">新規数</th>
+                      <th className="jisha-th">契約数</th>
+                      <th className="jisha-th">契約率</th>
+                      <th className="jisha-th">反響成約率</th>
+                      <th className="jisha-th">貢献売上</th>
+                      <th className="jisha-th">契約単価</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {renderMediaSection('Karilun', 'Karilun', 'jisha-media-karilun')}
+                    {renderMediaSection('学生サイト', '学生サイト', 'jisha-media-gakusei')}
+                    {renderMediaSection('SNS', 'SNS', 'jisha-media-sns')}
+                    {renderMediaSection('地域サイト', '地域サイト', 'jisha-media-chiiki')}
+                    {renderMediaSection('口コミ', '口コミ', 'jisha-media-kuchikomi')}
+                    {renderTotalSection()}
+                    {totalYosanBiRow}
+                    {totalNenBiRow}
+                  </tbody>
+                </table>
+                <p className="jisha-hint no-print">白いセルをクリックして数値を編集できます。グレーのセルは自動計算です。</p>
+              </div>
+            </section>
+          )
+        })()}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && (
         <button
           className="fab"
           onClick={() => setShowModal(true)}
@@ -2015,7 +2285,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div className="modal-content">
             <div className="modal-header">

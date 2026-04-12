@@ -1770,3 +1770,259 @@ button.manual-chip {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* ===== 自社集客売上 ===== */
+.jisha-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.jisha-panel .panel-heading {
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.jisha-heading-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.jisha-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.jisha-controls select {
+  width: auto;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+
+.jisha-toggle {
+  display: flex;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.jisha-toggle button {
+  padding: 6px 12px;
+  border: none;
+  background: var(--white);
+  color: var(--gray-600);
+  font-size: 0.82rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.jisha-toggle button.active {
+  background: var(--blue-600);
+  color: var(--white);
+}
+
+.jisha-table-wrap {
+  overflow-x: auto;
+  padding: 0 0 8px 0;
+}
+
+.print-title {
+  display: none;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  color: var(--gray-900);
+}
+
+.jisha-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  min-width: 900px;
+}
+
+.jisha-th-media {
+  background: #1e3a5f;
+  color: white;
+  padding: 5px 8px;
+  text-align: left;
+  font-weight: 700;
+  border: 1px solid #2d4f7a;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.jisha-th {
+  background: #1e3a5f;
+  color: white;
+  padding: 5px 6px;
+  text-align: center;
+  font-weight: 700;
+  border: 1px solid #2d4f7a;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.jisha-media-cell {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid #c8d5e8;
+  width: 28px;
+  padding: 4px 3px;
+  color: white;
+}
+
+.jisha-media-karilun { background: #1a56a4; }
+.jisha-media-gakusei { background: #2563eb; }
+.jisha-media-sns { background: #7c3aed; }
+.jisha-media-chiiki { background: #0891b2; }
+.jisha-media-kuchikomi { background: #059669; }
+.jisha-media-total { background: #dc2626; }
+
+.jisha-label-cell {
+  padding: 3px 8px;
+  border: 1px solid #d1daea;
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #f8fafc;
+  width: 48px;
+  color: var(--gray-600);
+}
+
+.jisha-cell {
+  padding: 3px 6px;
+  border: 1px solid #d1daea;
+  text-align: right;
+  font-size: 0.78rem;
+  min-width: 58px;
+  white-space: nowrap;
+}
+
+.jisha-cell-editable {
+  cursor: pointer;
+  background: white;
+}
+
+.jisha-cell-editable:hover {
+  background: #eff6ff;
+  outline: 1px solid var(--blue-400);
+}
+
+.jisha-cell-editing {
+  padding: 1px;
+  background: #fff;
+}
+
+.jisha-input {
+  width: 100%;
+  border: 2px solid var(--blue-500);
+  border-radius: 2px;
+  padding: 1px 4px;
+  font-size: 0.78rem;
+  text-align: right;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.jisha-calc {
+  background: #f1f5f9;
+  color: var(--gray-600);
+  font-style: normal;
+}
+
+.jisha-yosan-row { background: #fafafa; }
+.jisha-jisseki-row { background: white; font-weight: 600; }
+.jisha-zennen-row { background: #fafafa; }
+
+.jisha-yosan-hi-row td { background: #eff6ff; color: #1d4ed8; font-size: 0.73rem; }
+.jisha-nen-hi-row td { background: #f0fdf4; color: #15803d; font-size: 0.73rem; }
+
+.jisha-total-row td { font-weight: 700; }
+.jisha-total-num { background: #fff7ed; }
+
+.jisha-hint {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  padding: 4px 12px 8px;
+  margin: 0;
+}
+
+.jisha-sub-label {
+  padding-left: 16px;
+  font-style: italic;
+  color: var(--gray-500);
+}
+
+/* ===== 自社集客売上 印刷スタイル ===== */
+@media print {
+  @page {
+    size: A3 landscape;
+    margin: 8mm 8mm 8mm 8mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #jisha-print-area,
+  #jisha-print-area * {
+    visibility: visible;
+  }
+
+  #jisha-print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-title {
+    display: block !important;
+  }
+
+  .jisha-table-wrap {
+    overflow: visible;
+  }
+
+  .jisha-table {
+    font-size: 0.68rem;
+    page-break-inside: avoid;
+    width: 100%;
+  }
+
+  .jisha-th, .jisha-th-media {
+    padding: 3px 4px;
+  }
+
+  .jisha-cell, .jisha-label-cell {
+    padding: 2px 4px;
+  }
+
+  .jisha-cell-editable:hover {
+    background: white;
+    outline: none;
+  }
+
+  .fab {
+    display: none !important;
+  }
+}
