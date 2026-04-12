@@ -1979,26 +1979,23 @@ button.manual-chip {
     margin: 8mm 8mm 8mm 8mm;
   }
 
-  body * {
-    visibility: hidden;
+  .app-header,
+  .tab-nav,
+  .fab,
+  .modal-overlay,
+  .no-print {
+    display: none !important;
   }
 
-  #jisha-print-area,
-  #jisha-print-area * {
-    visibility: visible;
+  .page-content > *:not(#jisha-print-area) {
+    display: none !important;
   }
 
   #jisha-print-area {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
     box-shadow: none;
     border: none;
-  }
-
-  .no-print {
-    display: none !important;
+    border-radius: 0;
+    padding: 0;
   }
 
   .jisha-table-wrap {
