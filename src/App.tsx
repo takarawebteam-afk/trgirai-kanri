@@ -1,14 +1,5 @@
 ﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import './App.css'
 import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
@@ -39,6 +30,7 @@ type BushoSchedule = {
   id: string
   created_at: string
   date: string
+  start_time?: string | null
   title: string
   department: string
   note: string
@@ -60,7 +52,7 @@ type JishaShukyakuRecord = {
   created_at?: string
 }
 
-const defaultBushoForm = { date: '', title: '', department: '人事', note: '' }
+const defaultBushoForm = { date: '', start_time: '', title: '', department: '人事', note: '' }
 
 const DEPT_COLORS: Record<string, string> = {
   人事: '#4f86c6',
@@ -374,6 +366,7 @@ function App() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [bushoFilterDept, setBushoFilterDept] = useState<string>('全て')
+  const [bushoSelectedDate, setBushoSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [jishaShukyakuRecords, setJishaShukyakuRecords] = useState<JishaShukyakuRecord[]>([])
   const [jishaViewMode, setJishaViewMode] = useState<'単月' | '累計'>('累計')
   const [jishaYear, setJishaYear] = useState(new Date().getFullYear())
@@ -422,8 +415,12 @@ function App() {
   }
 
   async function fetchBusho() {
-    const { data } = await supabase.from('busho_schedules').select('*').order('date', { ascending: true })
-    if (data) setBushoSchedules(data as BushoSchedule[])
+    const { data, error } = await supabase.from('busho_schedules').select('*').order('date', { ascending: true })
+    if (error) {
+      setTaskError(`部署予定の読込失敗: ${error.message}`)
+      return
+    }
+    setBushoSchedules(data as BushoSchedule[])
   }
 
   async function fetchJishaShukyaku() {
@@ -464,16 +461,17 @@ function App() {
     .filter(Boolean)
     .sort((a, b) => b - a)
 
-  const filteredPosts = posts.filter((post) =>
-    matchesYearMonth(post.postDate, selectedYear, selectedMonth),
-  )
   const filteredRecruitment = recruitment.filter((record) =>
     matchesYearMonth(record.date, selectedYear, selectedMonth),
   )
-  const ongoingTasks = tasks.filter((task) => {
-    if (task.status !== '作業中') return false
-    return matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
-  })
+  const ongoingTasks = tasks
+    .filter((task) => task.status === '作業中')
+    .sort((a, b) => {
+      if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+      if (a.dueDate && !b.dueDate) return -1
+      if (!a.dueDate && b.dueDate) return 1
+      return (b.taskDate || '').localeCompare(a.taskDate || '')
+    })
 
   // 案件一覧: フィルター＋ソート（①優先度 ②期日近い順 ③案件日順）
   const priorityOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
@@ -494,42 +492,7 @@ function App() {
     })
 
   // 単発は完了時一括・継続は月次累積で集計
-  const totalSavings = tasks.reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0)
-  const departmentSavings = departments
-    .map((department) => ({
-      department,
-      savings: tasks
-        .filter((task) => task.department === department)
-        .reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0),
-    }))
-    .filter((entry) => entry.savings > 0)
-
-  const snsAccountMetrics = Object.values(
-    filteredPosts.reduce<Record<string, { account: string; posts: number }>>(
-      (acc, post) => {
-        if (!acc[post.account]) {
-          acc[post.account] = { account: post.account, posts: 0 }
-        }
-        acc[post.account].posts += 1
-        return acc
-      },
-      {},
-    ),
-  )
-
-  const recruitmentByDepartment = Object.values(
-    filteredRecruitment.reduce<Record<string, { department: string; count: number; costReduction: number }>>(
-      (acc, record) => {
-        if (!acc[record.department]) {
-          acc[record.department] = { department: record.department, count: 0, costReduction: 0 }
-        }
-        acc[record.department].count += 1
-        acc[record.department].costReduction += record.costReduction
-        return acc
-      },
-      {},
-    ),
-  )
+  const taskSavingsTotal = tasks.reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0)
 
   const recruitmentSummary = filteredRecruitment.reduce(
     (acc, record) => {
@@ -538,6 +501,27 @@ function App() {
     },
     { costReduction: 0 },
   )
+  const jishaStoreSalesTotal = jishaShukyakuRecords
+    .filter((record) => {
+      if (record.row_type !== '実績') return false
+      if (record.year !== selectedYear) return false
+      if (selectedMonth !== 'all' && record.month !== Number(selectedMonth)) return false
+      return true
+    })
+    .reduce((sum, record) => sum + record.koken_uriaage, 0)
+  const totalContribution = jishaStoreSalesTotal + taskSavingsTotal + recruitmentSummary.costReduction
+  const dashboardToday = new Date()
+  dashboardToday.setHours(0, 0, 0, 0)
+  const dashboardLimit = new Date(dashboardToday)
+  dashboardLimit.setDate(dashboardLimit.getDate() + 3)
+  const webTeamTasks = taskItems
+    .filter((item) => {
+      if (!item.due_date) return false
+      if (item.status === '完了') return false
+      const dueDate = new Date(`${item.due_date}T00:00:00`)
+      return dueDate >= dashboardToday && dueDate <= dashboardLimit
+    })
+    .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
 
   // タスク管理 計算
   const today = new Date().toISOString().split('T')[0]
@@ -690,7 +674,17 @@ function App() {
 
   const handleBushoSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    await supabase.from('busho_schedules').insert({ ...bushoForm, id: crypto.randomUUID() })
+    setTaskError(null)
+    const payload = {
+      ...bushoForm,
+      id: crypto.randomUUID(),
+      start_time: bushoForm.start_time || null,
+    }
+    const { error } = await supabase.from('busho_schedules').insert(payload)
+    if (error) {
+      setTaskError(`部署予定の追加失敗: ${error.message}`)
+      return
+    }
     setBushoForm(defaultBushoForm)
     setShowModal(false)
     fetchBusho()
@@ -823,23 +817,6 @@ function App() {
   const hankyoTotalPages = Math.max(1, Math.ceil(filteredHankyo.length / HANKYO_PAGE_SIZE))
   const paginatedHankyo = filteredHankyo.slice((hankyoPage - 1) * HANKYO_PAGE_SIZE, hankyoPage * HANKYO_PAGE_SIZE)
 
-  // ダッシュボード用 反響集計
-  const hankyoMonthlyData = (() => {
-    const now = new Date()
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
-      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const count = hankyoRecords.filter((r) => r.inquiry_date?.startsWith(ym)).length
-      return { month: `${d.getMonth() + 1}月`, count }
-    })
-  })()
-  const hankyoByMedia = Object.entries(
-    hankyoRecords.reduce<Record<string, number>>((acc, r) => { acc[r.media || '不明'] = (acc[r.media || '不明'] || 0) + 1; return acc }, {})
-  ).map(([media, count]) => ({ media, count })).sort((a, b) => b.count - a.count)
-  const hankyoByStore = Object.entries(
-    hankyoRecords.filter(r => r.store && r.store !== '対象外').reduce<Record<string, number>>((acc, r) => { acc[r.store] = (acc[r.store] || 0) + 1; return acc }, {})
-  ).map(([store, count]) => ({ store, count })).sort((a, b) => b.count - a.count).slice(0, 10)
-
   const handleSnsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('sns_posts').insert({ ...normalizePost(snsForm), id: crypto.randomUUID() })
@@ -966,121 +943,32 @@ function App() {
       <main className="page-content">
         {activePage === 'dashboard' && (
           <section className="dashboard-grid">
-            <div className="stat-card strong"><span>総削減額</span><strong>{currency.format(totalSavings)}</strong><small>単発:完了時 / 継続:月次累計</small></div>
-            <div className="stat-card"><span>SNS投稿数</span><strong>{integer.format(filteredPosts.length)}件</strong><small>選択期間の合計投稿</small></div>
-            <div className="stat-card"><span>採用記録数</span><strong>{integer.format(filteredRecruitment.length)}件</strong><small>選択期間の合計</small></div>
-            <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>選択期間の合計</small></div>
-            <div className="stat-card"><span>反響総数</span><strong>{integer.format(hankyoRecords.length)}件</strong><small>全期間累計</small></div>
+            <div className="stat-card strong"><span>総貢献額</span><strong>{currency.format(totalContribution)}</strong><small>店舗売上 + 案件削減額 + 採用削減額</small></div>
+            <div className="stat-card"><span>店舗売上</span><strong>{currency.format(jishaStoreSalesTotal)}</strong><small>自社集客売上の実績合計</small></div>
+            <div className="stat-card"><span>案件削減額</span><strong>{currency.format(taskSavingsTotal)}</strong><small>案件管理の削減額合計</small></div>
+            <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>採用管理の削減額合計</small></div>
 
-            <section className="panel chart-panel">
-              <div className="panel-heading"><div><h2>部署別削減額</h2><p>完了案件の削減額を部署別に表示</p></div></div>
-              <div className="chart-box">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={departmentSavings.length ? departmentSavings : [{ department: 'データなし', savings: 0 }]}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="department" />
-                    <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 10000)}万`} />
-                    <Tooltip formatter={(value) => currency.format(Number(value ?? 0))} />
-                    <Bar dataKey="savings" fill="#0f766e" radius={[10, 10, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            <section className="panel dashboard-list-panel">
+              <div className="panel-heading"><div><h2>WEBチームタスク</h2><p>今日から3日以内が期日のタスク</p></div></div>
+              <div className="ongoing-list">
+                {webTeamTasks.length === 0 && <p className="empty-text">期日が3日以内のタスクはありません。</p>}
+                {webTeamTasks.map((item) => (
+                  <article className="ongoing-item dashboard-task-item" key={item.id}>
+                    <div>
+                      <strong>{item.name}</strong>
+                      <p>{item.detail || '詳細なし'}</p>
+                    </div>
+                    <div>
+                      <span>担当: {(item.assignees || []).length ? item.assignees.join('・') : '未設定'}</span>
+                      <span>設定者: {item.creator || '未設定'}</span>
+                      <span>期日: {item.due_date}</span>
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
 
-            <section className="panel chart-panel">
-              <div className="panel-heading"><div><h2>アカウント別SNS投稿数</h2><p>選択期間のアカウント別投稿数</p></div></div>
-              <div className="chart-box">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={snsAccountMetrics}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="account" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="posts" name="投稿数" fill="#ea580c" radius={[6,6,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
-            <section className="panel chart-panel">
-              <div className="panel-heading"><div><h2>部署別採用削減額</h2><p>選択期間の部署別コスト削減</p></div></div>
-              <div className="chart-box">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={recruitmentByDepartment}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="department" />
-                    <YAxis tickFormatter={(v) => `${Math.round(Number(v)/10000)}万`} />
-                    <Tooltip formatter={(v) => currency.format(Number(v ?? 0))} />
-                    <Bar dataKey="costReduction" name="削減額" fill="#1d4ed8" radius={[6,6,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
-
-            <section className="panel" style={{ gridColumn: 'span 6' }}>
-              <div className="panel-heading"><div><h2>部署別採用実績</h2><p>選択期間の部署単位の件数・削減額</p></div></div>
-              <div className="mini-table">
-                <table>
-                  <thead><tr><th>部署</th><th>件数</th><th>削減額</th></tr></thead>
-                  <tbody>
-                    {recruitmentByDepartment.length === 0 && <tr><td colSpan={3}>データがありません。</td></tr>}
-                    {recruitmentByDepartment.map((r) => (
-                      <tr key={r.department}>
-                        <td>{r.department}</td>
-                        <td>{integer.format(r.count)}件</td>
-                        <td>{currency.format(r.costReduction)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="panel chart-panel">
-              <div className="panel-heading"><div><h2>月別反響数</h2><p>直近6ヶ月の反響件数</p></div></div>
-              <div className="chart-box">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={hankyoMonthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" name="反響数" fill="#7c3aed" radius={[6,6,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
-
-            <section className="panel" style={{ gridColumn: 'span 3' }}>
-              <div className="panel-heading"><div><h2>媒体別反響数</h2><p>全期間の媒体ごとの件数</p></div></div>
-              <div className="mini-table">
-                <table>
-                  <thead><tr><th>媒体</th><th>件数</th></tr></thead>
-                  <tbody>
-                    {hankyoByMedia.length === 0 && <tr><td colSpan={2}>データがありません。</td></tr>}
-                    {hankyoByMedia.map((r) => (
-                      <tr key={r.media}><td>{r.media}</td><td>{r.count}件</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="panel" style={{ gridColumn: 'span 3' }}>
-              <div className="panel-heading"><div><h2>店舗別送客数</h2><p>送客先（対象外除く）TOP10</p></div></div>
-              <div className="mini-table">
-                <table>
-                  <thead><tr><th>店舗</th><th>件数</th></tr></thead>
-                  <tbody>
-                    {hankyoByStore.length === 0 && <tr><td colSpan={2}>データがありません。</td></tr>}
-                    {hankyoByStore.map((r) => (
-                      <tr key={r.store}><td>{r.store}</td><td>{r.count}件</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="panel" style={{ gridColumn: 'span 12' }}>
+            <section className="panel dashboard-list-panel">
               <div className="panel-heading"><div><h2>進行中案件</h2><p>ステータスが「作業中」の案件一覧</p></div></div>
               <div className="ongoing-list">
                 {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません。</p>}
@@ -1905,6 +1793,10 @@ function App() {
           const firstDay = new Date(calYear, calMonth - 1, 1).getDay()
           const daysInMonth = new Date(calYear, calMonth, 0).getDate()
           const todayStr = new Date().toISOString().slice(0, 10)
+          const selectedBushoDate = bushoSelectedDate || todayStr
+          const selectedBushoSchedules = bushoFilterDept === '全て'
+            ? bushoSchedules.filter((r) => r.date === selectedBushoDate)
+            : bushoSchedules.filter((r) => r.date === selectedBushoDate && r.department === bushoFilterDept)
           type BushoCalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; dayOfWeek: number; isHoliday: boolean; schedules: BushoSchedule[] }
           const cells: BushoCalCell[] = []
           const JP_HOLIDAYS = new Set([
@@ -1968,7 +1860,17 @@ function App() {
                     <div key={d} className={`cal-header-cell${idx === 0 ? ' cal-header-sunday' : ''}${idx === 6 ? ' cal-header-saturday' : ''}`}>{d}</div>
                   ))}
                   {cells.map((cell, i) => (
-                    <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}${!cell.isOtherMonth && (cell.dayOfWeek === 0 || cell.isHoliday) ? ' holiday-cell' : ''}${!cell.isOtherMonth && cell.dayOfWeek === 6 && !cell.isHoliday ? ' saturday-cell' : ''}`}>
+                    <div
+                      key={i}
+                      className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}${cell.date === selectedBushoDate ? ' busho-selected-day' : ''}${!cell.isOtherMonth && (cell.dayOfWeek === 0 || cell.isHoliday) ? ' holiday-cell' : ''}${!cell.isOtherMonth && cell.dayOfWeek === 6 && !cell.isHoliday ? ' saturday-cell' : ''}`}
+                      onClick={() => {
+                        if (!cell.isOtherMonth && cell.date) {
+                          setBushoSelectedDate(cell.date)
+                          setBushoForm({ ...defaultBushoForm, date: cell.date })
+                          setShowModal(true)
+                        }
+                      }}
+                    >
                       <span className="cal-day-num">{cell.isOtherMonth ? '' : cell.day}</span>
                       {cell.schedules.map((s) => (
                         <div
@@ -1976,9 +1878,12 @@ function App() {
                           className="busho-badge"
                           style={{ backgroundColor: DEPT_COLORS[s.department] || '#95a5a6' }}
                           title={s.note}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <span className="busho-badge-dept">{s.department}</span>
-                          <span className="busho-badge-title">{s.title}</span>
+                          <span className="busho-badge-title">
+                            {s.start_time ? `${s.start_time.slice(0, 5)} ${s.title}` : s.title}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1987,7 +1892,11 @@ function App() {
               </section>
               <section className="panel">
                 <div className="panel-heading">
-                  <div><h2>予定一覧</h2><p>登録された部署予定</p></div>
+                  <div>
+                    <h2>予定一覧</h2>
+                    <p>{selectedBushoDate === todayStr ? `今日の予定 (${selectedBushoDate})` : `${selectedBushoDate} の予定`}</p>
+                  </div>
+                  <button className="secondary" onClick={() => setBushoSelectedDate(todayStr)}>今日に戻す</button>
                 </div>
                 <div className="table-wrap">
                   <table>
@@ -2001,10 +1910,10 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bushoSchedules.length === 0 && (
+                      {selectedBushoSchedules.length === 0 && (
                         <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
-                      {bushoSchedules.map((r) => (
+                      {selectedBushoSchedules.map((r) => (
                         <tr key={r.id}>
                           <td>{r.date}</td>
                           <td>
@@ -2215,6 +2124,9 @@ function App() {
           const totalYosanBiRow = renderRatioRow('予算比', '実績', '予算', 'total', 'jisha-yosan-hi-row jisha-total-row')
           const totalNenBiRow = renderRatioRow('前年比', '実績', '前年', 'total', 'jisha-nen-hi-row jisha-total-row')
           const viewLabel = jishaViewMode === '累計' ? `${jishaYear}年 1〜${jishaMonth}月 累計` : `${jishaYear}年${jishaMonth}月`
+          const jishaTableTitle = jishaViewMode === '累計'
+            ? `${jishaYear}年累計 自社集客実績`
+            : `${jishaYear}年${jishaMonth}月 自社集客実績`
 
           return (
             <section className="panel jisha-panel" id="jisha-print-area">
@@ -2238,9 +2150,7 @@ function App() {
                 </div>
               </div>
               <div className="jisha-table-wrap">
-                <div className="jisha-table-title">
-                  {jishaViewMode === '累計' ? `${jishaYear}年累計 自社集客実績` : `${jishaYear}年${jishaMonth}月 自社集客実績`}
-                </div>
+                <div className="jisha-table-title">{jishaTableTitle}</div>
                 <table className="jisha-table">
                   <thead>
                     <tr>
@@ -2585,43 +2495,53 @@ function App() {
             )}
 
             {activePage === 'busho' && (
-              <form className="data-form" onSubmit={handleBushoSubmit}>
-                <label className="form-label">日付
-                  <input
-                    type="date"
-                    value={bushoForm.date}
-                    onChange={(e) => setBushoForm({ ...bushoForm, date: e.target.value })}
-                    required
-                  />
-                </label>
-                <label className="form-label">部署
-                  <select
-                    value={bushoForm.department}
-                    onChange={(e) => setBushoForm({ ...bushoForm, department: e.target.value })}
-                    required
-                  >
-                    {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </label>
-                <label className="form-label">タイトル
-                  <input
-                    type="text"
-                    value={bushoForm.title}
-                    onChange={(e) => setBushoForm({ ...bushoForm, title: e.target.value })}
-                    required
-                    placeholder="予定のタイトル"
-                  />
-                </label>
-                <label className="form-label">メモ
-                  <textarea
-                    value={bushoForm.note}
-                    onChange={(e) => setBushoForm({ ...bushoForm, note: e.target.value })}
-                    rows={3}
-                    placeholder="備考など"
-                  />
-                </label>
-                <button type="submit" className="primary">追加</button>
-              </form>
+              <>
+                {taskError && <p className="error-msg">{taskError}</p>}
+                <form className="data-form" onSubmit={handleBushoSubmit}>
+                  <label className="form-label">日付
+                    <input
+                      type="date"
+                      value={bushoForm.date}
+                      onChange={(e) => setBushoForm({ ...bushoForm, date: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label className="form-label">時間（任意）
+                    <input
+                      type="time"
+                      value={bushoForm.start_time}
+                      onChange={(e) => setBushoForm({ ...bushoForm, start_time: e.target.value })}
+                    />
+                  </label>
+                  <label className="form-label">部署
+                    <select
+                      value={bushoForm.department}
+                      onChange={(e) => setBushoForm({ ...bushoForm, department: e.target.value })}
+                      required
+                    >
+                      {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </label>
+                  <label className="form-label">タイトル
+                    <input
+                      type="text"
+                      value={bushoForm.title}
+                      onChange={(e) => setBushoForm({ ...bushoForm, title: e.target.value })}
+                      required
+                      placeholder="予定のタイトル"
+                    />
+                  </label>
+                  <label className="form-label">メモ
+                    <textarea
+                      value={bushoForm.note}
+                      onChange={(e) => setBushoForm({ ...bushoForm, note: e.target.value })}
+                      rows={3}
+                      placeholder="備考など"
+                    />
+                  </label>
+                  <button type="submit" className="primary">追加</button>
+                </form>
+              </>
             )}
           </div>
         </div>
@@ -2922,4 +2842,3 @@ function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<Recru
 }
 
 export default App
-
