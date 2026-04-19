@@ -472,7 +472,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 /* ===== テキスト省略セル ===== */
 .cell-truncate {
   display: block;
-  max-width: 120px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
