@@ -1234,7 +1234,13 @@ function App() {
                               : (item.assignees || []).join('・')}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.creator} onChange={(e) => setTaskItemInlineForm({ ...f, creator: e.target.value })} /> : item.creator}
+                            {isEditing
+                              ? <div className="inline-checkbox-group">{members.map((m) => (
+                                  <label key={m.id} className="inline-checkbox-item">
+                                    <input type="checkbox" checked={f.creator === m.name} onChange={() => setTaskItemInlineForm({ ...f, creator: m.name })} />{m.name}
+                                  </label>
+                                ))}</div>
+                              : item.creator}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <select className={`status-select status-ti-${isEditing ? f.status : item.status}`}
@@ -2367,7 +2373,13 @@ function App() {
                     </div>
                   </label>
                   <label className="form-label">設定者
-                    <input placeholder="設定者" value={taskItemForm.creator} onChange={(e) => setTaskItemForm({ ...taskItemForm, creator: e.target.value })} />
+                    <div className="checkbox-group">
+                      {members.map((m) => (
+                        <label key={m.id} className="checkbox-item">
+                          <input type="checkbox" checked={taskItemForm.creator === m.name} onChange={() => setTaskItemForm({ ...taskItemForm, creator: m.name })} />{m.name}
+                        </label>
+                      ))}
+                    </div>
                   </label>
                   <label className="form-label">ステータス
                     <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
