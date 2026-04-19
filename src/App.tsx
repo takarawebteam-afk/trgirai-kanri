@@ -612,14 +612,12 @@ function App() {
       console.error('Task Item Insert Error:', error)
       return 
     }
-    // Slack通知
-    try {
-      await fetch('/api/notify-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'new', taskName: taskItemForm.name, dueDate: taskItemForm.due_date, priority: taskItemForm.priority, assignees: taskItemForm.assignees, members }),
-      })
-    } catch { /* Slack未設定時は無視 */ }
+    // Slack通知（fire-and-forget: 待たずに即UIを更新）
+    fetch('/api/notify-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'new', taskName: taskItemForm.name, dueDate: taskItemForm.due_date, priority: taskItemForm.priority, assignees: taskItemForm.assignees, members }),
+    }).catch(() => {})
     setTaskItemForm({ ...defaultTaskItemForm, date: new Date().toISOString().split('T')[0] })
     fetchTaskItems()
     setShowModal(false)
@@ -631,13 +629,11 @@ function App() {
       const item = taskItems.find((t) => t.id === id)
       if (item && !item.completed_notified) {
         await supabase.from('task_items').update({ completed_notified: true }).eq('id', id)
-        try {
-          await fetch('/api/notify-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'completed', taskName: item.name, assignees: item.assignees, members }),
-          })
-        } catch { /* ignore */ }
+        fetch('/api/notify-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'completed', taskName: item.name, assignees: item.assignees, members }),
+        }).catch(() => {})
       }
     }
     fetchTaskItems()
