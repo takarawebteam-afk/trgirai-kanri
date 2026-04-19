@@ -683,27 +683,27 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 .tm-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   background: var(--white);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
+  padding: 8px 12px;
   box-shadow: var(--shadow-sm);
 }
 
 .tm-filters {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .tm-filter-btn {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1.5px solid var(--gray-200);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--gray-200);
   background: var(--white);
   color: var(--gray-600);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -717,11 +717,11 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 
 .tm-search {
   flex: 1;
-  min-width: 180px;
-  padding: 7px 12px;
-  border: 1.5px solid var(--gray-200);
+  min-width: 150px;
+  padding: 5px 10px;
+  border: 1px solid var(--gray-200);
   border-radius: var(--radius-sm);
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   outline: none;
 }
 .tm-search:focus { border-color: var(--blue-500); }
@@ -729,16 +729,16 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 .tm-myname {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.82rem;
+  gap: 5px;
+  font-size: 0.75rem;
   color: var(--gray-600);
   font-weight: 600;
 }
 .tm-myname select {
-  padding: 5px 8px;
-  border: 1.5px solid var(--gray-200);
+  padding: 4px 6px;
+  border: 1px solid var(--gray-200);
   border-radius: var(--radius-sm);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
 }
 
 .tm-add-panel .panel-heading { margin-bottom: 8px; }
@@ -764,50 +764,107 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 
 .tm-name-input { min-width: 160px; flex: 1; }
 
-.tm-table-panel { padding: 0; overflow: hidden; }
+.tm-table-panel { padding: 0; overflow: hidden; border-radius: var(--radius-lg); }
+.tm-table-panel .table-wrap { overflow: auto; max-height: calc(100vh - 260px); }
+
 
 .tm-table {
   width: 100%;
-  font-size: 0.84rem;
+  font-size: 0.75rem;
+  border-collapse: collapse;
 }
 
 .tm-table th {
-  background: var(--gray-100);
-  padding: 10px 12px;
+  background: #f0f4fa;
+  padding: 5px 8px;
   text-align: left;
-  font-size: 0.78rem;
+  font-size: 0.70rem;
   color: var(--gray-600);
   font-weight: 700;
   white-space: nowrap;
-  border-bottom: 1.5px solid var(--gray-200);
+  border-bottom: 2px solid var(--gray-200);
+  border-right: 1px solid var(--gray-200);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
+.tm-table th:last-child { border-right: none; }
 
 .tm-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--gray-100);
+  padding: 3px 8px;
+  border-bottom: 1px solid #eef1f6;
+  border-right: 1px solid #eef1f6;
   vertical-align: middle;
   white-space: nowrap;
+  height: 28px;
+  line-height: 1.2;
 }
+.tm-table td:last-child { border-right: none; }
 
-.row-overdue td { background: #fff8f8; }
-.row-overdue:hover td { background: #fff1f1; }
+/* スプレッドシートらしい縞模様 */
+.tm-table tbody tr:nth-child(even) td { background: #f8fafd; }
+.tm-table tbody tr:nth-child(even).row-overdue td { background: #fff5f5; }
 
+.row-overdue td { background: #fff8f8; color: inherit; }
+.row-overdue:hover td { background: #ffecec; }
+
+/* コンパクトなタグ */
 .tag-overdue {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.65rem;
   font-weight: 700;
   background: var(--red-100);
   color: var(--red-700);
   white-space: nowrap;
 }
 
-/* タスクアイテムのステータスバッジ */
-.status-ti-未着手 { background: var(--gray-100); color: var(--gray-600); }
-.status-ti-進行中 { background: var(--amber-100); color: var(--amber-700); }
-.status-ti-完了   { background: var(--green-100); color: var(--green-700); }
+/* タスクアイテムのステータスバッジ（コンパクト） */
+.status-ti-未着手 { background: #f1f5f9; color: #64748b; }
+.status-ti-進行中 { background: #fef9c3; color: #92400e; }
+.status-ti-完了   { background: #dcfce7; color: #15803d; }
+
+/* タスク管理内のステータスセレクト */
+.tm-table .status-select {
+  padding: 2px 6px;
+  font-size: 0.70rem;
+  border-radius: 3px;
+}
+
+/* タスク管理内の優先度バッジ */
+.tm-table .priority {
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  border-radius: 3px;
+}
+
+/* タスク管理内のインライン入力 */
+.tm-table .inline-input,
+.tm-table .inline-select {
+  padding: 2px 5px;
+  font-size: 0.73rem;
+  border-radius: 3px;
+  min-width: 50px;
+  height: 22px;
+}
+
+/* タスク管理内のボタン */
+.tm-table .primary,
+.tm-table .secondary,
+.tm-table .danger {
+  padding: 2px 8px;
+  font-size: 0.70rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* row-actions 縦詰め */
+.tm-table .row-actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
 
 /* エラーメッセージ */
 .error-msg {
