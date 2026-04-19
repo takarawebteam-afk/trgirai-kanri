@@ -604,9 +604,14 @@ function App() {
 
   const handleTaskItemSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setTaskError(null)
     const id = crypto.randomUUID()
     const { error } = await supabase.from('task_items').insert({ ...taskItemForm, id })
-    if (error) { setTaskError(`追加失敗: ${error.message}`); return }
+    if (error) { 
+      setTaskError(`追加失敗: ${error.message} (データベース構成を確認してください)`)
+      console.error('Task Item Insert Error:', error)
+      return 
+    }
     // Slack通知
     try {
       await fetch('/api/notify-task', {
@@ -640,7 +645,13 @@ function App() {
 
   const saveTaskItemInline = async () => {
     if (!taskItemInlineId) return
-    await supabase.from('task_items').update(taskItemInlineForm).eq('id', taskItemInlineId)
+    setTaskError(null)
+    const { error } = await supabase.from('task_items').update(taskItemInlineForm).eq('id', taskItemInlineId)
+    if (error) {
+      setTaskError(`更新失敗: ${error.message}`)
+      console.error('Task Item Update Error:', error)
+      return
+    }
     setTaskItemInlineId(null)
     fetchTaskItems()
   }
@@ -1223,10 +1234,12 @@ function App() {
                             {isEditing ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setTaskItemInlineForm({ ...f, date: e.target.value })} /> : item.date}
                           </td>
                           <td onClick={(e) => { e.stopPropagation(); if (!isEditing && item.memo) setMemoToView(item.memo) }}>
-                            {isEditing 
-                              ? <input className="inline-input" placeholder="メモ" value={f.memo} onChange={(e) => setTaskItemInlineForm({ ...f, memo: e.target.value })} />
-                              : (item.memo ? <span className="memo-icon" title="メモを表示">📝</span> : <span style={{ color: '#ccc' }}>-</span>)
-                            }
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', minHeight: '24px', cursor: (!isEditing && item.memo) ? 'pointer' : 'default' }}>
+                              {isEditing 
+                                ? <input className="inline-input" placeholder="メモ" value={f.memo} onChange={(e) => setTaskItemInlineForm({ ...f, memo: e.target.value })} onClick={(e) => e.stopPropagation()} />
+                                : (item.memo ? <span className="memo-icon" title="メモを表示" onClick={(e) => { e.stopPropagation(); setMemoToView(item.memo) }}>📝</span> : <span style={{ color: '#ccc' }}>-</span>)
+                              }
+                            </div>
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
