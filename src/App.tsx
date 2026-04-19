@@ -1,8 +1,9 @@
-﻿import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import './App.css'
 import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
+import ProgressPage from './ProgressPage'
 
 type Department = '人事' | '総務' | '仲介' | '管理' | '売買' | '本社' | 'その他'
 type TaskType = '単発' | '継続'
@@ -12,7 +13,7 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress'
 
 type StockRecord = {
   id: string
@@ -291,6 +292,22 @@ const currency = new Intl.NumberFormat('ja-JP', {
 
 const integer = new Intl.NumberFormat('ja-JP')
 
+// WMO天気コード → 絵文字変換
+function getWeatherEmoji(code: number | null | undefined): string {
+  if (code === null || code === undefined) return ''
+  if (code === 0) return '☀️'
+  if (code === 1) return '🌤️'
+  if (code === 2) return '⛅'
+  if (code === 3) return '☁️'
+  if (code <= 48) return '🌫️'
+  if (code <= 55) return '🌦️'
+  if (code <= 65) return '🌧️'
+  if (code <= 77) return '❄️'
+  if (code <= 82) return '🌧️'
+  if (code <= 86) return '🌨️'
+  return '⛈️'
+}
+
 function App() {
   const [activePage, setActivePage] = useState<PageKey>('dashboard')
   const [tasks, setTasks] = useState<Task[]>([])
@@ -359,6 +376,7 @@ function App() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const [weatherMap, setWeatherMap] = useState<Record<string, number>>({})
   const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
   const [bushoForm, setBushoForm] = useState(defaultBushoForm)
   const [bushoCalendarMonth, setBushoCalendarMonth] = useState(() => {
@@ -426,6 +444,28 @@ function App() {
   async function fetchJishaShukyaku() {
     const { data } = await supabase.from('jisha_shukyaku').select('*')
     if (data) setJishaShukyakuRecords(data as JishaShukyakuRecord[])
+  }
+
+  // Open-Meteo から大阪の天気取得（APIキー不要）
+  async function fetchWeather(yearMonth: string) {
+    const [y, m] = yearMonth.split('-').map(Number)
+    const startDate = `${y}-${String(m).padStart(2, '0')}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    const endDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=34.6937&longitude=135.5022&daily=weather_code&timezone=Asia%2FTokyo&start_date=${startDate}&end_date=${endDate}`
+      const res = await fetch(url)
+      if (!res.ok) return
+      const data = await res.json() as { daily?: { time: string[]; weather_code: (number | null)[] } }
+      if (data.daily?.time && data.daily?.weather_code) {
+        const map: Record<string, number> = {}
+        data.daily.time.forEach((date, i) => {
+          const code = data.daily!.weather_code[i]
+          if (code !== null && code !== undefined) map[date] = code
+        })
+        setWeatherMap(prev => ({ ...prev, ...map }))
+      }
+    } catch { /* 天気取得失敗時は無視 */ }
   }
 
   useEffect(() => {
@@ -740,6 +780,11 @@ function App() {
     }
   }, [dmForm.account, dmForm.property_number])
 
+  // ストックカレンダーの月が変わったら天気を取得
+  useEffect(() => {
+    fetchWeather(stockCalendarMonth)
+  }, [stockCalendarMonth])
+
   // 反響管理ハンドラー
   const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -938,6 +983,7 @@ function App() {
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
         <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
         <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
+        <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
       </nav>
 
       <main className="page-content">
@@ -1718,7 +1764,14 @@ function App() {
                   ))}
                   {cells.map((cell, i) => (
                     <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
-                      <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
+                        {!cell.isOtherMonth && cell.date && weatherMap[cell.date] !== undefined && (
+                          <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天気: ${getWeatherEmoji(weatherMap[cell.date])}`}>
+                            {getWeatherEmoji(weatherMap[cell.date])}
+                          </span>
+                        )}
+                      </div>
                       {cell.stocks.map(s => {
                         const done = s.achieved_count >= s.required_count
                         return (
@@ -1797,6 +1850,10 @@ function App() {
           const selectedBushoSchedules = bushoFilterDept === '全て'
             ? bushoSchedules.filter((r) => r.date === selectedBushoDate)
             : bushoSchedules.filter((r) => r.date === selectedBushoDate && r.department === bushoFilterDept)
+          const selectBushoDate = (date: string) => {
+            setBushoSelectedDate(date)
+            setBushoForm({ ...defaultBushoForm, date })
+          }
           type BushoCalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; dayOfWeek: number; isHoliday: boolean; schedules: BushoSchedule[] }
           const cells: BushoCalCell[] = []
           const JP_HOLIDAYS = new Set([
@@ -1865,8 +1922,7 @@ function App() {
                       className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}${cell.date === selectedBushoDate ? ' busho-selected-day' : ''}${!cell.isOtherMonth && (cell.dayOfWeek === 0 || cell.isHoliday) ? ' holiday-cell' : ''}${!cell.isOtherMonth && cell.dayOfWeek === 6 && !cell.isHoliday ? ' saturday-cell' : ''}`}
                       onClick={() => {
                         if (!cell.isOtherMonth && cell.date) {
-                          setBushoSelectedDate(cell.date)
-                          setBushoForm({ ...defaultBushoForm, date: cell.date })
+                          selectBushoDate(cell.date)
                           setShowModal(true)
                         }
                       }}
@@ -1878,7 +1934,10 @@ function App() {
                           className="busho-badge"
                           style={{ backgroundColor: DEPT_COLORS[s.department] || '#95a5a6' }}
                           title={s.note}
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            selectBushoDate(s.date)
+                          }}
                         >
                           <span className="busho-badge-dept">{s.department}</span>
                           <span className="busho-badge-title">
@@ -2182,10 +2241,11 @@ function App() {
             </section>
           )
         })()}
+        {activePage === 'progress' && <ProgressPage />}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'progress' && (
         <button
           className="fab"
           onClick={() => setShowModal(true)}
@@ -2197,7 +2257,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'progress' && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div className="modal-content">
             <div className="modal-header">
