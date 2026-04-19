@@ -476,7 +476,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: default;
+  cursor: help;
 }
 
 .empty-text { color: var(--gray-400); font-size: 0.9rem; }
