@@ -100,6 +100,8 @@ type TaskItem = {
   detail: string
   priority: Priority
   due_date: string
+  work_date: string
+  memo: string
   assignees: string[]
   creator: string
   status: TaskItemStatus
@@ -182,6 +184,8 @@ const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   detail: '',
   priority: '中',
   due_date: '',
+  work_date: '',
+  memo: '',
   assignees: [],
   creator: '',
   status: '未着手',
@@ -341,6 +345,7 @@ function App() {
   const [taskFilter, setTaskFilter] = useState<'all' | '未着手' | '自分' | '期限切れ'>('all')
   const [myName, setMyName] = useState(() => localStorage.getItem('myName') || '')
   const [taskError, setTaskError] = useState<string | null>(null)
+  const [memoToView, setMemoToView] = useState<string | null>(null)
   const [memberEditId, setMemberEditId] = useState<string | null>(null)
   const [memberEditSlack, setMemberEditSlack] = useState('')
   const [memberSettingOpen, setMemberSettingOpen] = useState(false)
@@ -1179,15 +1184,28 @@ function App() {
             <section className="panel tm-table-panel">
               <div className="table-wrap">
                 <table className="tm-table">
+                  <colgroup>
+                    <col className="tm-col-date" />
+                    <col className="tm-col-memo" />
+                    <col className="tm-col-name" />
+                    <col className="tm-col-detail" />
+                    <col className="tm-col-pri" />
+                    <col className="tm-col-work" />
+                    <col className="tm-col-due" />
+                    <col className="tm-col-assign" />
+                    <col className="tm-col-creator" />
+                    <col className="tm-col-status" />
+                    <col className="tm-col-action" />
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th>日付</th><th>タスク名</th><th>詳細</th><th>優先度</th><th>期日</th>
+                      <th>日付</th><th>メモ</th><th>タスク名</th><th>詳細</th><th>優先度</th><th>作業日</th><th>期日</th>
                       <th>担当者</th><th>設定者</th><th>ステータス</th><th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredTaskItems.length === 0 && (
-                      <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
+                      <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
                     )}
                     {filteredTaskItems.map((item) => {
                       const isEditing = taskItemInlineId === item.id
@@ -1198,11 +1216,17 @@ function App() {
                           onClick={() => {
                             if (!isEditing) {
                               setTaskItemInlineId(item.id)
-                              setTaskItemInlineForm({ date: item.date || '', name: item.name, detail: item.detail || '', priority: item.priority || '中', due_date: item.due_date || '', assignees: item.assignees || [], creator: item.creator || '', status: item.status })
+                              setTaskItemInlineForm({ date: item.date || '', name: item.name, detail: item.detail || '', priority: item.priority || '中', due_date: item.due_date || '', work_date: item.work_date || '', memo: item.memo || '', assignees: item.assignees || [], creator: item.creator || '', status: item.status })
                             }
                           }}>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setTaskItemInlineForm({ ...f, date: e.target.value })} /> : item.date}
+                          </td>
+                          <td onClick={(e) => { e.stopPropagation(); if (!isEditing && item.memo) setMemoToView(item.memo) }}>
+                            {isEditing 
+                              ? <input className="inline-input" placeholder="メモ" value={f.memo} onChange={(e) => setTaskItemInlineForm({ ...f, memo: e.target.value })} />
+                              : (item.memo ? <span className="memo-icon" title="メモを表示">📝</span> : <span style={{ color: '#ccc' }}>-</span>)
+                            }
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1217,6 +1241,9 @@ function App() {
                             {isEditing
                               ? <select className="inline-select" value={f.priority} onChange={(e) => setTaskItemInlineForm({ ...f, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p}>{p}</option>)}</select>
                               : <span className={`priority priority-${item.priority}`}>{item.priority}</span>}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? <input className="inline-input" type="date" value={f.work_date} onChange={(e) => setTaskItemInlineForm({ ...f, work_date: e.target.value })} /> : item.work_date}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing ? <input className="inline-input" type="date" value={f.due_date} onChange={(e) => setTaskItemInlineForm({ ...f, due_date: e.target.value })} /> : item.due_date}
@@ -1306,6 +1333,21 @@ function App() {
                 </div>
               )}
             </section>
+
+            {/* メモ表示ポップアップ */}
+            {memoToView !== null && (
+              <div className="memo-popup-overlay" onClick={() => setMemoToView(null)}>
+                <div className="memo-popup-content" onClick={e => e.stopPropagation()}>
+                  <div className="memo-popup-header">
+                    <h3>メモ詳細</h3>
+                    <button onClick={() => setMemoToView(null)}>✕</button>
+                  </div>
+                  <div className="memo-popup-body">
+                    {memoToView}
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -2357,6 +2399,9 @@ function App() {
                       {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </label>
+                  <label className="form-label">作業日
+                    <input type="date" value={taskItemForm.work_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, work_date: e.target.value })} />
+                  </label>
                   <label className="form-label">期日
                     <input type="date" value={taskItemForm.due_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, due_date: e.target.value })} />
                   </label>
@@ -2385,6 +2430,9 @@ function App() {
                     <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
                       {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
+                  </label>
+                  <label className="form-label">メモ
+                    <textarea placeholder="メモ内容" value={taskItemForm.memo} onChange={(e) => setTaskItemForm({ ...taskItemForm, memo: e.target.value })} rows={2} />
                   </label>
                   <div className="form-actions">
                     <button type="submit" className="primary">追加する</button>
