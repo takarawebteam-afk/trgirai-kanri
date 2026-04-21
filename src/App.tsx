@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import './App.css'
 import { supabase } from './supabase'
@@ -97,7 +97,6 @@ type TaskItem = {
   created_at?: string
   date: string
   name: string
-  detail: string
   priority: Priority
   due_date: string
   work_date: string
@@ -105,6 +104,7 @@ type TaskItem = {
   assignees: string[]
   creator: string
   status: TaskItemStatus
+  parent_task_id?: string | null
   slack_notified?: boolean
   completed_notified?: boolean
 }
@@ -158,6 +158,15 @@ const TEAM_MEMBERS = [
 
 type CalendarEvent = { id: string; summary: string; start: string }
 
+type WeeklyScheduleItem = {
+  id: string
+  source: '案件管理' | 'タスク管理' | '部署予定'
+  date: string
+  start_time?: string
+  title: string
+  detail: string
+}
+
 const departments: Department[] = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他']
 const taskTypes: TaskType[] = ['単発', '継続']
 const taskStatuses: TaskStatus[] = ['未実施', '作業中', '完了']
@@ -181,7 +190,6 @@ const hankyoStores = ['対象外', '店舗誘導済', '大阪店', '京橋店', 
 const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   date: new Date().toISOString().split('T')[0],
   name: '',
-  detail: '',
   priority: '中',
   due_date: '',
   work_date: '',
@@ -189,6 +197,7 @@ const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   assignees: [],
   creator: '',
   status: '未着手',
+  parent_task_id: null,
 }
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
@@ -259,6 +268,26 @@ const DM_ACCOUNT_YAO = dmAccounts[3]
 const DM_ACCOUNT_KINDAI = dmAccounts[4]
 const DM_ACCOUNT_KANGAKU = dmAccounts[5]
 
+function isDateWithinRange(dateText: string, start: Date, end: Date): boolean {
+  if (!dateText) return false
+  const target = new Date(`${dateText}T00:00:00`)
+  if (Number.isNaN(target.getTime())) return false
+  return target >= start && target <= end
+}
+
+function formatDashboardScheduleDate(dateText: string, startTime?: string | null): string {
+  if (!dateText) return '日付未設定'
+
+  const target = new Date(`${dateText}T00:00:00`)
+  if (Number.isNaN(target.getTime())) {
+    return startTime ? `${dateText} ${startTime}` : dateText
+  }
+
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土']
+  const baseText = `${target.getMonth() + 1}/${target.getDate()}(${weekdays[target.getDay()]})`
+  return startTime ? `${baseText} ${startTime}` : baseText
+}
+
 type DmAreaLookup =
   | { mode: 'fixed'; area: string }
   | { mode: 'sheet'; sheetName: string }
@@ -312,6 +341,42 @@ function getWeatherEmoji(code: number | null | undefined): string {
   return '⛈️'
 }
 
+function getTaskItemPrimaryAssignee(item: TaskItem) {
+  return item.assignees[0] || ''
+}
+
+function getUniqueTaskItemAssignees(assignees: string[]) {
+  return Array.from(new Set(assignees.filter(Boolean)))
+}
+
+function buildTaskItemRows(form: Omit<TaskItem, 'id' | 'created_at'>) {
+  const uniqueAssignees = getUniqueTaskItemAssignees(form.assignees)
+  const assigneeRows = uniqueAssignees.length > 0 ? uniqueAssignees : ['']
+
+  return assigneeRows.map((assignee) => ({
+    ...form,
+    id: crypto.randomUUID(),
+    assignees: assignee ? [assignee] : [],
+  }))
+}
+
+function notifyTaskEvent(payload: {
+  type: 'new' | 'updated' | 'deleted' | 'completed'
+  taskName: string
+  dueDate?: string
+  workDate?: string
+  priority?: Priority
+  assignees: string[]
+  creator?: string
+  members: Member[]
+}) {
+  fetch('/api/notify-task', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {})
+}
+
 function App() {
   const [activePage, setActivePage] = useState<PageKey>('dashboard')
   const [tasks, setTasks] = useState<Task[]>([])
@@ -342,8 +407,10 @@ function App() {
   const [taskItemInlineId, setTaskItemInlineId] = useState<string | null>(null)
   const [taskItemInlineForm, setTaskItemInlineForm] = useState<Omit<TaskItem, 'id' | 'created_at'>>(defaultTaskItemForm)
   const [taskSearch, setTaskSearch] = useState('')
-  const [taskFilter, setTaskFilter] = useState<'all' | '未着手' | '自分' | '期限切れ'>('all')
-  const [myName, setMyName] = useState(() => localStorage.getItem('myName') || '')
+  const [taskFilter, setTaskFilter] = useState<'all' | TaskItemStatus | 'overdue'>('all')
+  const [taskItemAssigneeFilter, setTaskItemAssigneeFilter] = useState('all')
+  const [taskItemShowCompleted, setTaskItemShowCompleted] = useState(false)
+  const [expandedParentTaskIds, setExpandedParentTaskIds] = useState<string[]>([])
   const [taskError, setTaskError] = useState<string | null>(null)
   const [memoToView, setMemoToView] = useState<string | null>(null)
   const [memberEditId, setMemberEditId] = useState<string | null>(null)
@@ -360,6 +427,7 @@ function App() {
   const [hankyoMediaFilter, setHankyoMediaFilter] = useState('all')
   const [hankyoStoreFilter, setHankyoStoreFilter] = useState('all')
   const [hankyoPage, setHankyoPage] = useState(1)
+  const [checkedHankyoIds, setCheckedHankyoIds] = useState<Set<string>>(new Set())
   const [showModal, setShowModal] = useState(false)
 
   // DM管理
@@ -396,6 +464,7 @@ function App() {
   const [jishaMonth, setJishaMonth] = useState(new Date().getMonth() + 1)
   const [jishaCellEditing, setJishaCellEditing] = useState<string | null>(null)
   const [jishaCellValue, setJishaCellValue] = useState('')
+  const [jishaSavingCell, setJishaSavingCell] = useState<string | null>(null)
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -559,6 +628,8 @@ function App() {
   dashboardToday.setHours(0, 0, 0, 0)
   const dashboardLimit = new Date(dashboardToday)
   dashboardLimit.setDate(dashboardLimit.getDate() + 3)
+  const dashboardWeeklyLimit = new Date(dashboardToday)
+  dashboardWeeklyLimit.setDate(dashboardWeeklyLimit.getDate() + 7)
   const webTeamTasks = taskItems
     .filter((item) => {
       if (!item.due_date) return false
@@ -569,16 +640,52 @@ function App() {
     .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
 
   // タスク管理 計算
+  const weeklySchedules = [
+    ...tasks
+      .filter((task) => task.dueDate && task.status !== '完了' && isDateWithinRange(task.dueDate, dashboardToday, dashboardWeeklyLimit))
+      .map((task): WeeklyScheduleItem => ({
+        id: `task-${task.id}`,
+        source: '案件管理',
+        date: task.dueDate,
+        title: task.name,
+        detail: `${task.department} / ${task.taskType}`,
+      })),
+    ...taskItems
+      .filter((item) => item.due_date && item.status !== '完了' && isDateWithinRange(item.due_date, dashboardToday, dashboardWeeklyLimit))
+      .map((item): WeeklyScheduleItem => ({
+        id: `task-item-${item.id}`,
+        source: 'タスク管理',
+        date: item.due_date,
+        title: item.name,
+        detail: `${getTaskItemPrimaryAssignee(item) || '担当者未設定'} / 作成者: ${item.creator || '未設定'}`,
+      })),
+    ...bushoSchedules
+      .filter((schedule) => schedule.date && isDateWithinRange(schedule.date, dashboardToday, dashboardWeeklyLimit))
+      .map((schedule): WeeklyScheduleItem => ({
+        id: `busho-${schedule.id}`,
+        source: '部署予定',
+        date: schedule.date,
+        start_time: schedule.start_time ?? undefined,
+        title: schedule.title,
+        detail: schedule.note ? `${schedule.department} / ${schedule.note}` : schedule.department,
+      })),
+  ].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date)
+    if (dateCompare !== 0) return dateCompare
+    return (a.start_time || '99:99').localeCompare(b.start_time || '99:99')
+  })
+
   const today = new Date().toISOString().split('T')[0]
   const filteredTaskItems = taskItems
     .filter((item) => {
       if (taskSearch && !item.name.includes(taskSearch)) return false
-      if (taskFilter === '未着手' && item.status !== '未着手') return false
-      if (taskFilter === '自分' && myName && !item.assignees.includes(myName)) return false
-      if (taskFilter === '期限切れ') {
-        if (!item.due_date || item.status === '完了') return false
+      if (!taskItemShowCompleted && item.status === taskItemStatuses[2]) return false
+      if (taskItemAssigneeFilter !== 'all' && getTaskItemPrimaryAssignee(item) !== taskItemAssigneeFilter) return false
+      if (taskFilter === 'overdue') {
+        if (!item.due_date || item.status === taskItemStatuses[2]) return false
         return item.due_date < today
       }
+      if (taskFilter !== 'all' && item.status !== taskFilter) return false
       return true
     })
     .sort((a, b) => {
@@ -591,7 +698,38 @@ function App() {
       return (b.created_at || '').localeCompare(a.created_at || '')
     })
 
+  const filteredTaskItemIdSet = new Set(filteredTaskItems.map((item) => item.id))
+  const taskItemsById = new Map(taskItems.map((item) => [item.id, item]))
+  const childTaskItemsByParent = filteredTaskItems.reduce<Record<string, TaskItem[]>>((acc, item) => {
+    if (!item.parent_task_id) return acc
+    if (!acc[item.parent_task_id]) acc[item.parent_task_id] = []
+    acc[item.parent_task_id].push(item)
+    return acc
+  }, {})
+  const extraParentTaskItems = filteredTaskItems
+    .map((item) => (item.parent_task_id ? taskItemsById.get(item.parent_task_id) ?? null : null))
+    .filter((item): item is TaskItem => !!item && !filteredTaskItemIdSet.has(item.id))
+  const taskItemsToRender = [...filteredTaskItems.filter((item) => !item.parent_task_id), ...extraParentTaskItems]
+    .sort((a, b) => {
+      const pOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
+      if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date.localeCompare(b.due_date)
+      if (a.due_date && !b.due_date) return -1
+      if (!a.due_date && b.due_date) return 1
+      const pd = pOrder[a.priority] - pOrder[b.priority]
+      if (pd !== 0) return pd
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    })
+
   // 新規追加ハンドラ
+  const isParentTaskExpanded = (taskId: string) => expandedParentTaskIds.includes(taskId)
+  const toggleParentTaskExpanded = (taskId: string) => {
+    setExpandedParentTaskIds((current) => (
+      current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [...current, taskId]
+    ))
+  }
+
   const handleTaskSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setTaskError(null)
@@ -605,50 +743,165 @@ function App() {
   const handleTaskItemSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setTaskError(null)
-    const id = crypto.randomUUID()
-    const { error } = await supabase.from('task_items').insert({ ...taskItemForm, id })
+    const rows = buildTaskItemRows(taskItemForm)
+    const { error } = await supabase.from('task_items').insert(rows)
     if (error) { 
       setTaskError(`追加失敗: ${error.message} (データベース構成を確認してください)`)
       console.error('Task Item Insert Error:', error)
       return 
     }
-    // Slack通知（fire-and-forget: 待たずに即UIを更新）
-    fetch('/api/notify-task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'new', taskName: taskItemForm.name, dueDate: taskItemForm.due_date, priority: taskItemForm.priority, assignees: taskItemForm.assignees, members }),
-    }).catch(() => {})
+    notifyTaskEvent({
+      type: 'new',
+      taskName: taskItemForm.name,
+      dueDate: taskItemForm.due_date,
+      workDate: taskItemForm.work_date,
+      priority: taskItemForm.priority,
+      assignees: taskItemForm.assignees,
+      creator: taskItemForm.creator,
+      members,
+    })
     setTaskItemForm({ ...defaultTaskItemForm, date: new Date().toISOString().split('T')[0] })
     fetchTaskItems()
     setShowModal(false)
   }
 
   const updateTaskItemStatus = async (id: string, status: TaskItemStatus) => {
-    await supabase.from('task_items').update({ status }).eq('id', id)
-    if (status === '完了') {
-      const item = taskItems.find((t) => t.id === id)
-      if (item && !item.completed_notified) {
-        await supabase.from('task_items').update({ completed_notified: true }).eq('id', id)
-        fetch('/api/notify-task', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'completed', taskName: item.name, assignees: item.assignees, members }),
-        }).catch(() => {})
-      }
+    const item = taskItems.find((t) => t.id === id)
+    if (!item) return
+
+    const completedNotified = status === '完了'
+      ? item.completed_notified
+      : false
+
+    await supabase.from('task_items').update({ status, completed_notified: completedNotified }).eq('id', id)
+
+    if (status === '完了' && !item.completed_notified) {
+      notifyTaskEvent({
+        type: 'completed',
+        taskName: item.name,
+        dueDate: item.due_date,
+        workDate: item.work_date,
+        priority: item.priority,
+        assignees: item.assignees,
+        creator: item.creator,
+        members,
+      })
+
+      await supabase.from('task_items').update({ completed_notified: true }).eq('id', id)
     }
+
     fetchTaskItems()
   }
 
   const saveTaskItemInline = async () => {
     if (!taskItemInlineId) return
     setTaskError(null)
-    const { error } = await supabase.from('task_items').update(taskItemInlineForm).eq('id', taskItemInlineId)
+    const currentItem = taskItems.find((item) => item.id === taskItemInlineId)
+    const currentAssignee = currentItem ? getTaskItemPrimaryAssignee(currentItem) : ''
+    const selectedAssignees = getUniqueTaskItemAssignees(taskItemInlineForm.assignees)
+    const nextPrimaryAssignee = currentAssignee && selectedAssignees.includes(currentAssignee)
+      ? currentAssignee
+      : (selectedAssignees[0] || '')
+    const additionalAssignees = selectedAssignees.filter((assignee) => assignee !== nextPrimaryAssignee)
+    const updatePayload = {
+      ...taskItemInlineForm,
+      assignees: nextPrimaryAssignee ? [nextPrimaryAssignee] : [],
+    }
+    const { error } = await supabase.from('task_items').update(updatePayload).eq('id', taskItemInlineId)
     if (error) {
       setTaskError(`更新失敗: ${error.message}`)
       console.error('Task Item Update Error:', error)
       return
     }
+    if (additionalAssignees.length > 0) {
+      const insertRows = additionalAssignees.map((assignee) => ({
+        ...taskItemInlineForm,
+        id: crypto.randomUUID(),
+        assignees: [assignee],
+      }))
+      const { error: insertError } = await supabase.from('task_items').insert(insertRows)
+      if (insertError) {
+        setTaskError(`担当者追加の保存に失敗しました: ${insertError.message}`)
+        console.error('Task Item Additional Insert Error:', insertError)
+        return
+      }
+    }
+
+    notifyTaskEvent({
+      type: 'updated',
+      taskName: taskItemInlineForm.name,
+      dueDate: taskItemInlineForm.due_date,
+      workDate: taskItemInlineForm.work_date,
+      priority: taskItemInlineForm.priority,
+      assignees: selectedAssignees,
+      creator: taskItemInlineForm.creator,
+      members,
+    })
+
+    if (currentItem && currentItem.status !== '完了' && taskItemInlineForm.status === '完了' && !currentItem.completed_notified) {
+      await supabase.from('task_items').update({ completed_notified: true }).eq('id', taskItemInlineId)
+      notifyTaskEvent({
+        type: 'completed',
+        taskName: taskItemInlineForm.name,
+        dueDate: taskItemInlineForm.due_date,
+        workDate: taskItemInlineForm.work_date,
+        priority: taskItemInlineForm.priority,
+        assignees: selectedAssignees,
+        creator: taskItemInlineForm.creator,
+        members,
+      })
+    }
+
+    if (currentItem && currentItem.status === '完了' && taskItemInlineForm.status !== '完了') {
+      await supabase.from('task_items').update({ completed_notified: false }).eq('id', taskItemInlineId)
+    }
+
     setTaskItemInlineId(null)
+    fetchTaskItems()
+  }
+
+  const startTaskItemInline = (item: TaskItem) => {
+    setTaskItemInlineId(item.id)
+    setTaskItemInlineForm({
+      date: item.date || '',
+      name: item.name,
+      priority: item.priority || '中',
+      due_date: item.due_date || '',
+      work_date: item.work_date || '',
+      memo: item.memo || '',
+      assignees: getUniqueTaskItemAssignees(item.assignees),
+      creator: item.creator || '',
+      status: item.status,
+      parent_task_id: item.parent_task_id || null,
+    })
+  }
+
+  const deleteTaskItemWithChildren = async (item: TaskItem) => {
+    const itemsToDelete = [item, ...taskItems.filter((child) => child.parent_task_id === item.id)]
+    const deleteIds = itemsToDelete.map((target) => target.id)
+    const childCount = itemsToDelete.length - 1
+    const message = childCount > 0
+      ? 'この親タスクと子タスクを本当に削除しますか？'
+      : 'このタスクを本当に削除しますか？'
+
+    const confirmed = window.confirm(message)
+    if (!confirmed) return
+
+    await supabase.from('task_items').delete().in('id', deleteIds)
+
+    itemsToDelete.forEach((target) => {
+      notifyTaskEvent({
+        type: 'deleted',
+        taskName: target.name,
+        dueDate: target.due_date,
+        workDate: target.work_date,
+        priority: target.priority,
+        assignees: target.assignees,
+        creator: target.creator,
+        members,
+      })
+    })
+
     fetchTaskItems()
   }
 
@@ -796,6 +1049,19 @@ function App() {
   useEffect(() => {
     fetchWeather(stockCalendarMonth)
   }, [stockCalendarMonth])
+
+  const confirmAndDeleteRecord = async (
+    tableName: string,
+    id: string,
+    refresh: () => void,
+    message = '本当に削除しますか？'
+  ) => {
+    const confirmed = window.confirm(message)
+    if (!confirmed) return
+
+    await supabase.from(tableName).delete().eq('id', id)
+    refresh()
+  }
 
   // 反響管理ハンドラー
   const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1006,18 +1272,37 @@ function App() {
             <div className="stat-card"><span>案件削減額</span><strong>{currency.format(taskSavingsTotal)}</strong><small>案件管理の削減額合計</small></div>
             <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>採用管理の削減額合計</small></div>
 
+            <section className="panel dashboard-list-panel dashboard-full-panel">
+              <div className="panel-heading"><div><h2>1週間の予定</h2><p>1週間以内の期日と予定をまとめて表示</p></div></div>
+              <div className="ongoing-list">
+                {weeklySchedules.length === 0 && <p className="empty-text">1週間以内の予定はありません。</p>}
+                {weeklySchedules.map((item) => (
+                  <article className="ongoing-item dashboard-schedule-item" key={item.id}>
+                    <div className="dashboard-schedule-main">
+                      <span className="schedule-source-badge">{item.source}</span>
+                      <strong>{item.title}</strong>
+                      <p className="dashboard-schedule-detail">{item.detail}</p>
+                    </div>
+                    <div className="dashboard-schedule-date">
+                      <span>{formatDashboardScheduleDate(item.date, item.start_time)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="panel dashboard-list-panel">
               <div className="panel-heading"><div><h2>WEBチームタスク</h2><p>今日から3日以内が期日のタスク</p></div></div>
               <div className="ongoing-list">
                 {webTeamTasks.length === 0 && <p className="empty-text">期日が3日以内のタスクはありません。</p>}
                 {webTeamTasks.map((item) => (
-                  <article className="ongoing-item dashboard-task-item" key={item.id}>
+                  <article className="ongoing-item dashboard-task-item dashboard-compact-item" key={item.id}>
                     <div>
                       <strong>{item.name}</strong>
-                      <p>{item.detail || '詳細なし'}</p>
+                      <p>{item.memo || 'メモなし'}</p>
                     </div>
                     <div>
-                      <span>担当: {(item.assignees || []).length ? item.assignees.join('・') : '未設定'}</span>
+                      <span>担当: {getTaskItemPrimaryAssignee(item) || '未設定'}</span>
                       <span>設定者: {item.creator || '未設定'}</span>
                       <span>期日: {item.due_date}</span>
                     </div>
@@ -1031,7 +1316,7 @@ function App() {
               <div className="ongoing-list">
                 {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません。</p>}
                 {ongoingTasks.map((task) => (
-                  <article className="ongoing-item" key={task.id}>
+                  <article className="ongoing-item dashboard-task-item dashboard-compact-item" key={task.id}>
                     <div><strong>{task.name}</strong><p>{task.department} / {task.taskType} / 優先度: {task.priority}</p></div>
                     <div><span>担当: {(task.assignees || []).join('・')}</span><span>期日: {task.dueDate}</span></div>
                   </article>
@@ -1066,7 +1351,7 @@ function App() {
                 </div>
               </div>
               <div className="table-wrap">
-                <table>
+                <table className="compact-list-table">
                   <thead>
                     <tr>
                       <th>案件日</th><th>担当者</th><th>依頼部署</th><th>案件名</th><th>案件内容</th>
@@ -1151,7 +1436,7 @@ function App() {
                                   <button className="secondary" onClick={() => setTaskInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={async () => { await supabase.from('tasks').delete().eq('id', task.id); fetchTasks() }}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('tasks', task.id, fetchTasks, 'この業務管理の項目を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1170,21 +1455,22 @@ function App() {
           <section className="taskmanagement-page">
             {/* ヘッダー: 検索・フィルター・自分設定 */}
             <div className="tm-toolbar">
-              <div className="tm-filters">
-                {(['all', '未着手', '自分', '期限切れ'] as const).map((f) => (
-                  <button key={f} className={`tm-filter-btn ${taskFilter === f ? 'active' : ''}`} onClick={() => setTaskFilter(f)}>
-                    {f === 'all' ? 'すべて' : f === '自分' ? '自分の担当' : f}
-                  </button>
-                ))}
-              </div>
+              <select className="tm-filter-select" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value as 'all' | TaskItemStatus | 'overdue')}>
+                <option value="all">すべて</option>
+                <option value={taskItemStatuses[0]}>未着手</option>
+                <option value={taskItemStatuses[1]}>進行中</option>
+                <option value={taskItemStatuses[2]}>完了</option>
+                <option value="overdue">期限切れ</option>
+              </select>
               <input className="tm-search" placeholder="タスク名で検索..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
-              <div className="tm-myname">
-                <span>自分:</span>
-                <select value={myName} onChange={(e) => { setMyName(e.target.value); localStorage.setItem('myName', e.target.value) }}>
-                  <option value="">未設定</option>
-                  {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
-                </select>
-              </div>
+              <select className="tm-filter-select" value={taskItemAssigneeFilter} onChange={(e) => setTaskItemAssigneeFilter(e.target.value)}>
+                <option value="all">担当者一覧</option>
+                {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+              </select>
+              <label className="tm-completed-toggle">
+                <input type="checkbox" checked={taskItemShowCompleted} onChange={(e) => setTaskItemShowCompleted(e.target.checked)} />
+                完了表示
+              </label>
             </div>
 
             {/* タスク一覧テーブル */}
@@ -1195,7 +1481,6 @@ function App() {
                     <col className="tm-col-date" />
                     <col className="tm-col-memo" />
                     <col className="tm-col-name" />
-                    <col className="tm-col-detail" />
                     <col className="tm-col-pri" />
                     <col className="tm-col-work" />
                     <col className="tm-col-due" />
@@ -1206,25 +1491,25 @@ function App() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>日付</th><th>メモ</th><th>タスク名</th><th>詳細</th><th>優先度</th><th>作業日</th><th>期日</th>
+                      <th>日付</th><th>メモ</th><th>タスク名</th><th>優先度</th><th>作業日</th><th>期日</th>
                       <th>担当者</th><th>設定者</th><th>ステータス</th><th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredTaskItems.length === 0 && (
-                      <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
+                      <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
                     )}
-                    {filteredTaskItems.map((item) => {
+                    {taskItemsToRender.map((item) => {
                       const isEditing = taskItemInlineId === item.id
                       const f = taskItemInlineForm
                       const overdue = item.due_date && item.due_date < today && item.status !== '完了'
+                      const childItems = childTaskItemsByParent[item.id] || []
+                      const showChildren = isParentTaskExpanded(item.id)
                       return (
-                        <tr key={item.id} className={`${isEditing ? 'row-editing' : 'row-hoverable'} ${overdue ? 'row-overdue' : ''}`}
+                        <Fragment key={item.id}>
+                        <tr className={`${isEditing ? 'row-editing' : 'row-hoverable'} ${overdue ? 'row-overdue' : ''}`}
                           onClick={() => {
-                            if (!isEditing) {
-                              setTaskItemInlineId(item.id)
-                              setTaskItemInlineForm({ date: item.date || '', name: item.name, detail: item.detail || '', priority: item.priority || '中', due_date: item.due_date || '', work_date: item.work_date || '', memo: item.memo || '', assignees: item.assignees || [], creator: item.creator || '', status: item.status })
-                            }
+                            if (!isEditing) startTaskItemInline(item)
                           }}>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setTaskItemInlineForm({ ...f, date: e.target.value })} /> : item.date}
@@ -1238,13 +1523,25 @@ function App() {
                             </div>
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              {overdue && <span className="tag-overdue">期限切れ</span>}
-                              {isEditing ? <input className="inline-input tm-name-input" value={f.name} onChange={(e) => setTaskItemInlineForm({ ...f, name: e.target.value })} /> : item.name}
+                            <div className="tm-name-cell">
+                              <div className="tm-name-main">
+                                {overdue && <span className="tag-overdue">期限切れ</span>}
+                                {isEditing ? <input className="inline-input tm-name-input" value={f.name} onChange={(e) => setTaskItemInlineForm({ ...f, name: e.target.value })} /> : item.name}
+                              </div>
+                              {childItems.length > 0 && (
+                                <button
+                                  type="button"
+                                  className="tm-child-toggle"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleParentTaskExpanded(item.id)
+                                  }}
+                                >
+                                  <span className="tm-child-toggle-label">{showChildren ? '閉じる' : '子タスク'}</span>
+                                  <span className="tm-child-badge">{childItems.length}</span>
+                                </button>
+                              )}
                             </div>
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.detail} onChange={(e) => setTaskItemInlineForm({ ...f, detail: e.target.value })} /> : <span className="cell-truncate" title={item.detail}>{item.detail}</span>}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
@@ -1259,15 +1556,17 @@ function App() {
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
-                              ? <div className="inline-checkbox-group">{members.map((m) => (
-                                  <label key={m.id} className="inline-checkbox-item">
-                                    <input type="checkbox" checked={f.assignees.includes(m.name)} onChange={(e) => {
-                                      const next = e.target.checked ? [...f.assignees, m.name] : f.assignees.filter((x) => x !== m.name)
-                                      setTaskItemInlineForm({ ...f, assignees: next })
-                                    }} />{m.name}
-                                  </label>
-                                ))}</div>
-                              : (item.assignees || []).join('・')}
+                              ? (
+                                <><div className="inline-checkbox-group">{members.map((m) => (<label key={m.id} className="inline-checkbox-item"><input type="checkbox" checked={f.assignees.includes(m.name)} onChange={(e) => { const next = e.target.checked ? [...f.assignees, m.name] : f.assignees.filter((name) => name !== m.name); setTaskItemInlineForm({ ...f, assignees: getUniqueTaskItemAssignees(next) }) }} />{m.name}</label>))}</div><select style={{ display: 'none' }}
+                                  className="inline-select"
+                                  value={f.assignees[0] || ''}
+                                  onChange={(e) => setTaskItemInlineForm({ ...f, assignees: e.target.value ? [e.target.value] : [] })}
+                                >
+                                  <option value="">未設定</option>
+                                  {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                                </select></>
+                              )
+                              : getTaskItemPrimaryAssignee(item)}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
@@ -1297,11 +1596,103 @@ function App() {
                                   <button className="secondary" onClick={() => setTaskItemInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={async () => { await supabase.from('task_items').delete().eq('id', item.id); fetchTaskItems() }}>削除</button>
+                                <button className="danger" onClick={() => deleteTaskItemWithChildren(item)}>削除</button>
                               )}
                             </div>
                           </td>
                         </tr>
+                        {showChildren && childItems.map((child) => {
+                          const childEditing = taskItemInlineId === child.id
+                          const childForm = taskItemInlineForm
+                          const childOverdue = child.due_date && child.due_date < today && child.status !== '完了'
+                          return (
+                            <Fragment key={child.id}>
+                            <tr className={`tm-child-row ${childEditing ? 'row-editing' : 'row-hoverable'} ${childOverdue ? 'row-overdue' : ''}`}
+                              onClick={() => {
+                                if (!childEditing) startTaskItemInline(child)
+                              }}>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing ? <input className="inline-input" type="date" value={childForm.date} onChange={(e) => setTaskItemInlineForm({ ...childForm, date: e.target.value })} /> : child.date}
+                              </td>
+                              <td onClick={(e) => { e.stopPropagation(); if (!childEditing && child.memo) setMemoToView(child.memo) }}>
+                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', minHeight: '24px', cursor: (!childEditing && child.memo) ? 'pointer' : 'default' }}>
+                                  {childEditing
+                                    ? <input className="inline-input" placeholder="メモ" value={childForm.memo} onChange={(e) => setTaskItemInlineForm({ ...childForm, memo: e.target.value })} onClick={(e) => e.stopPropagation()} />
+                                    : (child.memo ? <span className="memo-icon" title="メモを表示" onClick={(e) => { e.stopPropagation(); setMemoToView(child.memo) }}>📝</span> : <span style={{ color: '#ccc' }}>-</span>)
+                                  }
+                                </div>
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                <div className="tm-name-cell">
+                                  <div className="tm-name-main">
+                                    <span className="tm-child-badge">子</span>
+                                    {childOverdue && <span className="tag-overdue">期限切れ</span>}
+                                    {childEditing ? <input className="inline-input tm-name-input" value={childForm.name} onChange={(e) => setTaskItemInlineForm({ ...childForm, name: e.target.value })} /> : child.name}
+                                  </div>
+                                </div>
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing
+                                  ? <select className="inline-select" value={childForm.priority} onChange={(e) => setTaskItemInlineForm({ ...childForm, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p}>{p}</option>)}</select>
+                                  : <span className={`priority priority-${child.priority}`}>{child.priority}</span>}
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing ? <input className="inline-input" type="date" value={childForm.work_date} onChange={(e) => setTaskItemInlineForm({ ...childForm, work_date: e.target.value })} /> : child.work_date}
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing ? <input className="inline-input" type="date" value={childForm.due_date} onChange={(e) => setTaskItemInlineForm({ ...childForm, due_date: e.target.value })} /> : child.due_date}
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing
+                                  ? (
+                                    <><div className="inline-checkbox-group">{members.map((m) => (<label key={m.id} className="inline-checkbox-item"><input type="checkbox" checked={childForm.assignees.includes(m.name)} onChange={(e) => { const next = e.target.checked ? [...childForm.assignees, m.name] : childForm.assignees.filter((name) => name !== m.name); setTaskItemInlineForm({ ...childForm, assignees: getUniqueTaskItemAssignees(next) }) }} />{m.name}</label>))}</div><select style={{ display: 'none' }}
+                                      className="inline-select"
+                                      value={childForm.assignees[0] || ''}
+                                      onChange={(e) => setTaskItemInlineForm({ ...childForm, assignees: e.target.value ? [e.target.value] : [] })}
+                                    >
+                                      <option value="">未設定</option>
+                                      {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                                    </select></>
+                                  )
+                                  : getTaskItemPrimaryAssignee(child)}
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing
+                                  ? <div className="inline-checkbox-group">{members.map((m) => (
+                                      <label key={m.id} className="inline-checkbox-item">
+                                        <input type="checkbox" checked={childForm.creator === m.name} onChange={() => setTaskItemInlineForm({ ...childForm, creator: m.name })} />{m.name}
+                                      </label>
+                                    ))}</div>
+                                  : child.creator}
+                              </td>
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <select className={`status-select status-ti-${childEditing ? childForm.status : child.status}`}
+                                  value={childEditing ? childForm.status : child.status}
+                                  onChange={async (e) => {
+                                    const s = e.target.value as TaskItemStatus
+                                    if (childEditing) setTaskItemInlineForm({ ...childForm, status: s })
+                                    else await updateTaskItemStatus(child.id, s)
+                                  }}>
+                                  {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </td>
+                              <td onClick={(e) => e.stopPropagation()}>
+                                <div className="row-actions">
+                                  {childEditing ? (
+                                    <>
+                                      <button className="primary" onClick={saveTaskItemInline}>保存</button>
+                                      <button className="secondary" onClick={() => setTaskItemInlineId(null)}>×</button>
+                                    </>
+                                  ) : (
+                                    <button className="danger" onClick={() => deleteTaskItemWithChildren(child)}>削除</button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                            </Fragment>
+                          )
+                        })}
+                        </Fragment>
                       )
                     })}
                   </tbody>
@@ -1366,7 +1757,7 @@ function App() {
             <section className="panel table-panel">
               <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
-                <table>
+                <table className="compact-list-table">
                   <thead>
                     <tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>コメント</th><th>保存</th><th>操作</th></tr>
                   </thead>
@@ -1403,7 +1794,7 @@ function App() {
                                   <button className="secondary" onClick={() => setSnsInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={async () => { await supabase.from('sns_posts').delete().eq('id', post.id); fetchPosts() }}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_posts', post.id, fetchPosts, 'このSNS記録を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1423,7 +1814,7 @@ function App() {
             <section className="panel table-panel">
               <div className="panel-heading"><div><h2>採用実績一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
-                <table>
+                <table className="compact-list-table">
                   <thead>
                     <tr><th>応募日</th><th>媒体</th><th>部署</th><th>職種</th><th>削減額</th><th>操作</th></tr>
                   </thead>
@@ -1460,7 +1851,7 @@ function App() {
                                   <button className="secondary" onClick={() => setRecruitmentInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={async () => { await supabase.from('recruitment').delete().eq('id', record.id); fetchRecruitment() }}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('recruitment', record.id, fetchRecruitment, 'この採用記録を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1508,9 +1899,10 @@ function App() {
               </div>
 
               <div className="table-wrap">
-                <table>
+                <table className="compact-list-table">
                   <thead>
                     <tr>
+                      <th>確認</th>
                       <th>反響日</th>
                       <th>顧客名</th>
                       <th>アカウント</th>
@@ -1527,7 +1919,7 @@ function App() {
                   </thead>
                   <tbody>
                     {paginatedHankyo.length === 0 && (
-                      <tr><td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      <tr><td colSpan={13} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                     )}
                     {paginatedHankyo.map((r) => {
                       const isEditing = hankyoInlineId === r.id
@@ -1535,9 +1927,21 @@ function App() {
                       return (
                         <tr
                           key={r.id}
-                          className={isEditing ? 'row-editing' : 'row-hoverable'}
+                          className={isEditing ? 'row-editing' : (r.store === '対象外' || r.store === '重複') ? 'row-gray' : checkedHankyoIds.has(r.id) ? 'row-yellow' : 'row-hoverable'}
                           onClick={() => { if (!isEditing) startHankyoInline(r) }}
                         >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={checkedHankyoIds.has(r.id)}
+                              onChange={(e) => {
+                                const next = new Set(checkedHankyoIds)
+                                if (e.target.checked) next.add(r.id)
+                                else next.delete(r.id)
+                                setCheckedHankyoIds(next)
+                              }}
+                            />
+                          </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
                               ? <input className="inline-input" type="date" value={f.inquiry_date} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_date: e.target.value })} />
@@ -1603,7 +2007,7 @@ function App() {
                               ) : (
                                 <>
                                   <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
-                                  <button className="danger" onClick={async () => { await supabase.from('hankyo').delete().eq('id', r.id); fetchHankyo() }}>削除</button>
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
                                 </>
                               )}
                             </div>
@@ -1657,7 +2061,7 @@ function App() {
               </div>
 
               <div className="table-wrap">
-                <table>
+                <table className="compact-list-table">
                   <thead>
                     <tr>
                       <th>日付</th>
@@ -1714,7 +2118,7 @@ function App() {
                                   <button className="secondary" onClick={() => setDmInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={async () => { await supabase.from('dm').delete().eq('id', r.id); fetchDm() }}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('dm', r.id, fetchDm, 'このDM記録を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1847,7 +2251,7 @@ function App() {
               <section className="panel table-panel" style={{ gridColumn: 'span 12' }}>
                 <div className="panel-heading"><div><h2>ストック一覧</h2><p>行をクリックして直接編集</p></div></div>
                 <div className="table-wrap">
-                  <table>
+                  <table className="compact-list-table">
                     <thead>
                       <tr>
                         <th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>状態</th><th>メモ</th><th>操作</th>
@@ -1882,7 +2286,7 @@ function App() {
                                 {isEditing ? (
                                   <><button className="primary" onClick={saveStockInline}>保存</button><button className="secondary" onClick={() => setStockInlineId(null)}>×</button></>
                                 ) : (
-                                  <button className="danger" onClick={async () => { await supabase.from('stock').delete().eq('id', r.id); fetchStock() }}>削除</button>
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('stock', r.id, fetchStock, 'この在庫記録を本当に削除しますか？')}>削除</button>
                                 )}
                               </div>
                             </td>
@@ -2040,10 +2444,7 @@ function App() {
                           <td>{r.title}</td>
                           <td>{r.note}</td>
                           <td>
-                            <button className="danger" onClick={async () => {
-                              await supabase.from('busho_schedules').delete().eq('id', r.id)
-                              fetchBusho()
-                            }}>削除</button>
+                            <button className="danger" onClick={() => confirmAndDeleteRecord('busho_schedules', r.id, fetchBusho, 'この部署予定を本当に削除しますか？')}>削除</button>
                           </td>
                         </tr>
                       ))}
@@ -2087,31 +2488,46 @@ function App() {
           function pct(v: number) { return v === 0 ? '0.0%' : `${v.toFixed(1)}%` }
 
           async function handleCellSave(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType, field: string, rawValue: string) {
-            const numValue = Number(rawValue.replace(/,/g, '')) || 0
+            const cellKey = `${media}-${rowType}-${field}`
+            if (jishaSavingCell === cellKey) return
+            if (jishaViewMode !== '単月') {
+              setJishaCellEditing(null)
+              return
+            }
+
+            setJishaSavingCell(cellKey)
+            setJishaCellEditing(null)
+
+            const normalizedValue = rawValue.trim()
+            const numValue = Number(normalizedValue.replace(/,/g, '')) || 0
             const targetMonth = jishaMonth
             const existing = jishaShukyakuRecords.find(r => r.year === jishaYear && r.month === targetMonth && r.media === media && r.row_type === rowType)
             const update: Record<string, number> = {}
             update[field] = numValue
-            if (existing) {
-              const { data } = await supabase.from('jisha_shukyaku').update(update).eq('id', existing.id).select().single()
-              if (data) setJishaShukyakuRecords(prev => prev.map(r => r.id === existing.id ? { ...r, ...update } : r))
-            } else {
-              const newRec = {
-                year: jishaYear,
-                month: targetMonth,
-                media,
-                row_type: rowType,
-                hankyo_count: 0,
-                hankyo_raikyo: 0,
-                shinki_count: 0,
-                keiyaku_count: 0,
-                koken_uriaage: 0,
-                [field]: numValue,
+            try {
+              if (existing) {
+                if ((existing as Record<string, number | string>)[field] === numValue) return
+                const { data } = await supabase.from('jisha_shukyaku').update(update).eq('id', existing.id).select().single()
+                if (data) setJishaShukyakuRecords(prev => prev.map(r => r.id === existing.id ? { ...r, ...update } : r))
+              } else {
+                const newRec = {
+                  year: jishaYear,
+                  month: targetMonth,
+                  media,
+                  row_type: rowType,
+                  hankyo_count: 0,
+                  hankyo_raikyo: 0,
+                  shinki_count: 0,
+                  keiyaku_count: 0,
+                  koken_uriaage: 0,
+                  [field]: numValue,
+                }
+                const { data } = await supabase.from('jisha_shukyaku').insert(newRec).select().single()
+                if (data) setJishaShukyakuRecords(prev => [...prev, data as JishaShukyakuRecord])
               }
-              const { data } = await supabase.from('jisha_shukyaku').insert(newRec).select().single()
-              if (data) setJishaShukyakuRecords(prev => [...prev, data as JishaShukyakuRecord])
+            } finally {
+              setJishaSavingCell(null)
             }
-            setJishaCellEditing(null)
           }
 
           function getTotalData(rowType: JishaShukyakuRowType) {
@@ -2130,6 +2546,7 @@ function App() {
           function renderEditableCell(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType, field: string, value: number) {
             const cellKey = `${media}-${rowType}-${field}`
             const isEditing = jishaCellEditing === cellKey
+            const isEditable = jishaViewMode === '単月'
             if (isEditing) {
               return (
                 <td key={field} className="jisha-cell jisha-cell-editing">
@@ -2149,7 +2566,15 @@ function App() {
               )
             }
             return (
-              <td key={field} className="jisha-cell jisha-cell-editable" onClick={() => { setJishaCellEditing(cellKey); setJishaCellValue(String(value)) }}>
+              <td
+                key={field}
+                className={`jisha-cell${isEditable ? ' jisha-cell-editable' : ''}`}
+                onClick={() => {
+                  if (!isEditable) return
+                  setJishaCellEditing(cellKey)
+                  setJishaCellValue(String(value))
+                }}
+              >
                 {value.toLocaleString('ja-JP')}
               </td>
             )
@@ -2293,7 +2718,7 @@ function App() {
                     {totalNenBiRow}
                   </tbody>
                 </table>
-                <p className="jisha-hint no-print">白いセルをクリックして数値を編集できます。グレーのセルは自動計算です。</p>
+                <p className="jisha-hint no-print">数字の編集は単月だけでできます。累計は合計を見せる場所なので、クリックしても数字は変わりません。</p>
               </div>
             </section>
           )
@@ -2400,8 +2825,18 @@ function App() {
                   <label className="form-label">タスク名 <span className="required-badge">必須</span>
                     <input placeholder="タスク名" value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required />
                   </label>
-                  <label className="form-label">タスク詳細
-                    <input placeholder="タスク詳細" value={taskItemForm.detail} onChange={(e) => setTaskItemForm({ ...taskItemForm, detail: e.target.value })} />
+                  <label className="form-label">親タスク
+                    <select value={taskItemForm.parent_task_id || ''} onChange={(e) => setTaskItemForm({ ...taskItemForm, parent_task_id: e.target.value || null })}>
+                      <option value="">なし</option>
+                      {taskItems.filter((item) => !item.parent_task_id).map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}{getTaskItemPrimaryAssignee(item) ? `・${getTaskItemPrimaryAssignee(item)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-label">メモ
+                    <textarea placeholder="メモ内容" value={taskItemForm.memo} onChange={(e) => setTaskItemForm({ ...taskItemForm, memo: e.target.value })} rows={2} />
                   </label>
                   <label className="form-label">優先度
                     <select value={taskItemForm.priority} onChange={(e) => setTaskItemForm({ ...taskItemForm, priority: e.target.value as Priority })}>
@@ -2439,9 +2874,6 @@ function App() {
                     <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
                       {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
-                  </label>
-                  <label className="form-label">メモ
-                    <textarea placeholder="メモ内容" value={taskItemForm.memo} onChange={(e) => setTaskItemForm({ ...taskItemForm, memo: e.target.value })} rows={2} />
                   </label>
                   <div className="form-actions">
                     <button type="submit" className="primary">追加する</button>

@@ -652,6 +652,20 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   vertical-align: middle;
 }
 
+.row-gray {
+  cursor: pointer;
+}
+.row-gray td {
+  background-color: #e8e8e8 !important;
+  color: #999;
+}
+.row-yellow {
+  cursor: pointer;
+}
+.row-yellow td {
+  background-color: #fffde7 !important;
+}
+
 .inline-input,
 .inline-select {
   padding: 5px 8px;
