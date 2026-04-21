@@ -5,14 +5,14 @@ import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
 import ProgressPage from './ProgressPage'
 
-type Department = '人亁E | '総務' | '仲仁E | '管琁E | '売買' | '本社' | 'そ�E仁E
-type TaskType = '単発' | '継綁E
-type TaskStatus = '未実施' | '作業中' | '完亁E
-type Priority = '髁E | '中' | '佁E
+type Department = '人事' | '総務' | '仲介' | '管理' | '売買' | '本社' | 'その他'
+type TaskType = '単発' | '継続'
+type TaskStatus = '未実施' | '作業中' | '完了'
+type Priority = '高' | '中' | '低'
 type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
-type RecruitDepartment = '仲仁E | '管琁E | '売買' | 'ビバ' | '経理' | '総務' | 'そ�E仁E
-type JobType = '正社員' | 'パ�EチE
-type TaskItemStatus = '未着扁E | '進行中' | '完亁E
+type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
+type JobType = '正社員' | 'パート'
+type TaskItemStatus = '未着手' | '進行中' | '完了'
 type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress'
 
 type StockRecord = {
@@ -25,7 +25,7 @@ type StockRecord = {
   created_at?: string
 }
 
-const DEPARTMENTS = ['人亁E, '総務', '仲仁E, '管琁E, '売買', '本社', 'そ�E仁E] as const
+const DEPARTMENTS = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他'] as const
 
 type BushoSchedule = {
   id: string
@@ -37,8 +37,8 @@ type BushoSchedule = {
   note: string
 }
 
-type JishaShukyakuMedia = 'Karilun' | '学生サイチE | 'SNS' | '地域サイチE | '口コチE
-type JishaShukyakuRowType = '予箁E | '実績' | '前年'
+type JishaShukyakuMedia = 'Karilun' | '学生サイト' | 'SNS' | '地域サイト' | '口コミ'
+type JishaShukyakuRowType = '予算' | '実績' | '前年'
 type JishaShukyakuRecord = {
   id: string
   year: number
@@ -53,16 +53,16 @@ type JishaShukyakuRecord = {
   created_at?: string
 }
 
-const defaultBushoForm = { date: '', start_time: '', title: '', department: '人亁E, note: '' }
+const defaultBushoForm = { date: '', start_time: '', title: '', department: '人事', note: '' }
 
 const DEPT_COLORS: Record<string, string> = {
-  人亁E '#4f86c6',
+  人事: '#4f86c6',
   総務: '#6ab04c',
-  仲仁E '#f0932b',
-  管琁E '#eb4d4b',
+  仲介: '#f0932b',
+  管理: '#eb4d4b',
   売買: '#9b59b6',
   本社: '#1abc9c',
-  そ�E仁E '#95a5a6',
+  その他: '#95a5a6',
 }
 
 type HankyoRecord = {
@@ -149,43 +149,43 @@ type RecruitmentRecord = {
 }
 
 const TEAM_MEMBERS = [
-  { name: '新屁E, calendarId: 'trg.yshini@gmail.com', color: '#374151' },
-  { name: '況E, calendarId: 'izumiyurina2322@gmail.com', color: '#7c3aed' },
+  { name: '新居', calendarId: 'trg.yshini@gmail.com', color: '#374151' },
+  { name: '泉', calendarId: 'izumiyurina2322@gmail.com', color: '#7c3aed' },
   { name: '坂本', calendarId: 'takarabaito3@gmail.com', color: '#1d4ed8' },
   { name: '吉田', calendarId: 'takarabaito1@gmail.com', color: '#db2777' },
-  { name: 'WEBチ�Eム', calendarId: 'takara.webteam@gmail.com', color: '#0ea5e9' },
+  { name: 'WEBチーム', calendarId: 'takara.webteam@gmail.com', color: '#0ea5e9' },
 ]
 
 type CalendarEvent = { id: string; summary: string; start: string }
 
 type WeeklyScheduleItem = {
   id: string
-  source: '案件管琁E | 'タスク管琁E | '部署予宁E
+  source: '案件管理' | 'タスク管理' | '部署予定'
   date: string
   start_time?: string
   title: string
   detail: string
 }
 
-const departments: Department[] = ['人亁E, '総務', '仲仁E, '管琁E, '売買', '本社', 'そ�E仁E]
-const taskTypes: TaskType[] = ['単発', '継綁E]
-const taskStatuses: TaskStatus[] = ['未実施', '作業中', '完亁E]
-const taskItemStatuses: TaskItemStatus[] = ['未着扁E, '進行中', '完亁E]
-const priorityOptions: Priority[] = ['髁E, '中', '佁E]
-const assigneeOptions = ['況E, '坂本', '吉田', '新屁E]
+const departments: Department[] = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他']
+const taskTypes: TaskType[] = ['単発', '継続']
+const taskStatuses: TaskStatus[] = ['未実施', '作業中', '完了']
+const taskItemStatuses: TaskItemStatus[] = ['未着手', '進行中', '完了']
+const priorityOptions: Priority[] = ['高', '中', '低']
+const assigneeOptions = ['泉', '坂本', '吉田', '新居']
 
-// DM管琁EマスターチE�Eタ
-const dmAccounts = ['Karilun', '京阪Karilun', '西宮Karilun', '近鉄八尾庁E, '近大一人暮らし', '関学一人暮らし']
+// DM管理 マスターデータ
+const dmAccounts = ['Karilun', '京阪Karilun', '西宮Karilun', '近鉄八尾店', '近大一人暮らし', '関学一人暮らし']
 const dmSnsList = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 
-// 反響管琁EマスターチE�Eタ
-const hankyoAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '外大', '摂南', '大啁E, '大絁E, '武庫女', '学生�Eータル', '八尾', '売買', '採用', '管琁E, '店�E']
-const hankyoTriggers = ['検索', 'Karilun', 'TikTok', 'Instagram', 'threads', 'YouTube', '庁E��', '学生サイチE, '学生�Eータル', '地域サイチE, '不�E']
-const hankyoMedias = ['Karilun', '学生サイチE, 'TikTok', 'Instagram', 'threads', 'YouTube', '地域サイチE, '口コチE, '不�E']
-const hankyoInquiryTypes = ['物件問合', 'アンケーチE, '来店予紁E, 'オンライン', '相諁E, 'そ�E仁E]
-const hankyoContactMethods = ['LINE', 'メール', 'DM', 'コメンチE, '電話']
-const hankyoMoveInTimings = ['2週間以冁E, '1ヶ月以冁E, '2ヶ月以冁E, '3ヶ月以冁E, '4ヶ月以冁E, '時期允E, '良ぁE�Eがあれ�E', '時期未宁E, '不�E']
-const hankyoStores = ['対象夁E, '店�E誘導渁E, '大阪庁E, '京橋庁E, '放出庁E, '淡路庁E, '長瀬庁E, '西北庁E, '枚方庁E, '八尾庁E, '塚口庁E, 'JR西宮庁E, '寝屋川庁E, '守口庁E, '高槻庁E, '長田庁E, '币E��庁E, '小阪庁E, '瓢箪山庁E, '深井庁E, 'WEB', '反響C', '重褁E]
+// 反響管理 マスターデータ
+const hankyoAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '外大', '摂南', '大商', '大経', '武庫女', '学生ポータル', '八尾', '売買', '採用', '管理', '店舗']
+const hankyoTriggers = ['検索', 'Karilun', 'TikTok', 'Instagram', 'threads', 'YouTube', '広告', '学生サイト', '学生ポータル', '地域サイト', '不明']
+const hankyoMedias = ['Karilun', '学生サイト', 'TikTok', 'Instagram', 'threads', 'YouTube', '地域サイト', '口コミ', '不明']
+const hankyoInquiryTypes = ['物件問合', 'アンケート', '来店予約', 'オンライン', '相談', 'その他']
+const hankyoContactMethods = ['LINE', 'メール', 'DM', 'コメント', '電話']
+const hankyoMoveInTimings = ['2週間以内', '1ヶ月以内', '2ヶ月以内', '3ヶ月以内', '4ヶ月以内', '時期先', '良いのがあれば', '時期未定', '不明']
+const hankyoStores = ['対象外', '店舗誘導済', '大阪店', '京橋店', '放出店', '淡路店', '長瀬店', '西北店', '枚方店', '八尾店', '塚口店', 'JR西宮店', '寝屋川店', '守口店', '高槻店', '長田店', '布施店', '小阪店', '瓢箪山店', '深井店', 'WEB', '反響C', '重複']
 
 const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   date: new Date().toISOString().split('T')[0],
@@ -196,18 +196,18 @@ const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   memo: '',
   assignees: [],
   creator: '',
-  status: '未着扁E,
+  status: '未着手',
   parent_task_id: null,
 }
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
-const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管琁E]
-const recruitDepartments: RecruitDepartment[] = ['仲仁E, '管琁E, '売買', 'ビバ', '経理', '総務', 'そ�E仁E]
-const jobTypes: JobType[] = ['正社員', 'パ�EチE]
+const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
+const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
+const jobTypes: JobType[] = ['正社員', 'パート']
 
 const defaultTaskForm: Omit<Task, 'id'> = {
   taskDate: '',
   assignees: [],
-  department: '人亁E,
+  department: '人事',
   name: '',
   content: '',
   taskType: '単発',
@@ -229,7 +229,7 @@ const defaultSnsForm: Omit<SnsPost, 'id'> = {
 const defaultRecruitmentForm: Omit<RecruitmentRecord, 'id'> = {
   date: '',
   platform: 'TikTok',
-  department: '仲仁E,
+  department: '仲介',
   jobType: '正社員',
   costReduction: 0,
 }
@@ -242,8 +242,8 @@ const defaultHankyoForm: Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'> 
   inquiry_type: '物件問合',
   customer_name: '',
   contact_method: 'LINE',
-  move_in_timing: '不�E',
-  store: '対象夁E,
+  move_in_timing: '不明',
+  store: '対象外',
   area: '',
   note: '',
 }
@@ -275,14 +275,14 @@ function isDateWithinRange(dateText: string, start: Date, end: Date): boolean {
 }
 
 function formatDashboardScheduleDate(dateText: string, startTime?: string | null): string {
-  if (!dateText) return '日付未設宁E
+  if (!dateText) return '日付未設定'
 
   const target = new Date(`${dateText}T00:00:00`)
   if (Number.isNaN(target.getTime())) {
     return startTime ? `${dateText} ${startTime}` : dateText
   }
 
-  const weekdays = ['日', '朁E, '火', '水', '木', '釁E, '圁E]
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土']
   const baseText = `${target.getMonth() + 1}/${target.getDate()}(${weekdays[target.getDay()]})`
   return startTime ? `${baseText} ${startTime}` : baseText
 }
@@ -296,8 +296,8 @@ type DmAreaLookup =
 function getDmAreaLookup(account: string, propertyNumber: string): DmAreaLookup {
   const normalizedPropertyNumber = propertyNumber.trim().toUpperCase()
 
-  if (account === DM_ACCOUNT_NISHINOMIYA) return { mode: 'fixed', area: '西宮币E }
-  if (account === DM_ACCOUNT_YAO) return { mode: 'fixed', area: '八尾币E }
+  if (account === DM_ACCOUNT_NISHINOMIYA) return { mode: 'fixed', area: '西宮市' }
+  if (account === DM_ACCOUNT_YAO) return { mode: 'fixed', area: '八尾市' }
   if (account === DM_ACCOUNT_KINDAI) return { mode: 'fixed', area: '近大近く' }
   if (account === DM_ACCOUNT_KANGAKU) return { mode: 'fixed', area: '関学近く' }
 
@@ -324,20 +324,20 @@ const currency = new Intl.NumberFormat('ja-JP', {
 
 const integer = new Intl.NumberFormat('ja-JP')
 
-// WMO天気コーチEↁE絵斁E��変換
+// WMO天気コード → 絵文字変換
 function getWeatherEmoji(code: number | null | undefined): string {
   if (code === null || code === undefined) return ''
-  if (code === 0) return '☀�E�E
-  if (code === 1) return '🌤�E�E
-  if (code === 2) return '⛁E
-  if (code === 3) return '☁E��E
-  if (code <= 48) return '🌫�E�E
-  if (code <= 55) return '🌦�E�E
-  if (code <= 65) return '🌧�E�E
-  if (code <= 77) return '❁E��E
-  if (code <= 82) return '🌧�E�E
-  if (code <= 86) return '🌨�E�E
-  return '⛈︁E
+  if (code === 0) return '☀️'
+  if (code === 1) return '🌤️'
+  if (code === 2) return '⛅'
+  if (code === 3) return '☁️'
+  if (code <= 48) return '🌫️'
+  if (code <= 55) return '🌦️'
+  if (code <= 65) return '🌧️'
+  if (code <= 77) return '❄️'
+  if (code <= 82) return '🌧️'
+  if (code <= 86) return '🌨️'
+  return '⛈️'
 }
 
 function getTaskItemPrimaryAssignee(item: TaskItem) {
@@ -389,7 +389,7 @@ function App() {
   const [snsForm, setSnsForm] = useState(defaultSnsForm)
   const [recruitmentForm, setRecruitmentForm] = useState(defaultRecruitmentForm)
 
-  // インライン編雁E
+  // インライン編集
   const [taskInlineId, setTaskInlineId] = useState<string | null>(null)
   const [taskInlineForm, setTaskInlineForm] = useState<Omit<Task, 'id'>>(defaultTaskForm)
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all')
@@ -399,7 +399,7 @@ function App() {
   const [recruitmentInlineId, setRecruitmentInlineId] = useState<string | null>(null)
   const [recruitmentInlineForm, setRecruitmentInlineForm] = useState<Omit<RecruitmentRecord, 'id'>>(defaultRecruitmentForm)
 
-  // タスク管琁E
+  // タスク管理
   const [taskItems, setTaskItems] = useState<TaskItem[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [taskItemForm, setTaskItemForm] = useState(defaultTaskItemForm)
@@ -416,7 +416,7 @@ function App() {
   const [memberEditSlack, setMemberEditSlack] = useState('')
   const [memberSettingOpen, setMemberSettingOpen] = useState(false)
 
-  // 反響管琁E
+  // 反響管理
   const [hankyoRecords, setHankyoRecords] = useState<HankyoRecord[]>([])
   const [hankyoForm, setHankyoForm] = useState(defaultHankyoForm)
   const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
@@ -428,7 +428,7 @@ function App() {
   const [checkedHankyoIds, setCheckedHankyoIds] = useState<Set<string>>(new Set())
   const [showModal, setShowModal] = useState(false)
 
-  // DM管琁E
+  // DM管理
   const [dmRecords, setDmRecords] = useState<DMRecord[]>([])
   const [dmForm, setDmForm] = useState(defaultDmForm)
   const [dmInlineId, setDmInlineId] = useState<string | null>(null)
@@ -438,7 +438,7 @@ function App() {
   const [dmPage, setDmPage] = useState(1)
   const [dmAreaLoading, setDmAreaLoading] = useState(false)
 
-  // ストック管琁E
+  // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
   const [stockForm, setStockForm] = useState(defaultStockForm)
   const [stockInlineId, setStockInlineId] = useState<string | null>(null)
@@ -457,7 +457,7 @@ function App() {
   const [bushoFilterDept, setBushoFilterDept] = useState<string>('全て')
   const [bushoSelectedDate, setBushoSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [jishaShukyakuRecords, setJishaShukyakuRecords] = useState<JishaShukyakuRecord[]>([])
-  const [jishaViewMode, setJishaViewMode] = useState<'単月' | '累訁E>('累訁E)
+  const [jishaViewMode, setJishaViewMode] = useState<'単月' | '累計'>('累計')
   const [jishaYear, setJishaYear] = useState(new Date().getFullYear())
   const [jishaMonth, setJishaMonth] = useState(new Date().getMonth() + 1)
   const [jishaCellEditing, setJishaCellEditing] = useState<string | null>(null)
@@ -507,7 +507,7 @@ function App() {
   async function fetchBusho() {
     const { data, error } = await supabase.from('busho_schedules').select('*').order('date', { ascending: true })
     if (error) {
-      setTaskError(`部署予定�E読込失敁E ${error.message}`)
+      setTaskError(`部署予定の読込失敗: ${error.message}`)
       return
     }
     setBushoSchedules(data as BushoSchedule[])
@@ -518,7 +518,7 @@ function App() {
     if (data) setJishaShukyakuRecords(data as JishaShukyakuRecord[])
   }
 
-  // Open-Meteo から大阪の天気取得！EPIキー不要E��E
+  // Open-Meteo から大阪の天気取得（APIキー不要）
   async function fetchWeather(yearMonth: string) {
     const [y, m] = yearMonth.split('-').map(Number)
     const startDate = `${y}-${String(m).padStart(2, '0')}-01`
@@ -537,7 +537,7 @@ function App() {
         })
         setWeatherMap(prev => ({ ...prev, ...map }))
       }
-    } catch { /* 天気取得失敗時は無要E*/ }
+    } catch { /* 天気取得失敗時は無視 */ }
   }
 
   useEffect(() => {
@@ -585,11 +585,11 @@ function App() {
       return (b.taskDate || '').localeCompare(a.taskDate || '')
     })
 
-  // 案件一覧: フィルター�E�ソート（①優先度 ②期日近い頁E③案件日頁E��E
-  const priorityOrder: Record<Priority, number> = { 髁E 0, 中: 1, 佁E 2 }
+  // 案件一覧: フィルター＋ソート（①優先度 ②期日近い順 ③案件日順）
+  const priorityOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
   const filteredAndSortedTasks = tasks
     .filter((task) => {
-      if (!taskShowCompleted && task.status === '完亁E) return false
+      if (!taskShowCompleted && task.status === '完了') return false
       if (taskAssigneeFilter !== 'all' && !(task.assignees || []).includes(taskAssigneeFilter)) return false
       return true
     })
@@ -603,7 +603,7 @@ function App() {
       return (b.taskDate || '').localeCompare(a.taskDate || '')
     })
 
-  // 単発は完亁E��一括・継続�E月次累積で雁E��E
+  // 単発は完了時一括・継続は月次累積で集計
   const taskSavingsTotal = tasks.reduce((sum, task) => sum + calcTaskSavings(task, selectedYear, selectedMonth), 0)
 
   const recruitmentSummary = filteredRecruitment.reduce(
@@ -631,37 +631,37 @@ function App() {
   const webTeamTasks = taskItems
     .filter((item) => {
       if (!item.due_date) return false
-      if (item.status === '完亁E) return false
+      if (item.status === '完了') return false
       const dueDate = new Date(`${item.due_date}T00:00:00`)
       return dueDate >= dashboardToday && dueDate <= dashboardLimit
     })
     .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
 
-  // タスク管琁E計箁E
+  // タスク管理 計算
   const weeklySchedules = [
     ...tasks
-      .filter((task) => task.dueDate && task.status !== '完亁E && isDateWithinRange(task.dueDate, dashboardToday, dashboardWeeklyLimit))
+      .filter((task) => task.dueDate && task.status !== '完了' && isDateWithinRange(task.dueDate, dashboardToday, dashboardWeeklyLimit))
       .map((task): WeeklyScheduleItem => ({
         id: `task-${task.id}`,
-        source: '案件管琁E,
+        source: '案件管理',
         date: task.dueDate,
         title: task.name,
         detail: `${task.department} / ${task.taskType}`,
       })),
     ...taskItems
-      .filter((item) => item.due_date && item.status !== '完亁E && isDateWithinRange(item.due_date, dashboardToday, dashboardWeeklyLimit))
+      .filter((item) => item.due_date && item.status !== '完了' && isDateWithinRange(item.due_date, dashboardToday, dashboardWeeklyLimit))
       .map((item): WeeklyScheduleItem => ({
         id: `task-item-${item.id}`,
-        source: 'タスク管琁E,
+        source: 'タスク管理',
         date: item.due_date,
         title: item.name,
-        detail: `${getTaskItemPrimaryAssignee(item) || '拁E��老E��設宁E} / 作�E老E ${item.creator || '未設宁E}`,
+        detail: `${getTaskItemPrimaryAssignee(item) || '担当者未設定'} / 作成者: ${item.creator || '未設定'}`,
       })),
     ...bushoSchedules
       .filter((schedule) => schedule.date && isDateWithinRange(schedule.date, dashboardToday, dashboardWeeklyLimit))
       .map((schedule): WeeklyScheduleItem => ({
         id: `busho-${schedule.id}`,
-        source: '部署予宁E,
+        source: '部署予定',
         date: schedule.date,
         start_time: schedule.start_time ?? undefined,
         title: schedule.title,
@@ -687,7 +687,7 @@ function App() {
       return true
     })
     .sort((a, b) => {
-      const pOrder: Record<Priority, number> = { 髁E 0, 中: 1, 佁E 2 }
+      const pOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
       if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date.localeCompare(b.due_date)
       if (a.due_date && !b.due_date) return -1
       if (!a.due_date && b.due_date) return 1
@@ -709,7 +709,7 @@ function App() {
     .filter((item): item is TaskItem => !!item && !filteredTaskItemIdSet.has(item.id))
   const taskItemsToRender = [...filteredTaskItems.filter((item) => !item.parent_task_id), ...extraParentTaskItems]
     .sort((a, b) => {
-      const pOrder: Record<Priority, number> = { 髁E 0, 中: 1, 佁E 2 }
+      const pOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
       if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date.localeCompare(b.due_date)
       if (a.due_date && !b.due_date) return -1
       if (!a.due_date && b.due_date) return 1
@@ -732,7 +732,7 @@ function App() {
     event.preventDefault()
     setTaskError(null)
     const { error } = await supabase.from('tasks').insert({ ...normalizeTask(taskForm), id: crypto.randomUUID() })
-    if (error) { setTaskError(`追加失敁E ${error.message}`); return }
+    if (error) { setTaskError(`追加失敗: ${error.message}`); return }
     setTaskForm(defaultTaskForm)
     fetchTasks()
     setShowModal(false)
@@ -744,7 +744,7 @@ function App() {
     const rows = buildTaskItemRows(taskItemForm)
     const { error } = await supabase.from('task_items').insert(rows)
     if (error) { 
-      setTaskError(`追加失敁E ${error.message} (チE�Eタベ�Eス構�Eを確認してください)`)
+      setTaskError(`追加失敗: ${error.message} (データベース構成を確認してください)`)
       console.error('Task Item Insert Error:', error)
       return 
     }
@@ -767,13 +767,13 @@ function App() {
     const item = taskItems.find((t) => t.id === id)
     if (!item) return
 
-    const completedNotified = status === '完亁E
+    const completedNotified = status === '完了'
       ? item.completed_notified
       : false
 
     await supabase.from('task_items').update({ status, completed_notified: completedNotified }).eq('id', id)
 
-    if (status === '完亁E && !item.completed_notified) {
+    if (status === '完了' && !item.completed_notified) {
       notifyTaskEvent({
         type: 'completed',
         taskName: item.name,
@@ -807,7 +807,7 @@ function App() {
     }
     const { error } = await supabase.from('task_items').update(updatePayload).eq('id', taskItemInlineId)
     if (error) {
-      setTaskError(`更新失敁E ${error.message}`)
+      setTaskError(`更新失敗: ${error.message}`)
       console.error('Task Item Update Error:', error)
       return
     }
@@ -819,7 +819,7 @@ function App() {
       }))
       const { error: insertError } = await supabase.from('task_items').insert(insertRows)
       if (insertError) {
-        setTaskError(`拁E��老E��加の保存に失敗しました: ${insertError.message}`)
+        setTaskError(`担当者追加の保存に失敗しました: ${insertError.message}`)
         console.error('Task Item Additional Insert Error:', insertError)
         return
       }
@@ -836,7 +836,7 @@ function App() {
       members,
     })
 
-    if (currentItem && currentItem.status !== '完亁E && taskItemInlineForm.status === '完亁E && !currentItem.completed_notified) {
+    if (currentItem && currentItem.status !== '完了' && taskItemInlineForm.status === '完了' && !currentItem.completed_notified) {
       await supabase.from('task_items').update({ completed_notified: true }).eq('id', taskItemInlineId)
       notifyTaskEvent({
         type: 'completed',
@@ -850,7 +850,7 @@ function App() {
       })
     }
 
-    if (currentItem && currentItem.status === '完亁E && taskItemInlineForm.status !== '完亁E) {
+    if (currentItem && currentItem.status === '完了' && taskItemInlineForm.status !== '完了') {
       await supabase.from('task_items').update({ completed_notified: false }).eq('id', taskItemInlineId)
     }
 
@@ -879,8 +879,8 @@ function App() {
     const deleteIds = itemsToDelete.map((target) => target.id)
     const childCount = itemsToDelete.length - 1
     const message = childCount > 0
-      ? 'こ�E親タスクと子タスクを本当に削除しますか�E�E
-      : 'こ�Eタスクを本当に削除しますか�E�E
+      ? 'この親タスクと子タスクを本当に削除しますか？'
+      : 'このタスクを本当に削除しますか？'
 
     const confirmed = window.confirm(message)
     if (!confirmed) return
@@ -909,7 +909,7 @@ function App() {
     fetchMembers()
   }
 
-  // ===== Google Sheets からエリアを取征E=====
+  // ===== Google Sheets からエリアを取得 =====
   async function fetchAreaFromSheets(account: string, propertyNumber: string): Promise<string> {
     const normalizedPropertyNumber = propertyNumber.trim()
     if (!normalizedPropertyNumber) return ''
@@ -934,7 +934,7 @@ function App() {
     }
   }
 
-  // ===== DM管琁E��ンドラー =====
+  // ===== DM管理ハンドラー =====
   const handleDmSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('dm').insert({ ...dmForm, id: crypto.randomUUID() })
@@ -966,7 +966,7 @@ function App() {
     fetchDm()
   }
 
-  // ===== ストック管琁E��ンドラー =====
+  // ===== ストック管理ハンドラー =====
   const handleStockSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('stock').insert({ ...stockForm, id: crypto.randomUUID() })
@@ -985,7 +985,7 @@ function App() {
     }
     const { error } = await supabase.from('busho_schedules').insert(payload)
     if (error) {
-      setTaskError(`部署予定�E追加失敁E ${error.message}`)
+      setTaskError(`部署予定の追加失敗: ${error.message}`)
       return
     }
     setBushoForm(defaultBushoForm)
@@ -1043,7 +1043,7 @@ function App() {
     }
   }, [dmForm.account, dmForm.property_number])
 
-  // ストックカレンダーの月が変わったら天気を取征E
+  // ストックカレンダーの月が変わったら天気を取得
   useEffect(() => {
     fetchWeather(stockCalendarMonth)
   }, [stockCalendarMonth])
@@ -1052,7 +1052,7 @@ function App() {
     tableName: string,
     id: string,
     refresh: () => void,
-    message = '本当に削除しますか�E�E
+    message = '本当に削除しますか？'
   ) => {
     const confirmed = window.confirm(message)
     if (!confirmed) return
@@ -1061,7 +1061,7 @@ function App() {
     refresh()
   }
 
-  // 反響管琁E��ンドラー
+  // 反響管理ハンドラー
   const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('hankyo').insert({ ...hankyoForm, id: crypto.randomUUID() })
@@ -1111,7 +1111,7 @@ function App() {
     setShowModal(true)
   }
 
-  // DM管琁Eフィルタリング & ペ�Eジネ�Eション
+  // DM管理 フィルタリング & ページネーション
   const filteredDm = dmRecords.filter((r) => {
     if (dmMonthFilter !== 'all' && r.date) {
       const m = new Date(r.date).getMonth() + 1
@@ -1123,7 +1123,7 @@ function App() {
   const dmTotalPages = Math.max(1, Math.ceil(filteredDm.length / DM_PAGE_SIZE))
   const paginatedDm = filteredDm.slice((dmPage - 1) * DM_PAGE_SIZE, dmPage * DM_PAGE_SIZE)
 
-  // 反響管琁Eフィルタリング & ペ�Eジネ�Eション
+  // 反響管理 フィルタリング & ページネーション
   const filteredHankyo = hankyoRecords.filter((r) => {
     if (hankyoSearch && !r.customer_name.includes(hankyoSearch)) return false
     if (hankyoMonthFilter !== 'all' && r.inquiry_date) {
@@ -1151,7 +1151,7 @@ function App() {
     setShowModal(false)
   }
 
-  // インライン編雁E開姁E
+  // インライン編集 開始
   const startTaskInline = (task: Task) => {
     setTaskInlineId(task.id)
     setTaskInlineForm({
@@ -1177,12 +1177,12 @@ function App() {
     setRecruitmentInlineForm({ date: record.date, platform: record.platform, department: record.department, jobType: record.jobType, costReduction: record.costReduction })
   }
 
-  // インライン編雁E保孁E
+  // インライン編集 保存
   const saveTaskInline = async () => {
     if (!taskInlineId) return
     let formToSave = { ...taskInlineForm }
-    // 継続案件を完亁E��した際、完亁E��が未設定なら今日をセチE��
-    if (formToSave.taskType === '継綁E && formToSave.status === '完亁E && !formToSave.dueDate) {
+    // 継続案件を完了にした際、完了日が未設定なら今日をセット
+    if (formToSave.taskType === '継続' && formToSave.status === '完了' && !formToSave.dueDate) {
       formToSave = { ...formToSave, dueDate: new Date().toISOString().split('T')[0] }
     }
     await supabase.from('tasks').update(normalizeTask(formToSave)).eq('id', taskInlineId)
@@ -1202,12 +1202,12 @@ function App() {
     fetchRecruitment()
   }
 
-  // スチE�Eタスのみ即時更新�E�行を編雁E��ードにしなくてもOK�E�E
+  // ステータスのみ即時更新（行を編集モードにしなくてもOK）
   const updateTaskStatus = async (id: string, status: TaskStatus) => {
     const task = tasks.find((t) => t.id === id)
     const updateData: Partial<Task> = { status }
-    // 継続案件を完亁E��した際、完亁E��が未設定なら今日をセチE��
-    if (status === '完亁E && task?.taskType === '継綁E && !task?.dueDate) {
+    // 継続案件を完了にした際、完了日が未設定なら今日をセット
+    if (status === '完了' && task?.taskType === '継続' && !task?.dueDate) {
       updateData.dueDate = new Date().toISOString().split('T')[0]
     }
     await supabase.from('tasks').update(updateData).eq('id', id)
@@ -1219,8 +1219,8 @@ function App() {
       <header className="app-header">
         <div>
           <p className="eyebrow">WEB Strategic Team</p>
-          <h1>WEB戦略チ�Eム管琁E��</h1>
-          <p className="intro">社冁E��頼、SNS運用、採用導線をひとつの画面で追える管琁E��ール</p>
+          <h1>WEB戦略チーム管理表</h1>
+          <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
         </div>
         <div className="header-panel">
           <label>
@@ -1232,11 +1232,11 @@ function App() {
             </select>
           </label>
           <label>
-            朁E
+            月
             <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
-              <option value="all">全年朁E/option>
+              <option value="all">全年月</option>
               {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                <option key={month} value={String(month)}>{month}朁E/option>
+                <option key={month} value={String(month)}>{month}月</option>
               ))}
             </select>
           </label>
@@ -1244,33 +1244,33 @@ function App() {
       </header>
 
       <nav className="tab-nav" aria-label="主要メニュー">
-        <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => { setActivePage('dashboard'); setShowModal(false) }}>ダチE��ュボ�EチE/button>
-        <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => { setActivePage('tasks'); setShowModal(false) }}>案件管琁E/button>
-        <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => { setActivePage('taskmanagement'); setShowModal(false) }}>タスク管琁E/button>
-        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管琁E/button>
-        <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管琁E/button>
-        <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管琁E/button>
-        <button className={activePage === 'dm' ? 'active' : ''} onClick={() => { setActivePage('dm'); setShowModal(false) }}>DM管琁E/button>
+        <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => { setActivePage('dashboard'); setShowModal(false) }}>ダッシュボード</button>
+        <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => { setActivePage('tasks'); setShowModal(false) }}>案件管理</button>
+        <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => { setActivePage('taskmanagement'); setShowModal(false) }}>タスク管理</button>
+        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
+        <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管理</button>
+        <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管理</button>
+        <button className={activePage === 'dm' ? 'active' : ''} onClick={() => { setActivePage('dm'); setShowModal(false) }}>DM管理</button>
         <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック</button>
         <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>ルール・マニュアル</button>
-        <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバ�E</button>
-        <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予宁E/button>
-        <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社雁E��売丁E/button>
-        <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管琁E/button>
+        <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
+        <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
+        <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
+        <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
       </nav>
 
       <main className="page-content">
         {activePage === 'dashboard' && (
           <section className="dashboard-grid">
-            <div className="stat-card strong"><span>総貢献顁E/span><strong>{currency.format(totalContribution)}</strong><small>店�E売丁E+ 案件削減顁E+ 採用削減顁E/small></div>
-            <div className="stat-card"><span>店�E売丁E/span><strong>{currency.format(jishaStoreSalesTotal)}</strong><small>自社雁E��売上�E実績合訁E/small></div>
-            <div className="stat-card"><span>案件削減顁E/span><strong>{currency.format(taskSavingsTotal)}</strong><small>案件管琁E�E削減額合訁E/small></div>
-            <div className="stat-card"><span>採用削減顁E/span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>採用管琁E�E削減額合訁E/small></div>
+            <div className="stat-card strong"><span>総貢献額</span><strong>{currency.format(totalContribution)}</strong><small>店舗売上 + 案件削減額 + 採用削減額</small></div>
+            <div className="stat-card"><span>店舗売上</span><strong>{currency.format(jishaStoreSalesTotal)}</strong><small>自社集客売上の実績合計</small></div>
+            <div className="stat-card"><span>案件削減額</span><strong>{currency.format(taskSavingsTotal)}</strong><small>案件管理の削減額合計</small></div>
+            <div className="stat-card"><span>採用削減額</span><strong>{currency.format(recruitmentSummary.costReduction)}</strong><small>採用管理の削減額合計</small></div>
 
             <section className="panel dashboard-list-panel dashboard-full-panel">
-              <div className="panel-heading"><div><h2>1週間�E予宁E/h2><p>1週間以冁E�E期日と予定をまとめて表示</p></div></div>
+              <div className="panel-heading"><div><h2>1週間の予定</h2><p>1週間以内の期日と予定をまとめて表示</p></div></div>
               <div className="ongoing-list">
-                {weeklySchedules.length === 0 && <p className="empty-text">1週間以冁E�E予定�Eありません、E/p>}
+                {weeklySchedules.length === 0 && <p className="empty-text">1週間以内の予定はありません。</p>}
                 {weeklySchedules.map((item) => (
                   <article className="ongoing-item dashboard-schedule-item" key={item.id}>
                     <div className="dashboard-schedule-main">
@@ -1287,18 +1287,18 @@ function App() {
             </section>
 
             <section className="panel dashboard-list-panel">
-              <div className="panel-heading"><div><h2>WEBチ�Eムタスク</h2><p>今日から3日以冁E��期日のタスク</p></div></div>
+              <div className="panel-heading"><div><h2>WEBチームタスク</h2><p>今日から3日以内が期日のタスク</p></div></div>
               <div className="ongoing-list">
-                {webTeamTasks.length === 0 && <p className="empty-text">期日ぁE日以冁E�Eタスクはありません、E/p>}
+                {webTeamTasks.length === 0 && <p className="empty-text">期日が3日以内のタスクはありません。</p>}
                 {webTeamTasks.map((item) => (
                   <article className="ongoing-item dashboard-task-item dashboard-compact-item" key={item.id}>
                     <div>
                       <strong>{item.name}</strong>
-                      <p>{item.memo || 'メモなぁE}</p>
+                      <p>{item.memo || 'メモなし'}</p>
                     </div>
                     <div>
-                      <span>拁E��E {getTaskItemPrimaryAssignee(item) || '未設宁E}</span>
-                      <span>設定老E {item.creator || '未設宁E}</span>
+                      <span>担当: {getTaskItemPrimaryAssignee(item) || '未設定'}</span>
+                      <span>設定者: {item.creator || '未設定'}</span>
                       <span>期日: {item.due_date}</span>
                     </div>
                   </article>
@@ -1307,13 +1307,13 @@ function App() {
             </section>
 
             <section className="panel dashboard-list-panel">
-              <div className="panel-heading"><div><h2>進行中案件</h2><p>スチE�Eタスが「作業中」�E案件一覧</p></div></div>
+              <div className="panel-heading"><div><h2>進行中案件</h2><p>ステータスが「作業中」の案件一覧</p></div></div>
               <div className="ongoing-list">
-                {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません、E/p>}
+                {ongoingTasks.length === 0 && <p className="empty-text">該当する進行中案件はありません。</p>}
                 {ongoingTasks.map((task) => (
                   <article className="ongoing-item dashboard-task-item dashboard-compact-item" key={task.id}>
                     <div><strong>{task.name}</strong><p>{task.department} / {task.taskType} / 優先度: {task.priority}</p></div>
-                    <div><span>拁E��E {(task.assignees || []).join('・')}</span><span>期日: {task.dueDate}</span></div>
+                    <div><span>担当: {(task.assignees || []).join('・')}</span><span>期日: {task.dueDate}</span></div>
                   </article>
                 ))}
               </div>
@@ -1321,18 +1321,18 @@ function App() {
           </section>
         )}
 
-        {/* ===== 案件管琁E===== */}
+        {/* ===== 案件管理 ===== */}
         {activePage === 'tasks' && (
           <>
             <section className="panel table-panel">
               <div className="panel-heading">
-                <div><h2>案件一覧</h2><p>行をクリチE��して直接編雁E�E現状はそ�E場で変更可能</p></div>
+                <div><h2>案件一覧</h2><p>行をクリックして直接編集・現状はその場で変更可能</p></div>
                 <div className="task-toolbar">
                   <select
                     value={taskAssigneeFilter}
                     onChange={(e) => setTaskAssigneeFilter(e.target.value)}
                   >
-                    <option value="all">全拁E��老E/option>
+                    <option value="all">全担当者</option>
                     {assigneeOptions.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
                   <label className="task-show-completed">
@@ -1341,7 +1341,7 @@ function App() {
                       checked={taskShowCompleted}
                       onChange={(e) => setTaskShowCompleted(e.target.checked)}
                     />
-                    完亁E��表示
+                    完了を表示
                   </label>
                 </div>
               </div>
@@ -1349,8 +1349,8 @@ function App() {
                 <table className="compact-list-table">
                   <thead>
                     <tr>
-                      <th>案件日</th><th>拁E��老E/th><th>依頼部署</th><th>案件吁E/th><th>案件冁E��</th>
-                      <th>種顁E/th><th>期日</th><th>優先度</th><th>現状</th><th>削減顁E/th><th>補足</th><th>操佁E/th>
+                      <th>案件日</th><th>担当者</th><th>依頼部署</th><th>案件名</th><th>案件内容</th>
+                      <th>種類</th><th>期日</th><th>優先度</th><th>現状</th><th>削減額</th><th>補足</th><th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1427,11 +1427,11 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveTaskInline}>保孁E/button>
-                                  <button className="secondary" onClick={() => setTaskInlineId(null)}>ÁE/button>
+                                  <button className="primary" onClick={saveTaskInline}>保存</button>
+                                  <button className="secondary" onClick={() => setTaskInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('tasks', task.id, fetchTasks, 'こ�E業務管琁E�E頁E��を本当に削除しますか�E�E)}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('tasks', task.id, fetchTasks, 'この業務管理の項目を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1445,30 +1445,30 @@ function App() {
           </>
         )}
 
-        {/* ===== タスク管琁E===== */}
+        {/* ===== タスク管理 ===== */}
         {activePage === 'taskmanagement' && (
           <section className="taskmanagement-page">
-            {/* ヘッダー: 検索・フィルター・自刁E��宁E*/}
+            {/* ヘッダー: 検索・フィルター・自分設定 */}
             <div className="tm-toolbar">
               <select className="tm-filter-select" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value as 'all' | TaskItemStatus | 'overdue')}>
                 <option value="all">すべて</option>
-                <option value={taskItemStatuses[0]}>未着扁E/option>
+                <option value={taskItemStatuses[0]}>未着手</option>
                 <option value={taskItemStatuses[1]}>進行中</option>
-                <option value={taskItemStatuses[2]}>完亁E/option>
-                <option value="overdue">期限刁E��</option>
+                <option value={taskItemStatuses[2]}>完了</option>
+                <option value="overdue">期限切れ</option>
               </select>
               <input className="tm-search" placeholder="タスク名で検索..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
               <select className="tm-filter-select" value={taskItemAssigneeFilter} onChange={(e) => setTaskItemAssigneeFilter(e.target.value)}>
-                <option value="all">拁E��老E��覧</option>
+                <option value="all">担当者一覧</option>
                 {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
               </select>
               <label className="tm-completed-toggle">
                 <input type="checkbox" checked={taskItemShowCompleted} onChange={(e) => setTaskItemShowCompleted(e.target.checked)} />
-                完亁E��示
+                完了表示
               </label>
             </div>
 
-            {/* タスク一覧チE�Eブル */}
+            {/* タスク一覧テーブル */}
             <section className="panel tm-table-panel">
               <div className="table-wrap">
                 <table className="tm-table">
@@ -1486,8 +1486,8 @@ function App() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>日仁E/th><th>メモ</th><th>タスク吁E/th><th>優先度</th><th>作業日</th><th>期日</th>
-                      <th>拁E��老E/th><th>設定老E/th><th>スチE�Eタス</th><th>操佁E/th>
+                      <th>日付</th><th>メモ</th><th>タスク名</th><th>優先度</th><th>作業日</th><th>期日</th>
+                      <th>担当者</th><th>設定者</th><th>ステータス</th><th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1497,7 +1497,7 @@ function App() {
                     {taskItemsToRender.map((item) => {
                       const isEditing = taskItemInlineId === item.id
                       const f = taskItemInlineForm
-                      const overdue = item.due_date && item.due_date < today && item.status !== '完亁E
+                      const overdue = item.due_date && item.due_date < today && item.status !== '完了'
                       const childItems = childTaskItemsByParent[item.id] || []
                       const showChildren = isParentTaskExpanded(item.id)
                       return (
@@ -1520,7 +1520,7 @@ function App() {
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             <div className="tm-name-cell">
                               <div className="tm-name-main">
-                                {overdue && <span className="tag-overdue">期限刁E��</span>}
+                                {overdue && <span className="tag-overdue">期限切れ</span>}
                                 {isEditing ? <input className="inline-input tm-name-input" value={f.name} onChange={(e) => setTaskItemInlineForm({ ...f, name: e.target.value })} /> : item.name}
                               </div>
                               {childItems.length > 0 && (
@@ -1532,7 +1532,7 @@ function App() {
                                     toggleParentTaskExpanded(item.id)
                                   }}
                                 >
-                                  <span className="tm-child-toggle-label">{showChildren ? '閉じめE : '子タスク'}</span>
+                                  <span className="tm-child-toggle-label">{showChildren ? '閉じる' : '子タスク'}</span>
                                   <span className="tm-child-badge">{childItems.length}</span>
                                 </button>
                               )}
@@ -1557,7 +1557,7 @@ function App() {
                                   value={f.assignees[0] || ''}
                                   onChange={(e) => setTaskItemInlineForm({ ...f, assignees: e.target.value ? [e.target.value] : [] })}
                                 >
-                                  <option value="">未設宁E/option>
+                                  <option value="">未設定</option>
                                   {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                                 </select></>
                               )
@@ -1587,8 +1587,8 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveTaskItemInline}>保孁E/button>
-                                  <button className="secondary" onClick={() => setTaskItemInlineId(null)}>ÁE/button>
+                                  <button className="primary" onClick={saveTaskItemInline}>保存</button>
+                                  <button className="secondary" onClick={() => setTaskItemInlineId(null)}>×</button>
                                 </>
                               ) : (
                                 <button className="danger" onClick={() => deleteTaskItemWithChildren(item)}>削除</button>
@@ -1599,7 +1599,7 @@ function App() {
                         {showChildren && childItems.map((child) => {
                           const childEditing = taskItemInlineId === child.id
                           const childForm = taskItemInlineForm
-                          const childOverdue = child.due_date && child.due_date < today && child.status !== '完亁E
+                          const childOverdue = child.due_date && child.due_date < today && child.status !== '完了'
                           return (
                             <Fragment key={child.id}>
                             <tr className={`tm-child-row ${childEditing ? 'row-editing' : 'row-hoverable'} ${childOverdue ? 'row-overdue' : ''}`}
@@ -1620,8 +1620,8 @@ function App() {
                               <td onClick={(e) => childEditing && e.stopPropagation()}>
                                 <div className="tm-name-cell">
                                   <div className="tm-name-main">
-                                    <span className="tm-child-badge">孁E/span>
-                                    {childOverdue && <span className="tag-overdue">期限刁E��</span>}
+                                    <span className="tm-child-badge">子</span>
+                                    {childOverdue && <span className="tag-overdue">期限切れ</span>}
                                     {childEditing ? <input className="inline-input tm-name-input" value={childForm.name} onChange={(e) => setTaskItemInlineForm({ ...childForm, name: e.target.value })} /> : child.name}
                                   </div>
                                 </div>
@@ -1645,7 +1645,7 @@ function App() {
                                       value={childForm.assignees[0] || ''}
                                       onChange={(e) => setTaskItemInlineForm({ ...childForm, assignees: e.target.value ? [e.target.value] : [] })}
                                     >
-                                      <option value="">未設宁E/option>
+                                      <option value="">未設定</option>
                                       {members.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                                     </select></>
                                   )
@@ -1675,8 +1675,8 @@ function App() {
                                 <div className="row-actions">
                                   {childEditing ? (
                                     <>
-                                      <button className="primary" onClick={saveTaskItemInline}>保孁E/button>
-                                      <button className="secondary" onClick={() => setTaskItemInlineId(null)}>ÁE/button>
+                                      <button className="primary" onClick={saveTaskItemInline}>保存</button>
+                                      <button className="secondary" onClick={() => setTaskItemInlineId(null)}>×</button>
                                     </>
                                   ) : (
                                     <button className="danger" onClick={() => deleteTaskItemWithChildren(child)}>削除</button>
@@ -1695,16 +1695,16 @@ function App() {
               </div>
             </section>
 
-            {/* メンバ�E管琁E*/}
+            {/* メンバー管理 */}
             <section className="panel">
-              <h2 style={{ margin: '0 0 4px' }}>メンバ�E設宁E/h2>
-              <p style={{ margin: '0 0 12px', color: 'var(--gray-400)', fontSize: '0.82rem' }}>SlackユーザーIDを設定すると@メンションで通知されまぁE/p>
+              <h2 style={{ margin: '0 0 4px' }}>メンバー設定</h2>
+              <p style={{ margin: '0 0 12px', color: 'var(--gray-400)', fontSize: '0.82rem' }}>SlackユーザーIDを設定すると@メンションで通知されます</p>
               <button
                 className="secondary"
                 onClick={() => setMemberSettingOpen(o => !o)}
                 style={{ marginBottom: memberSettingOpen ? '16px' : '0' }}
               >
-                {memberSettingOpen ? '▲ メンバ�E一覧を閉じる' : '▼ メンバ�E一覧を開ぁE}
+                {memberSettingOpen ? '▲ メンバー一覧を閉じる' : '▼ メンバー一覧を開く'}
               </button>
               {memberSettingOpen && (
                 <div className="member-slack-list">
@@ -1713,14 +1713,14 @@ function App() {
                       <span className="member-slack-name">{m.name}</span>
                       {memberEditId === m.id ? (
                         <>
-                          <input className="inline-input" placeholder="SlackユーザーID�E�侁E U12345678�E�E value={memberEditSlack} onChange={(e) => setMemberEditSlack(e.target.value)} style={{ flex: 1 }} />
-                          <button className="primary" onClick={() => saveMemberSlack(m.id)}>保孁E/button>
-                          <button className="secondary" onClick={() => setMemberEditId(null)}>ÁE/button>
+                          <input className="inline-input" placeholder="SlackユーザーID（例: U12345678）" value={memberEditSlack} onChange={(e) => setMemberEditSlack(e.target.value)} style={{ flex: 1 }} />
+                          <button className="primary" onClick={() => saveMemberSlack(m.id)}>保存</button>
+                          <button className="secondary" onClick={() => setMemberEditId(null)}>×</button>
                         </>
                       ) : (
                         <>
-                          <span className="member-slack-id">{m.slack_user_id || '未設宁E}</span>
-                          <button className="secondary" onClick={() => { setMemberEditId(m.id); setMemberEditSlack(m.slack_user_id) }}>編雁E/button>
+                          <span className="member-slack-id">{m.slack_user_id || '未設定'}</span>
+                          <button className="secondary" onClick={() => { setMemberEditId(m.id); setMemberEditSlack(m.slack_user_id) }}>編集</button>
                         </>
                       )}
                     </div>
@@ -1729,13 +1729,13 @@ function App() {
               )}
             </section>
 
-            {/* メモ表示ポップアチE�E */}
+            {/* メモ表示ポップアップ */}
             {memoToView !== null && (
               <div className="memo-popup-overlay" onClick={() => setMemoToView(null)}>
                 <div className="memo-popup-content" onClick={e => e.stopPropagation()}>
                   <div className="memo-popup-header">
                     <h3>メモ詳細</h3>
-                    <button onClick={() => setMemoToView(null)}>✁E/button>
+                    <button onClick={() => setMemoToView(null)}>✕</button>
                   </div>
                   <div className="memo-popup-body">
                     {memoToView}
@@ -1746,15 +1746,15 @@ function App() {
           </section>
         )}
 
-        {/* ===== SNS投稿管琁E===== */}
+        {/* ===== SNS投稿管理 ===== */}
         {activePage === 'sns' && (
           <>
             <section className="panel table-panel">
-              <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>行をクリチE��して直接編雁E/p></div></div>
+              <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
                 <table className="compact-list-table">
                   <thead>
-                    <tr><th>投稿日</th><th>媒佁E/th><th>アカウンチE/th><th>コメンチE/th><th>保孁E/th><th>操佁E/th></tr>
+                    <tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>コメント</th><th>保存</th><th>操作</th></tr>
                   </thead>
                   <tbody>
                     {posts.map((post) => {
@@ -1785,11 +1785,11 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveSnsInline}>保孁E/button>
-                                  <button className="secondary" onClick={() => setSnsInlineId(null)}>ÁE/button>
+                                  <button className="primary" onClick={saveSnsInline}>保存</button>
+                                  <button className="secondary" onClick={() => setSnsInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_posts', post.id, fetchPosts, 'こ�ESNS記録を本当に削除しますか�E�E)}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_posts', post.id, fetchPosts, 'このSNS記録を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1803,15 +1803,15 @@ function App() {
           </>
         )}
 
-        {/* ===== 採用管琁E===== */}
+        {/* ===== 採用管理 ===== */}
         {activePage === 'recruitment' && (
           <>
             <section className="panel table-panel">
-              <div className="panel-heading"><div><h2>採用実績一覧</h2><p>行をクリチE��して直接編雁E/p></div></div>
+              <div className="panel-heading"><div><h2>採用実績一覧</h2><p>行をクリックして直接編集</p></div></div>
               <div className="table-wrap">
                 <table className="compact-list-table">
                   <thead>
-                    <tr><th>応募日</th><th>媒佁E/th><th>部署</th><th>職種</th><th>削減顁E/th><th>操佁E/th></tr>
+                    <tr><th>応募日</th><th>媒体</th><th>部署</th><th>職種</th><th>削減額</th><th>操作</th></tr>
                   </thead>
                   <tbody>
                     {recruitment.map((record) => {
@@ -1842,11 +1842,11 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveRecruitmentInline}>保孁E/button>
-                                  <button className="secondary" onClick={() => setRecruitmentInlineId(null)}>ÁE/button>
+                                  <button className="primary" onClick={saveRecruitmentInline}>保存</button>
+                                  <button className="secondary" onClick={() => setRecruitmentInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('recruitment', record.id, fetchRecruitment, 'こ�E採用記録を本当に削除しますか�E�E)}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('recruitment', record.id, fetchRecruitment, 'この採用記録を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -1860,10 +1860,10 @@ function App() {
           </>
         )}
 
-        {/* ===== 反響管琁E===== */}
+        {/* ===== 反響管理 ===== */}
         {activePage === 'hankyo' && (
           <>
-            {/* 一覧チE�Eブル */}
+            {/* 一覧テーブル */}
             <section className="panel hankyo-table-panel">
               <div className="panel-heading">
                 <div><h2>反響一覧</h2><p>全{filteredHankyo.length}件 / {hankyoRecords.length}件中</p></div>
@@ -1878,17 +1878,17 @@ function App() {
                   onChange={(e) => { setHankyoSearch(e.target.value) }}
                 />
                 <select value={hankyoMonthFilter} onChange={(e) => { setHankyoMonthFilter(e.target.value) }}>
-                  <option value="all">全朁E/option>
+                  <option value="all">全月</option>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={String(m)}>{m}朁E/option>
+                    <option key={m} value={String(m)}>{m}月</option>
                   ))}
                 </select>
                 <select value={hankyoMediaFilter} onChange={(e) => { setHankyoMediaFilter(e.target.value) }}>
-                  <option value="all">全媒佁E/option>
+                  <option value="all">全媒体</option>
                   {hankyoMedias.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
                 <select value={hankyoStoreFilter} onChange={(e) => { setHankyoStoreFilter(e.target.value) }}>
-                  <option value="all">全店�E</option>
+                  <option value="all">全店舗</option>
                   {hankyoStores.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
@@ -1897,24 +1897,24 @@ function App() {
                 <table className="compact-list-table">
                   <thead>
                     <tr>
-                      <th>確誁E/th>
+                      <th>確認</th>
                       <th>反響日</th>
-                      <th>顧客吁E/th>
-                      <th>アカウンチE/th>
+                      <th>顧客名</th>
+                      <th>アカウント</th>
                       <th>きっかけ</th>
-                      <th>媒佁E/th>
-                      <th>問合冁E��</th>
+                      <th>媒体</th>
+                      <th>問合内容</th>
                       <th>問合手段</th>
-                      <th>入屁E��朁E/th>
-                      <th>送客先店�E</th>
+                      <th>入居時期</th>
+                      <th>送客先店舗</th>
                       <th>希望エリア</th>
-                      <th>備老E/th>
-                      <th>操佁E/th>
+                      <th>備考</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredHankyo.length === 0 && (
-                      <tr><td colSpan={13} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>チE�Eタがありません</td></tr>
+                      <tr><td colSpan={13} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                     )}
                     {filteredHankyo.map((r) => {
                       const isEditing = hankyoInlineId === r.id
@@ -1922,7 +1922,7 @@ function App() {
                       return (
                         <tr
                           key={r.id}
-                          className={isEditing ? 'row-editing' : (r.store === '対象夁E || r.store === '重褁E) ? 'row-gray' : checkedHankyoIds.has(r.id) ? 'row-yellow' : 'row-hoverable'}
+                          className={isEditing ? 'row-editing' : (r.store === '対象外' || r.store === '重複') ? 'row-gray' : checkedHankyoIds.has(r.id) ? 'row-yellow' : 'row-hoverable'}
                           onClick={() => { if (!isEditing) startHankyoInline(r) }}
                         >
                           <td onClick={(e) => e.stopPropagation()}>
@@ -1996,13 +1996,13 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveHankyoInline}>保孁E/button>
-                                  <button className="secondary" onClick={() => setHankyoInlineId(null)}>ÁE/button>
+                                  <button className="primary" onClick={saveHankyoInline}>保存</button>
+                                  <button className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
                                 </>
                               ) : (
                                 <>
-                                  <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="こ�EチE�Eタを褁E��">褁E��</button>
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'こ�E反響記録を本当に削除しますか�E�E)}>削除</button>
+                                  <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
                                 </>
                               )}
                             </div>
@@ -2014,11 +2014,13 @@ function App() {
                 </table>
               </div>
 
+              {/* ページネーション */}
+
             </section>
           </>
         )}
 
-        {/* ===== DM管琁E===== */}
+        {/* ===== DM管理 ===== */}
         {activePage === 'dm' && (
           <>
             <section className="panel table-panel">
@@ -2029,13 +2031,13 @@ function App() {
               {/* フィルター */}
               <div className="hankyo-toolbar">
                 <select value={dmMonthFilter} onChange={(e) => { setDmMonthFilter(e.target.value); setDmPage(1) }}>
-                  <option value="all">全朁E/option>
+                  <option value="all">全月</option>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={String(m)}>{m}朁E/option>
+                    <option key={m} value={String(m)}>{m}月</option>
                   ))}
                 </select>
                 <select value={dmAccountFilter} onChange={(e) => { setDmAccountFilter(e.target.value); setDmPage(1) }}>
-                  <option value="all">全アカウンチE/option>
+                  <option value="all">全アカウント</option>
                   {dmAccounts.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
@@ -2044,17 +2046,17 @@ function App() {
                 <table className="compact-list-table">
                   <thead>
                     <tr>
-                      <th>日仁E/th>
+                      <th>日付</th>
                       <th>アカウント名</th>
                       <th>SNS</th>
                       <th>エリア</th>
                       <th>反響物件番号</th>
-                      <th>操佁E/th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedDm.length === 0 && (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>チE�Eタがありません</td></tr>
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                     )}
                     {paginatedDm.map((r) => {
                       const isEditing = dmInlineId === r.id
@@ -2094,11 +2096,11 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveDmInline}>保孁E/button>
-                                  <button className="secondary" onClick={() => setDmInlineId(null)}>ÁE/button>
+                                  <button className="primary" onClick={saveDmInline}>保存</button>
+                                  <button className="secondary" onClick={() => setDmInlineId(null)}>×</button>
                                 </>
                               ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('dm', r.id, fetchDm, 'こ�EDM記録を本当に削除しますか�E�E)}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('dm', r.id, fetchDm, 'このDM記録を本当に削除しますか？')}>削除</button>
                               )}
                             </div>
                           </td>
@@ -2109,7 +2111,7 @@ function App() {
                 </table>
               </div>
 
-              {/* ペ�Eジネ�Eション */}
+              {/* ページネーション */}
               {dmTotalPages > 1 && (
                 <div className="hankyo-pagination">
                   <button onClick={() => setDmPage(1)} disabled={dmPage === 1}>«</button>
@@ -2121,14 +2123,14 @@ function App() {
                     ))}
                   <button onClick={() => setDmPage(p => Math.min(dmTotalPages, p + 1))} disabled={dmPage === dmTotalPages}>›</button>
                   <button onClick={() => setDmPage(dmTotalPages)} disabled={dmPage === dmTotalPages}>»</button>
-                  <span className="hankyo-page-info">{dmPage} / {dmTotalPages}ペ�Eジ</span>
+                  <span className="hankyo-page-info">{dmPage} / {dmTotalPages}ページ</span>
                 </div>
               )}
             </section>
           </>
         )}
 
-        {/* ===== メンバ�E ===== */}
+        {/* ===== メンバー ===== */}
         {activePage === 'members' && (
           <section className="members-page">
 
@@ -2138,7 +2140,7 @@ function App() {
               : (
                 <div className="panel">
                   <div className="panel-heading"><div><h2>今日のタスク</h2></div></div>
-                  <div className="calendar-login-prompt"><p>Google Calendar連携を有効にするにはVercelに環墁E��数を設定してください、E/p></div>
+                  <div className="calendar-login-prompt"><p>Google Calendar連携を有効にするにはVercelに環境変数を設定してください。</p></div>
                 </div>
               )
             }
@@ -2147,8 +2149,8 @@ function App() {
             <div className="panel">
               <div className="panel-heading">
                 <div>
-                  <h2>チ�Eムカレンダー</h2>
-                  <p>カレンダー上で直接イベント�E追加・編雁E��可能です、E/p>
+                  <h2>チームカレンダー</h2>
+                  <p>カレンダー上で直接イベントの追加・編集が可能です。</p>
                 </div>
               </div>
               <div className="calendar-wrap">
@@ -2159,7 +2161,7 @@ function App() {
                   height="640"
                   frameBorder={0}
                   scrolling="no"
-                  title="チ�Eムカレンダー"
+                  title="チームカレンダー"
                 />
               </div>
             </div>
@@ -2168,7 +2170,7 @@ function App() {
 
         {activePage === 'manuals' && <ManualsPage />}
 
-        {/* ===== ストック管琁E===== */}
+        {/* ===== ストック管理 ===== */}
         {activePage === 'stock' && (() => {
           const [calYear, calMonth] = stockCalendarMonth.split('-').map(Number)
           const firstDay = new Date(calYear, calMonth - 1, 1)
@@ -2192,23 +2194,23 @@ function App() {
               {/* カレンダー */}
               <section className="panel" style={{ gridColumn: 'span 12' }}>
                 <div className="panel-heading">
-                  <div><h2>ストックカレンダー</h2><p>締刁E��ごとの忁E��件数を管琁E/p></div>
+                  <div><h2>ストックカレンダー</h2><p>締切日ごとの必要件数を管理</p></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <button className="secondary" onClick={() => moveStockMonth(-1)}>◀</button>
-                    <span style={{ fontWeight: 700, fontSize: '1rem' }}>{calYear}年{calMonth}朁E/span>
+                    <span style={{ fontWeight: 700, fontSize: '1rem' }}>{calYear}年{calMonth}月</span>
                     <button className="secondary" onClick={() => moveStockMonth(1)}>▶</button>
                   </div>
                 </div>
                 <div className="stock-calendar-grid">
-                  {['日','朁E,'火','水','木','釁E,'圁E].map(w => (
-                    <div key={w} className="cal-weekday" style={{ color: w === '日' ? '#ef4444' : w === '圁E ? '#3b82f6' : undefined }}>{w}</div>
+                  {['日','月','火','水','木','金','土'].map(w => (
+                    <div key={w} className="cal-weekday" style={{ color: w === '日' ? '#ef4444' : w === '土' ? '#3b82f6' : undefined }}>{w}</div>
                   ))}
                   {cells.map((cell, i) => (
                     <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
                         {!cell.isOtherMonth && cell.date && weatherMap[cell.date] !== undefined && (
-                          <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天氁E ${getWeatherEmoji(weatherMap[cell.date])}`}>
+                          <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天気: ${getWeatherEmoji(weatherMap[cell.date])}`}>
                             {getWeatherEmoji(weatherMap[cell.date])}
                           </span>
                         )}
@@ -2229,16 +2231,16 @@ function App() {
 
               {/* 一覧 */}
               <section className="panel table-panel" style={{ gridColumn: 'span 12' }}>
-                <div className="panel-heading"><div><h2>ストック一覧</h2><p>行をクリチE��して直接編雁E/p></div></div>
+                <div className="panel-heading"><div><h2>ストック一覧</h2><p>行をクリックして直接編集</p></div></div>
                 <div className="table-wrap">
                   <table className="compact-list-table">
                     <thead>
                       <tr>
-                        <th>締刁E��</th><th>ラベル</th><th>忁E��件数</th><th>達�E件数</th><th>状慁E/th><th>メモ</th><th>操佁E/th>
+                        <th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>状態</th><th>メモ</th><th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {stockRecords.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>チE�Eタがありません</td></tr>}
+                      {stockRecords.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
                       {stockRecords.map(r => {
                         const isEditing = stockInlineId === r.id
                         const f = stockInlineForm
@@ -2257,16 +2259,16 @@ function App() {
                             <td onClick={e => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" type="number" min="0" value={f.achieved_count} onChange={e => setStockInlineForm({ ...f, achieved_count: Number(e.target.value) })} /> : `${r.achieved_count}件`}
                             </td>
-                            <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.78rem', background: done ? '#dcfce7' : '#fef9c3', color: done ? '#166534' : '#713f12' }}>{done ? '達�E' : '未遁E}</span></td>
+                            <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.78rem', background: done ? '#dcfce7' : '#fef9c3', color: done ? '#166534' : '#713f12' }}>{done ? '達成' : '未達'}</span></td>
                             <td onClick={e => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" value={f.note} onChange={e => setStockInlineForm({ ...f, note: e.target.value })} /> : r.note}
                             </td>
                             <td onClick={e => e.stopPropagation()}>
                               <div className="row-actions">
                                 {isEditing ? (
-                                  <><button className="primary" onClick={saveStockInline}>保孁E/button><button className="secondary" onClick={() => setStockInlineId(null)}>ÁE/button></>
+                                  <><button className="primary" onClick={saveStockInline}>保存</button><button className="secondary" onClick={() => setStockInlineId(null)}>×</button></>
                                 ) : (
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('stock', r.id, fetchStock, 'こ�E在庫記録を本当に削除しますか�E�E)}>削除</button>
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('stock', r.id, fetchStock, 'この在庫記録を本当に削除しますか？')}>削除</button>
                                 )}
                               </div>
                             </td>
@@ -2281,7 +2283,7 @@ function App() {
           )
         })()}
 
-        {/* ===== 部署予宁E===== */}
+        {/* ===== 部署予定 ===== */}
         {activePage === 'busho' && (() => {
           const [calYear, calMonth] = bushoCalendarMonth.split('-').map(Number)
           const firstDay = new Date(calYear, calMonth - 1, 1).getDay()
@@ -2328,7 +2330,7 @@ function App() {
             <>
               <section className="panel">
                 <div className="panel-heading">
-                  <div><h2>部署予定カレンダー</h2><p>部署ごとの予定を管琁E/p></div>
+                  <div><h2>部署予定カレンダー</h2><p>部署ごとの予定を管理</p></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <select
                       value={bushoFilterDept}
@@ -2344,7 +2346,7 @@ function App() {
                       const py = m === 1 ? y - 1 : y
                       setBushoCalendarMonth(`${py}-${String(pm).padStart(2, '0')}`)
                     }}>◀</button>
-                    <span style={{ fontWeight: 600, minWidth: 80, textAlign: 'center' }}>{calYear}年{calMonth}朁E/span>
+                    <span style={{ fontWeight: 600, minWidth: 80, textAlign: 'center' }}>{calYear}年{calMonth}月</span>
                     <button onClick={() => {
                       const [y, m] = bushoCalendarMonth.split('-').map(Number)
                       const nm = m === 12 ? 1 : m + 1
@@ -2354,7 +2356,7 @@ function App() {
                   </div>
                 </div>
                 <div className="stock-calendar-grid">
-                  {['日', '朁E, '火', '水', '木', '釁E, '圁E].map((d, idx) => (
+                  {['日', '月', '火', '水', '木', '金', '土'].map((d, idx) => (
                     <div key={d} className={`cal-header-cell${idx === 0 ? ' cal-header-sunday' : ''}${idx === 6 ? ' cal-header-saturday' : ''}`}>{d}</div>
                   ))}
                   {cells.map((cell, i) => (
@@ -2394,24 +2396,24 @@ function App() {
                 <div className="panel-heading">
                   <div>
                     <h2>予定一覧</h2>
-                    <p>{selectedBushoDate === todayStr ? `今日の予宁E(${selectedBushoDate})` : `${selectedBushoDate} の予定`}</p>
+                    <p>{selectedBushoDate === todayStr ? `今日の予定 (${selectedBushoDate})` : `${selectedBushoDate} の予定`}</p>
                   </div>
-                  <button className="secondary" onClick={() => setBushoSelectedDate(todayStr)}>今日に戻ぁE/button>
+                  <button className="secondary" onClick={() => setBushoSelectedDate(todayStr)}>今日に戻す</button>
                 </div>
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
-                        <th>日仁E/th>
+                        <th>日付</th>
                         <th>部署</th>
                         <th>タイトル</th>
                         <th>メモ</th>
-                        <th>操佁E/th>
+                        <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedBushoSchedules.length === 0 && (
-                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>チE�Eタがありません</td></tr>
+                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {selectedBushoSchedules.map((r) => (
                         <tr key={r.id}>
@@ -2424,7 +2426,7 @@ function App() {
                           <td>{r.title}</td>
                           <td>{r.note}</td>
                           <td>
-                            <button className="danger" onClick={() => confirmAndDeleteRecord('busho_schedules', r.id, fetchBusho, 'こ�E部署予定を本当に削除しますか�E�E)}>削除</button>
+                            <button className="danger" onClick={() => confirmAndDeleteRecord('busho_schedules', r.id, fetchBusho, 'この部署予定を本当に削除しますか？')}>削除</button>
                           </td>
                         </tr>
                       ))}
@@ -2435,10 +2437,10 @@ function App() {
             </>
           )
         })()}
-        {/* ===== 自社雁E��売丁E===== */}
+        {/* ===== 自社集客売上 ===== */}
         {activePage === 'jishashukyaku' && (() => {
-          const JISHA_MEDIAS: JishaShukyakuMedia[] = ['Karilun', '学生サイチE, 'SNS', '地域サイチE, '口コチE]
-          const JISHA_ROW_TYPES: JishaShukyakuRowType[] = ['予箁E, '実績', '前年']
+          const JISHA_MEDIAS: JishaShukyakuMedia[] = ['Karilun', '学生サイト', 'SNS', '地域サイト', '口コミ']
+          const JISHA_ROW_TYPES: JishaShukyakuRowType[] = ['予算', '実績', '前年']
 
           function getJishaData(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType): { hankyo_count: number; hankyo_raikyo: number; shinki_count: number; keiyaku_count: number; koken_uriaage: number } {
             let records: JishaShukyakuRecord[]
@@ -2589,7 +2591,7 @@ function App() {
             const rows = JISHA_ROW_TYPES.map((rowType, idx) => {
               const d = getJishaData(media, rowType)
               const rates = calcRates(d)
-              const rowClass = rowType === '予箁E ? 'jisha-yosan-row' : rowType === '実績' ? 'jisha-jisseki-row' : 'jisha-zennen-row'
+              const rowClass = rowType === '予算' ? 'jisha-yosan-row' : rowType === '実績' ? 'jisha-jisseki-row' : 'jisha-zennen-row'
               return (
                 <tr key={`${media}-${rowType}`} className={rowClass}>
                   {idx === 0 && (
@@ -2610,8 +2612,8 @@ function App() {
                 </tr>
               )
             })
-            const yosanBiRow = renderRatioRow('予算毁E, '実績', '予箁E, media, 'jisha-yosan-hi-row')
-            const nenBiRow = renderRatioRow('前年毁E, '実績', '前年', media, 'jisha-nen-hi-row')
+            const yosanBiRow = renderRatioRow('予算比', '実績', '予算', media, 'jisha-yosan-hi-row')
+            const nenBiRow = renderRatioRow('前年比', '実績', '前年', media, 'jisha-nen-hi-row')
             return [...rows, yosanBiRow, nenBiRow]
           }
 
@@ -2619,12 +2621,12 @@ function App() {
             return JISHA_ROW_TYPES.map((rowType, idx) => {
               const d = getTotalData(rowType)
               const rates = calcRates(d)
-              const rowClass = rowType === '予箁E ? 'jisha-yosan-row jisha-total-row' : rowType === '実績' ? 'jisha-jisseki-row jisha-total-row' : 'jisha-zennen-row jisha-total-row'
+              const rowClass = rowType === '予算' ? 'jisha-yosan-row jisha-total-row' : rowType === '実績' ? 'jisha-jisseki-row jisha-total-row' : 'jisha-zennen-row jisha-total-row'
               return (
                 <tr key={`total-${rowType}`} className={rowClass}>
                   {idx === 0 && (
                     <td className="jisha-media-cell jisha-media-total" rowSpan={5}>
-                      <span>自社雁E��合訁E/span>
+                      <span>自社集客合計</span>
                     </td>
                   )}
                   <td className="jisha-label-cell">{rowType}</td>
@@ -2642,30 +2644,30 @@ function App() {
             })
           }
 
-          const totalYosanBiRow = renderRatioRow('予算毁E, '実績', '予箁E, 'total', 'jisha-yosan-hi-row jisha-total-row')
-          const totalNenBiRow = renderRatioRow('前年毁E, '実績', '前年', 'total', 'jisha-nen-hi-row jisha-total-row')
-          const viewLabel = jishaViewMode === '累訁E ? `${jishaYear}年 1、E{jishaMonth}朁E累訁E : `${jishaYear}年${jishaMonth}朁E
-          const jishaTableTitle = jishaViewMode === '累訁E
-            ? `${jishaYear}年累訁E自社雁E��実績`
-            : `${jishaYear}年${jishaMonth}朁E自社雁E��実績`
+          const totalYosanBiRow = renderRatioRow('予算比', '実績', '予算', 'total', 'jisha-yosan-hi-row jisha-total-row')
+          const totalNenBiRow = renderRatioRow('前年比', '実績', '前年', 'total', 'jisha-nen-hi-row jisha-total-row')
+          const viewLabel = jishaViewMode === '累計' ? `${jishaYear}年 1〜${jishaMonth}月 累計` : `${jishaYear}年${jishaMonth}月`
+          const jishaTableTitle = jishaViewMode === '累計'
+            ? `${jishaYear}年累計 自社集客実績`
+            : `${jishaYear}年${jishaMonth}月 自社集客実績`
 
           return (
             <section className="panel jisha-panel" id="jisha-print-area">
               <div className="panel-heading no-print">
                 <div className="jisha-heading-text">
-                  <h2>自社雁E��実績</h2>
-                  <p>メチE��ア別雁E��・成紁E��ータ�E�セルをクリチE��して編雁E��E/p>
+                  <h2>自社集客実績</h2>
+                  <p>メディア別集客・成約データ（セルをクリックして編集）</p>
                 </div>
                 <div className="jisha-controls">
                   <div className="jisha-toggle">
                     <button className={jishaViewMode === '単月' ? 'active' : ''} onClick={() => setJishaViewMode('単月')}>単月</button>
-                    <button className={jishaViewMode === '累訁E ? 'active' : ''} onClick={() => setJishaViewMode('累訁E)}>累訁E/button>
+                    <button className={jishaViewMode === '累計' ? 'active' : ''} onClick={() => setJishaViewMode('累計')}>累計</button>
                   </div>
                   <select value={jishaYear} onChange={e => setJishaYear(Number(e.target.value))}>
                     {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}年</option>)}
                   </select>
                   <select value={jishaMonth} onChange={e => setJishaMonth(Number(e.target.value))}>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}朁E/option>)}
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
                   </select>
                   <button className="secondary" style={{ fontSize: '0.82rem', padding: '5px 10px' }} onClick={() => window.print()}>🖨 印刷</button>
                 </div>
@@ -2677,28 +2679,28 @@ function App() {
                     <tr>
                       <th className="jisha-th-media" colSpan={2}>{viewLabel}</th>
                       <th className="jisha-th">反響数</th>
-                      <th className="jisha-th">反響来庁E/th>
-                      <th className="jisha-th">反来玁E/th>
+                      <th className="jisha-th">反響来店</th>
+                      <th className="jisha-th">反来率</th>
                       <th className="jisha-th">新規数</th>
-                      <th className="jisha-th">契紁E��</th>
-                      <th className="jisha-th">契紁E��</th>
-                      <th className="jisha-th">反響成紁E��</th>
-                      <th className="jisha-th">貢献売丁E/th>
-                      <th className="jisha-th">契紁E��価</th>
+                      <th className="jisha-th">契約数</th>
+                      <th className="jisha-th">契約率</th>
+                      <th className="jisha-th">反響成約率</th>
+                      <th className="jisha-th">貢献売上</th>
+                      <th className="jisha-th">契約単価</th>
                     </tr>
                   </thead>
                   <tbody>
                     {renderMediaSection('Karilun', 'Karilun', 'jisha-media-karilun')}
-                    {renderMediaSection('学生サイチE, '学生サイチE, 'jisha-media-gakusei')}
+                    {renderMediaSection('学生サイト', '学生サイト', 'jisha-media-gakusei')}
                     {renderMediaSection('SNS', 'SNS', 'jisha-media-sns')}
-                    {renderMediaSection('地域サイチE, '地域サイチE, 'jisha-media-chiiki')}
-                    {renderMediaSection('口コチE, '口コチE, 'jisha-media-kuchikomi')}
+                    {renderMediaSection('地域サイト', '地域サイト', 'jisha-media-chiiki')}
+                    {renderMediaSection('口コミ', '口コミ', 'jisha-media-kuchikomi')}
                     {renderTotalSection()}
                     {totalYosanBiRow}
                     {totalNenBiRow}
                   </tbody>
                 </table>
-                <p className="jisha-hint no-print">数字�E編雁E�E単月だけでできます。累計�E合計を見せる場所なので、クリチE��しても数字�E変わりません、E/p>
+                <p className="jisha-hint no-print">数字の編集は単月だけでできます。累計は合計を見せる場所なので、クリックしても数字は変わりません。</p>
               </div>
             </section>
           )
@@ -2706,7 +2708,7 @@ function App() {
         {activePage === 'progress' && <ProgressPage />}
       </main>
 
-      {/* ===== フローチE��ング追加ボタン ===== */}
+      {/* ===== フローティング追加ボタン ===== */}
       {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'progress' && (
         <button
           className="fab"
@@ -2714,7 +2716,7 @@ function App() {
           aria-label="新規追加"
           title="新規追加"
         >
-          �E�E
+          ＋
         </button>
       )}
 
@@ -2727,22 +2729,22 @@ function App() {
                 {activePage === 'tasks' && '案件を追加'}
                 {activePage === 'taskmanagement' && 'タスクを追加'}
                 {activePage === 'sns' && '投稿を追加'}
-                {activePage === 'recruitment' && '採用チE�Eタを追加'}
+                {activePage === 'recruitment' && '採用データを追加'}
                 {activePage === 'hankyo' && '反響を追加'}
                 {activePage === 'dm' && 'DMを追加'}
                 {activePage === 'stock' && 'ストックを追加'}
                 {activePage === 'busho' && '予定を追加'}
               </h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✁E/button>
+              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
 
-            {/* 案件管琁E��ォーム */}
+            {/* 案件管理フォーム */}
             {activePage === 'tasks' && (
               <form className="data-form" onSubmit={handleTaskSubmit}>
                 <label className="form-label">案件日
                   <input type="date" value={taskForm.taskDate} onChange={(e) => setTaskForm({ ...taskForm, taskDate: e.target.value })} required />
                 </label>
-                <label className="form-label">拁E��老E��褁E��選択可�E�E
+                <label className="form-label">担当者（複数選択可）
                   <div className="checkbox-group">
                     {assigneeOptions.map((a) => (
                       <label key={a} className="checkbox-item">
@@ -2758,13 +2760,13 @@ function App() {
                 <label className="form-label">依頼部署
                   <select value={taskForm.department} onChange={(e) => setTaskForm({ ...taskForm, department: e.target.value as Department })}>{departments.map((d) => <option key={d} value={d}>{d}</option>)}</select>
                 </label>
-                <label className="form-label">案件吁E
-                  <input placeholder="案件吁E value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
+                <label className="form-label">案件名
+                  <input placeholder="案件名" value={taskForm.name} onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })} required />
                 </label>
-                <label className="form-label">案件冁E��
-                  <textarea placeholder="案件の詳細冁E��" value={taskForm.content} onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })} rows={3} />
+                <label className="form-label">案件内容
+                  <textarea placeholder="案件の詳細内容" value={taskForm.content} onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })} rows={3} />
                 </label>
-                <label className="form-label">種顁E
+                <label className="form-label">種類
                   <select value={taskForm.taskType} onChange={(e) => setTaskForm({ ...taskForm, taskType: e.target.value as TaskType, dueDate: '' })}>{taskTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
                 </label>
                 {taskForm.taskType === '単発' && (
@@ -2772,8 +2774,8 @@ function App() {
                     <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
                   </label>
                 )}
-                {taskForm.taskType === '継綁E && (
-                  <p style={{ fontSize: '0.8rem', color: 'var(--gray-400)', margin: '0' }}>※ 継続案件は期日不要。完亁E��チE�Eタスに変更した日が�E動的に完亁E��になります、E/p>
+                {taskForm.taskType === '継続' && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--gray-400)', margin: '0' }}>※ 継続案件は期日不要。完了ステータスに変更した日が自動的に完了日になります。</p>
                 )}
                 <label className="form-label">優先度
                   <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}</select>
@@ -2781,8 +2783,8 @@ function App() {
                 <label className="form-label">現状
                   <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as TaskStatus })}>{taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
                 </label>
-                <label className="form-label">削減顁E
-                  <input type="number" min="0" placeholder="削減額（侁E 50000�E�E value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
+                <label className="form-label">削減額
+                  <input type="number" min="0" placeholder="削減額（例: 50000）" value={taskForm.savings || ''} onChange={(e) => setTaskForm({ ...taskForm, savings: Number(e.target.value) || 0 })} />
                 </label>
                 <label className="form-label">補足
                   <textarea placeholder="補足・メモ" value={taskForm.note} onChange={(e) => setTaskForm({ ...taskForm, note: e.target.value })} rows={2} />
@@ -2794,20 +2796,20 @@ function App() {
               </form>
             )}
 
-            {/* タスク管琁E��ォーム */}
+            {/* タスク管理フォーム */}
             {activePage === 'taskmanagement' && (
               <>
                 {taskError && <p className="error-msg">{taskError}</p>}
                 <form className="data-form" onSubmit={handleTaskItemSubmit}>
-                  <label className="form-label">日仁E
+                  <label className="form-label">日付
                     <input type="date" value={taskItemForm.date} onChange={(e) => setTaskItemForm({ ...taskItemForm, date: e.target.value })} required />
                   </label>
-                  <label className="form-label">タスク吁E<span className="required-badge">忁E��E/span>
-                    <input placeholder="タスク吁E value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required />
+                  <label className="form-label">タスク名 <span className="required-badge">必須</span>
+                    <input placeholder="タスク名" value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required />
                   </label>
                   <label className="form-label">親タスク
                     <select value={taskItemForm.parent_task_id || ''} onChange={(e) => setTaskItemForm({ ...taskItemForm, parent_task_id: e.target.value || null })}>
-                      <option value="">なぁE/option>
+                      <option value="">なし</option>
                       {taskItems.filter((item) => !item.parent_task_id).map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name}{getTaskItemPrimaryAssignee(item) ? `・${getTaskItemPrimaryAssignee(item)}` : ''}
@@ -2816,7 +2818,7 @@ function App() {
                     </select>
                   </label>
                   <label className="form-label">メモ
-                    <textarea placeholder="メモ冁E��" value={taskItemForm.memo} onChange={(e) => setTaskItemForm({ ...taskItemForm, memo: e.target.value })} rows={2} />
+                    <textarea placeholder="メモ内容" value={taskItemForm.memo} onChange={(e) => setTaskItemForm({ ...taskItemForm, memo: e.target.value })} rows={2} />
                   </label>
                   <label className="form-label">優先度
                     <select value={taskItemForm.priority} onChange={(e) => setTaskItemForm({ ...taskItemForm, priority: e.target.value as Priority })}>
@@ -2829,7 +2831,7 @@ function App() {
                   <label className="form-label">期日
                     <input type="date" value={taskItemForm.due_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, due_date: e.target.value })} />
                   </label>
-                  <label className="form-label">拁E��老E
+                  <label className="form-label">担当者
                     <div className="checkbox-group">
                       {members.map((m) => (
                         <label key={m.id} className="checkbox-item">
@@ -2841,7 +2843,7 @@ function App() {
                       ))}
                     </div>
                   </label>
-                  <label className="form-label">設定老E
+                  <label className="form-label">設定者
                     <div className="checkbox-group">
                       {members.map((m) => (
                         <label key={m.id} className="checkbox-item">
@@ -2850,7 +2852,7 @@ function App() {
                       ))}
                     </div>
                   </label>
-                  <label className="form-label">スチE�Eタス
+                  <label className="form-label">ステータス
                     <select value={taskItemForm.status} onChange={(e) => setTaskItemForm({ ...taskItemForm, status: e.target.value as TaskItemStatus })}>
                       {taskItemStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -2863,23 +2865,23 @@ function App() {
               </>
             )}
 
-            {/* SNS投稿管琁E��ォーム */}
+            {/* SNS投稿管理フォーム */}
             {activePage === 'sns' && (
               <form className="data-form" onSubmit={handleSnsSubmit}>
                 <label className="form-label">投稿日
                   <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
                 </label>
-                <label className="form-label">媒佁E
+                <label className="form-label">媒体
                   <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 </label>
-                <label className="form-label">アカウンチE
+                <label className="form-label">アカウント
                   <select value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })}>{snsAccounts.map((a) => <option key={a} value={a}>{a}</option>)}</select>
                 </label>
                 <label className="form-label">コメント数
-                  <input type="number" min="0" placeholder="コメント数�E�侁E 50�E�E value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
+                  <input type="number" min="0" placeholder="コメント数（例: 50）" value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
                 </label>
                 <label className="form-label">保存数
-                  <input type="number" min="0" placeholder="保存数�E�侁E 100�E�E value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
+                  <input type="number" min="0" placeholder="保存数（例: 100）" value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
                 </label>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
@@ -2888,13 +2890,13 @@ function App() {
               </form>
             )}
 
-            {/* 採用管琁E��ォーム */}
+            {/* 採用管理フォーム */}
             {activePage === 'recruitment' && (
               <form className="data-form" onSubmit={handleRecruitmentSubmit}>
                 <label className="form-label">応募日
                   <input type="date" value={recruitmentForm.date} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, date: e.target.value })} required />
                 </label>
-                <label className="form-label">媒佁E
+                <label className="form-label">媒体
                   <select value={recruitmentForm.platform} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 </label>
                 <label className="form-label">部署
@@ -2903,8 +2905,8 @@ function App() {
                 <label className="form-label">職種
                   <select value={recruitmentForm.jobType} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, jobType: e.target.value as JobType })}>{jobTypes.map((j) => <option key={j} value={j}>{j}</option>)}</select>
                 </label>
-                <label className="form-label">削減顁E
-                  <input type="number" min="0" placeholder="削減額（侁E 50000�E�E value={recruitmentForm.costReduction || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, costReduction: Number(e.target.value) || 0 })} />
+                <label className="form-label">削減額
+                  <input type="number" min="0" placeholder="削減額（例: 50000）" value={recruitmentForm.costReduction || ''} onChange={(e) => setRecruitmentForm({ ...recruitmentForm, costReduction: Number(e.target.value) || 0 })} />
                 </label>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
@@ -2913,13 +2915,13 @@ function App() {
               </form>
             )}
 
-            {/* 反響管琁E��ォーム */}
+            {/* 反響管理フォーム */}
             {activePage === 'hankyo' && (
               <form className="data-form" onSubmit={handleHankyoSubmit}>
                 <label className="form-label">反響日
                   <input type="date" value={hankyoForm.inquiry_date} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_date: e.target.value })} required />
                 </label>
-                <label className="form-label">アカウンチE
+                <label className="form-label">アカウント
                   <select value={hankyoForm.account} onChange={(e) => setHankyoForm({ ...hankyoForm, account: e.target.value })}>
                     {hankyoAccounts.map((a) => <option key={a}>{a}</option>)}
                   </select>
@@ -2929,39 +2931,39 @@ function App() {
                     {hankyoTriggers.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </label>
-                <label className="form-label">反響媒佁E
+                <label className="form-label">反響媒体
                   <select value={hankyoForm.media} onChange={(e) => setHankyoForm({ ...hankyoForm, media: e.target.value })}>
                     {hankyoMedias.map((m) => <option key={m}>{m}</option>)}
                   </select>
                 </label>
-                <label className="form-label">問合冁E��
+                <label className="form-label">問合内容
                   <select value={hankyoForm.inquiry_type} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_type: e.target.value })}>
                     {hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </label>
-                <label className="form-label">顧客吁E<span className="required-badge">忁E��E/span>
-                  <input placeholder="顧客吁E value={hankyoForm.customer_name} onChange={(e) => setHankyoForm({ ...hankyoForm, customer_name: e.target.value })} required />
+                <label className="form-label">顧客名 <span className="required-badge">必須</span>
+                  <input placeholder="顧客名" value={hankyoForm.customer_name} onChange={(e) => setHankyoForm({ ...hankyoForm, customer_name: e.target.value })} required />
                 </label>
                 <label className="form-label">問合手段
                   <select value={hankyoForm.contact_method} onChange={(e) => setHankyoForm({ ...hankyoForm, contact_method: e.target.value })}>
                     {hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </label>
-                <label className="form-label">入屁E��望時期
+                <label className="form-label">入居希望時期
                   <select value={hankyoForm.move_in_timing} onChange={(e) => setHankyoForm({ ...hankyoForm, move_in_timing: e.target.value })}>
                     {hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </label>
-                <label className="form-label">送客先店�E
+                <label className="form-label">送客先店舗
                   <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })}>
                     {hankyoStores.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </label>
                 <label className="form-label">希望エリア
-                  <input placeholder="侁E 大阪市、守口币E value={hankyoForm.area} onChange={(e) => setHankyoForm({ ...hankyoForm, area: e.target.value })} />
+                  <input placeholder="例: 大阪市、守口市" value={hankyoForm.area} onChange={(e) => setHankyoForm({ ...hankyoForm, area: e.target.value })} />
                 </label>
-                <label className="form-label">備老E
-                  <textarea placeholder="備老E�Eメモ" rows={2} value={hankyoForm.note} onChange={(e) => setHankyoForm({ ...hankyoForm, note: e.target.value })} />
+                <label className="form-label">備考
+                  <textarea placeholder="備考・メモ" rows={2} value={hankyoForm.note} onChange={(e) => setHankyoForm({ ...hankyoForm, note: e.target.value })} />
                 </label>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
@@ -2970,10 +2972,10 @@ function App() {
               </form>
             )}
 
-            {/* DM管琁E��ォーム */}
+            {/* DM管理フォーム */}
             {activePage === 'dm' && (
               <form className="data-form" onSubmit={(e) => { handleDmSubmit(e); setShowModal(false) }}>
-                <label className="form-label">日仁E
+                <label className="form-label">日付
                   <input type="date" value={dmForm.date} onChange={(e) => setDmForm({ ...dmForm, date: e.target.value })} required />
                 </label>
                 <div className="form-label">アカウント名
@@ -2997,11 +2999,11 @@ function App() {
                   </div>
                 </div>
                 <label className="form-label">反響物件番号
-                  <input placeholder="侁E K001" value={dmForm.property_number} onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })} />
+                  <input placeholder="例: K001" value={dmForm.property_number} onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })} />
                 </label>
                 <label className="form-label">エリア
                   {dmAreaLoading && <span className="dm-area-loading">取得中…</span>}
-                  <input placeholder="物件番号入力で自動取征E value={dmForm.area} onChange={(e) => setDmForm({ ...dmForm, area: e.target.value })} />
+                  <input placeholder="物件番号入力で自動取得" value={dmForm.area} onChange={(e) => setDmForm({ ...dmForm, area: e.target.value })} />
                 </label>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
@@ -3010,23 +3012,23 @@ function App() {
               </form>
             )}
 
-            {/* ストック管琁E��ォーム */}
+            {/* ストック管理フォーム */}
             {activePage === 'stock' && (
               <form className="data-form" onSubmit={handleStockSubmit}>
-                <label className="form-label">締刁E��
+                <label className="form-label">締切日
                   <input type="date" value={stockForm.deadline} onChange={e => setStockForm({ ...stockForm, deadline: e.target.value })} required />
                 </label>
-                <label className="form-label">ラベル�E�例：仲介、管琁E��E
-                  <input placeholder="侁E 仲仁E value={stockForm.label} onChange={e => setStockForm({ ...stockForm, label: e.target.value })} required />
+                <label className="form-label">ラベル（例：仲介、管理）
+                  <input placeholder="例: 仲介" value={stockForm.label} onChange={e => setStockForm({ ...stockForm, label: e.target.value })} required />
                 </label>
-                <label className="form-label">忁E��件数
+                <label className="form-label">必要件数
                   <input type="number" min="1" value={stockForm.required_count} onChange={e => setStockForm({ ...stockForm, required_count: Number(e.target.value) })} required />
                 </label>
-                <label className="form-label">達�E件数
+                <label className="form-label">達成件数
                   <input type="number" min="0" value={stockForm.achieved_count} onChange={e => setStockForm({ ...stockForm, achieved_count: Number(e.target.value) })} />
                 </label>
                 <label className="form-label">メモ
-                  <input value={stockForm.note} onChange={e => setStockForm({ ...stockForm, note: e.target.value })} placeholder="任愁E />
+                  <input value={stockForm.note} onChange={e => setStockForm({ ...stockForm, note: e.target.value })} placeholder="任意" />
                 </label>
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
@@ -3039,7 +3041,7 @@ function App() {
               <>
                 {taskError && <p className="error-msg">{taskError}</p>}
                 <form className="data-form" onSubmit={handleBushoSubmit}>
-                  <label className="form-label">日仁E
+                  <label className="form-label">日付
                     <input
                       type="date"
                       value={bushoForm.date}
@@ -3047,7 +3049,7 @@ function App() {
                       required
                     />
                   </label>
-                  <label className="form-label">時間�E�任意！E
+                  <label className="form-label">時間（任意）
                     <input
                       type="time"
                       value={bushoForm.start_time}
@@ -3069,7 +3071,7 @@ function App() {
                       value={bushoForm.title}
                       onChange={(e) => setBushoForm({ ...bushoForm, title: e.target.value })}
                       required
-                      placeholder="予定�Eタイトル"
+                      placeholder="予定のタイトル"
                     />
                   </label>
                   <label className="form-label">メモ
@@ -3077,7 +3079,7 @@ function App() {
                       value={bushoForm.note}
                       onChange={(e) => setBushoForm({ ...bushoForm, note: e.target.value })}
                       rows={3}
-                      placeholder="備老E��ど"
+                      placeholder="備考など"
                     />
                   </label>
                   <button type="submit" className="primary">追加</button>
@@ -3129,7 +3131,7 @@ function TodayTasksPanel() {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const silentLoginFnRef = useRef<(() => void) | null>(null)
 
-  // Supabaseから今日のチェチE��状態を読み込む�E�E秒ごとにポ�Eリングして他PCと同期�E�E
+  // Supabaseから今日のチェック状態を読み込む（3秒ごとにポーリングして他PCと同期）
   useEffect(() => {
     const fetchChecked = async () => {
       const { data } = await supabase
@@ -3147,12 +3149,12 @@ function TodayTasksPanel() {
     return () => clearInterval(interval)
   }, [today])
 
-  // タイマ�EクリーンアチE�E
+  // タイマークリーンアップ
   useEffect(() => {
     return () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current) }
   }, [])
 
-  // ト�Eクン有効期限の3刁E��にsetAccessToken(null)して「�E接続」�Eタンを表示する
+  // トークン有効期限の3分前にsetAccessToken(null)して「再接続」ボタンを表示する
   const scheduleRefresh = useCallback((expiresIn: number) => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     const ms = Math.max(0, (expiresIn - 180) * 1000)
@@ -3193,7 +3195,7 @@ function TodayTasksPanel() {
           const data = await res.json()
           results[member.calendarId] = (data.items || []).map((e: any) => ({
             id: e.id,
-            summary: e.summary || '�E�タイトルなし！E,
+            summary: e.summary || '（タイトルなし）',
             start: e.start?.dateTime || e.start?.date || '',
           }))
         } catch {
@@ -3205,7 +3207,7 @@ function TodayTasksPanel() {
     setCalendarLoading(false)
   }, [])
 
-  // 保存済みト�Eクンがあれ�E起動時に自動取得！E��フレチE��ュタイマ�EセチE��
+  // 保存済みトークンがあれば起動時に自動取得＆リフレッシュタイマーセット
   useEffect(() => {
     const saved = getSavedToken()
     if (saved) {
@@ -3220,7 +3222,7 @@ function TodayTasksPanel() {
     }
   }, [fetchMemberEvents, scheduleRefresh])
 
-  // prompt:none でGoogleUIを�Eさずに無音再認証
+  // prompt:none でGoogleUIを出さずに無音再認証
   const silentLogin = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
     prompt: 'none',
@@ -3232,13 +3234,13 @@ function TodayTasksPanel() {
       scheduleRefresh(expiresIn)
     },
     onError: () => {
-      // 無音再認証失敗�E通常ログインボタンへ刁E��替ぁE
+      // 無音再認証失敗→通常ログインボタンへ切り替え
       clearToken()
       setAccessToken(null)
     },
   })
 
-  // silentLoginをrefに保持�E�タイマ�Eコールバックから参�Eするため�E�E
+  // silentLoginをrefに保持（タイマーコールバックから参照するため）
   silentLoginFnRef.current = silentLogin
 
   const googleLogin = useGoogleLogin({
@@ -3276,7 +3278,7 @@ function TodayTasksPanel() {
 
       {accessToken && !calendarLoading && (
         <div className="today-tasks-grid">
-          {TEAM_MEMBERS.filter(m => m.name !== 'WEBチ�Eム').map((member) => {
+          {TEAM_MEMBERS.filter(m => m.name !== 'WEBチーム').map((member) => {
             const events = memberEvents[member.calendarId] || []
             return (
               <div key={member.calendarId} className="member-task-card">
@@ -3285,7 +3287,7 @@ function TodayTasksPanel() {
                   <span className="member-event-count">{events.length}件</span>
                 </div>
                 {events.length === 0 ? (
-                  <p className="no-events">予定なぁE/p>
+                  <p className="no-events">予定なし</p>
                 ) : (
                   <ul className="event-checklist">
                     {events.map((ev) => {
@@ -3297,7 +3299,7 @@ function TodayTasksPanel() {
                       return (
                         <li key={ev.id} className={`event-item ${checked ? 'checked' : ''}`}
                           onClick={() => toggleCheck(key, checked)}>
-                          <span className="event-checkbox">{checked ? '✁E : ''}</span>
+                          <span className="event-checkbox">{checked ? '✓' : ''}</span>
                           <span className="event-time">{time}</span>
                           <span className="event-title" title={ev.summary}>{ev.summary}</span>
                         </li>
@@ -3329,25 +3331,25 @@ function matchesYearMonth(dateString: string, year: number, month: string) {
 
 
 /** 案件1件の削減額貢献額を返す
- *  - 単発: 完亁E& dueDate が選択期間�Eのみ計丁E
- *  - 継綁E taskDate から完亁E��(or今日)まで月×��額で累積。完亁E��が最終月 */
+ *  - 単発: 完了 & dueDate が選択期間内のみ計上
+ *  - 継続: taskDate から完了日(or今日)まで月×金額で累積。完了月が最終月 */
 function calcTaskSavings(task: Task, selectedYear: number, selectedMonth: string): number {
   if (!task.savings || task.savings <= 0) return 0
 
   if (task.taskType === '単発') {
-    return task.status === '完亁E && matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
+    return task.status === '完了' && matchesYearMonth(task.dueDate, selectedYear, selectedMonth)
       ? task.savings : 0
   }
 
-  // ===== 継綁E=====
+  // ===== 継続 =====
   if (!task.taskDate) return 0
   const s = new Date(task.taskDate)
   const startYM = new Date(s.getFullYear(), s.getMonth(), 1)
-  const e = task.status === '完亁E && task.dueDate ? new Date(task.dueDate) : new Date()
+  const e = task.status === '完了' && task.dueDate ? new Date(task.dueDate) : new Date()
   const endYM = new Date(e.getFullYear(), e.getMonth(), 1)
 
   if (selectedMonth === 'all') {
-    // 選択年冁E��アクチE��ブだった月数 ÁE月顁E
+    // 選択年内でアクティブだった月数 × 月額
     const yearStart = new Date(selectedYear, 0, 1)
     const yearEnd   = new Date(selectedYear, 11, 1)
     const from = startYM > yearStart ? startYM : yearStart
@@ -3357,7 +3359,7 @@ function calcTaskSavings(task: Task, selectedYear: number, selectedMonth: string
     return task.savings * Math.max(0, months)
   }
 
-  // 特定月: そ�E月にアクチE��ブか判宁E
+  // 特定月: その月にアクティブか判定
   const selYM = new Date(selectedYear, Number(selectedMonth) - 1, 1)
   if (startYM > selYM || endYM < selYM) return 0
   return task.savings
@@ -3383,4 +3385,3 @@ function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<Recru
 }
 
 export default App
-
