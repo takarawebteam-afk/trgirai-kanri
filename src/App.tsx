@@ -2188,7 +2188,7 @@ function App() {
                   { key: 'moveIn', label: '入居時期', selected: hankyoMoveInFilters, setSelected: setHankyoMoveInFilters, options: hankyoMoveInTimings.map(v => ({ value: v, label: v })) },
                   { key: 'store', label: '店舗', selected: hankyoStoreFilters, setSelected: setHankyoStoreFilters, options: hankyoStores.map(v => ({ value: v, label: v })) },
                 ] as { key: string; label: string; selected: string[]; setSelected: React.Dispatch<React.SetStateAction<string[]>>; options: { value: string; label: string }[] }[]).map(({ key, label, selected, setSelected, options }) => (
-                  <div key={key} className="hankyo-multiselect">
+                  <div key={key} className="hankyo-multiselect" onClick={(e) => e.stopPropagation()}>
                     <button
                       className={`hankyo-multiselect-btn${selected.length > 0 ? ' active' : ''}`}
                       onClick={() => setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)}
