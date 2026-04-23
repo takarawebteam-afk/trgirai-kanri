@@ -1253,8 +1253,13 @@ function App() {
   useEffect(() => {
     if (hankyoOpenFilter === null) return
     const close = () => setHankyoOpenFilter(null)
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
+    const timer = window.setTimeout(() => {
+      document.addEventListener('click', close)
+    }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('click', close)
+    }
   }, [hankyoOpenFilter])
 
   useEffect(() => {
@@ -2183,13 +2188,10 @@ function App() {
                   { key: 'moveIn', label: '入居時期', selected: hankyoMoveInFilters, setSelected: setHankyoMoveInFilters, options: hankyoMoveInTimings.map(v => ({ value: v, label: v })) },
                   { key: 'store', label: '店舗', selected: hankyoStoreFilters, setSelected: setHankyoStoreFilters, options: hankyoStores.map(v => ({ value: v, label: v })) },
                 ] as { key: string; label: string; selected: string[]; setSelected: React.Dispatch<React.SetStateAction<string[]>>; options: { value: string; label: string }[] }[]).map(({ key, label, selected, setSelected, options }) => (
-                  <div key={key} className="hankyo-multiselect" onMouseDown={(e) => e.stopPropagation()}>
+                  <div key={key} className="hankyo-multiselect">
                     <button
                       className={`hankyo-multiselect-btn${selected.length > 0 ? ' active' : ''}`}
-                      onMouseDown={(e) => {
-                        e.stopPropagation()
-                        setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)
-                      }}
+                      onClick={() => setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)}
                     >
                       {selected.length === 0 ? `全${label}` : `${label}(${selected.length})`}
                       <span className="hankyo-multiselect-arrow">▾</span>
