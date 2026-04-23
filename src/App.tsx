@@ -78,6 +78,7 @@ type HankyoRecord = {
   store: string
   area: string
   note: string
+  confirmed?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -146,6 +147,14 @@ type RecruitmentRecord = {
   department: RecruitDepartment
   jobType: JobType
   costReduction: number
+}
+
+type AllowedAccount = {
+  id: string
+  created_at?: string
+  email: string
+  is_master: boolean
+  created_by?: string | null
 }
 
 const TEAM_MEMBERS = [
@@ -266,6 +275,14 @@ const DM_ACCOUNT_NISHINOMIYA = dmAccounts[2]
 const DM_ACCOUNT_YAO = dmAccounts[3]
 const DM_ACCOUNT_KINDAI = dmAccounts[4]
 const DM_ACCOUNT_KANGAKU = dmAccounts[5]
+const MASTER_EMAIL = 'trg.yshini@gmail.com'
+const DEFAULT_ALLOWED_EMAILS = [
+  MASTER_EMAIL,
+  'takara.webteam@gmail.com',
+  'izumiyurina2322@gmail.com',
+  'takarabaito3@gmail.com',
+  'takarabaito1@gmail.com',
+] as const
 
 function isDateWithinRange(dateText: string, start: Date, end: Date): boolean {
   if (!dateText) return false
@@ -323,6 +340,19 @@ const currency = new Intl.NumberFormat('ja-JP', {
 })
 
 const integer = new Intl.NumberFormat('ja-JP')
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
+}
+
+function buildDefaultAllowedAccounts(): AllowedAccount[] {
+  return DEFAULT_ALLOWED_EMAILS.map((email) => ({
+    id: email,
+    email,
+    is_master: email === MASTER_EMAIL,
+    created_by: MASTER_EMAIL,
+  }))
+}
 
 // WMO天気コード → 絵文字変換
 function getWeatherEmoji(code: number | null | undefined): string {
@@ -463,6 +493,16 @@ function App() {
   const [jishaCellEditing, setJishaCellEditing] = useState<string | null>(null)
   const [jishaCellValue, setJishaCellValue] = useState('')
   const [jishaSavingCell, setJishaSavingCell] = useState<string | null>(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [allowedAccounts, setAllowedAccounts] = useState<AllowedAccount[]>(buildDefaultAllowedAccounts())
+  const [allowedAccountForm, setAllowedAccountForm] = useState('')
+  const [allowedAccountSaving, setAllowedAccountSaving] = useState(false)
+  const [allowedAccountMessage, setAllowedAccountMessage] = useState('')
+  const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
+
+  const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -491,7 +531,11 @@ function App() {
 
   async function fetchHankyo() {
     const { data } = await supabase.from('hankyo').select('*').order('inquiry_date', { ascending: false }).order('created_at', { ascending: false })
-    if (data) setHankyoRecords(data as HankyoRecord[])
+    if (data) {
+      setHankyoRecords(data as HankyoRecord[])
+      const confirmedIds = new Set<string>((data as HankyoRecord[]).filter(r => r.confirmed).map(r => r.id))
+      setCheckedHankyoIds(confirmedIds)
+    }
   }
 
   async function fetchDm() {
@@ -519,6 +563,149 @@ function App() {
   }
 
   // Open-Meteo から大阪の天気取得（APIキー不要）
+  async function fetchAllowedAccounts() {
+    const fallback = buildDefaultAllowedAccounts()
+    const { data, error } = await supabase
+      .from('allowed_accounts')
+      .select('*')
+      .order('is_master', { ascending: false })
+      .order('email', { ascending: true })
+
+    if (error) {
+      setAllowedAccounts(fallback)
+      return fallback
+    }
+
+    const rows = (data as AllowedAccount[] | null)?.map((row) => ({
+      ...row,
+      email: normalizeEmail(row.email),
+    })) ?? []
+
+    if (rows.length === 0) {
+      setAllowedAccounts(fallback)
+      return fallback
+    }
+
+    setAllowedAccounts(rows)
+    return rows
+  }
+
+  async function fetchGoogleUserEmail(token: string) {
+    try {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return null
+      const userInfo = await res.json() as { email?: string }
+      return userInfo.email ? normalizeEmail(userInfo.email) : null
+    } catch {
+      return null
+    }
+  }
+
+  async function applyLoginAccess(token: string, options?: { saveSession?: boolean; expiresIn?: number }) {
+    setAuthLoading(true)
+    setAuthError('')
+    setAllowedAccountMessage('')
+
+    if (options?.saveSession) {
+      saveToken(token, options.expiresIn ?? 3600)
+    }
+
+    const accounts = await fetchAllowedAccounts()
+    const email = await fetchGoogleUserEmail(token)
+
+    if (!email) {
+      clearToken()
+      setCurrentUserEmail(null)
+      setAuthError('Googleアカウントの確認に失敗しました。もう一度ログインしてください。')
+      setAuthLoading(false)
+      return
+    }
+
+    const canOpen = accounts.some((account) => normalizeEmail(account.email) === email)
+
+    if (!canOpen) {
+      clearToken()
+      setCurrentUserEmail(null)
+      setAuthError(`このアカウント（${email}）はまだ閲覧を許可していません。`)
+      setAuthLoading(false)
+      return
+    }
+
+    localStorage.setItem('gcal_hint', email)
+    setCurrentUserEmail(email)
+    setAuthLoading(false)
+  }
+
+  async function addAllowedAccount() {
+    if (!isMasterUser) return
+
+    const email = normalizeEmail(allowedAccountForm)
+    if (!email) {
+      setAllowedAccountMessage('追加したいGoogleアカウントを入力してください。')
+      return
+    }
+
+    if (allowedAccounts.some((account) => normalizeEmail(account.email) === email)) {
+      setAllowedAccountMessage('そのGoogleアカウントはすでに登録されています。')
+      return
+    }
+
+    setAllowedAccountSaving(true)
+    setAllowedAccountMessage('')
+
+    const { error } = await supabase.from('allowed_accounts').insert({
+      email,
+      is_master: email === MASTER_EMAIL,
+      created_by: currentUserEmail,
+    })
+
+    if (error) {
+      setAllowedAccountMessage(`追加できませんでした: ${error.message}`)
+      setAllowedAccountSaving(false)
+      return
+    }
+
+    await fetchAllowedAccounts()
+    setAllowedAccountForm('')
+    setAllowedAccountSaving(false)
+    setAllowedAccountMessage('Googleアカウントを追加しました。')
+  }
+
+  async function removeAllowedAccount(emailToRemove: string) {
+    if (!isMasterUser) return
+
+    const email = normalizeEmail(emailToRemove)
+    if (email === MASTER_EMAIL) {
+      setAllowedAccountMessage('マスターアカウントは削除できません。')
+      return
+    }
+
+    setAllowedAccountSaving(true)
+    setAllowedAccountMessage('')
+
+    const { error } = await supabase.from('allowed_accounts').delete().eq('email', email)
+
+    if (error) {
+      setAllowedAccountMessage(`削除できませんでした: ${error.message}`)
+      setAllowedAccountSaving(false)
+      return
+    }
+
+    await fetchAllowedAccounts()
+    setAllowedAccountSaving(false)
+    setAllowedAccountMessage('Googleアカウントを削除しました。')
+  }
+
+  function logoutFromApp() {
+    clearToken()
+    localStorage.removeItem('gcal_hint')
+    setCurrentUserEmail(null)
+    setAuthError('')
+    setAllowedAccountMessage('')
+  }
+
   async function fetchWeather(yearMonth: string) {
     const [y, m] = yearMonth.split('-').map(Number)
     const startDate = `${y}-${String(m).padStart(2, '0')}-01`
@@ -541,6 +728,19 @@ function App() {
   }
 
   useEffect(() => {
+    const savedToken = getSavedToken()
+    if (!savedToken) {
+      setAuthLoading(false)
+      fetchAllowedAccounts()
+      return
+    }
+
+    void applyLoginAccess(savedToken)
+  }, [])
+
+  useEffect(() => {
+    if (!currentUserEmail) return
+
     fetchTasks()
     fetchPosts()
     fetchRecruitment()
@@ -560,7 +760,7 @@ function App() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [currentUserEmail])
 
   const yearOptions = Array.from(
     new Set([
@@ -1214,15 +1414,87 @@ function App() {
     fetchTasks()
   }
 
+  const googleLogin = useGoogleLogin({
+    scope: 'openid email profile https://www.googleapis.com/auth/calendar.readonly',
+    prompt: 'select_account',
+    onSuccess: async (res) => {
+      await applyLoginAccess(res.access_token, {
+        saveSession: true,
+        expiresIn: res.expires_in ?? 3600,
+      })
+    },
+    onError: () => {
+      clearToken()
+      setCurrentUserEmail(null)
+      setAuthError('Googleログインに失敗しました。もう一度お試しください。')
+      setAuthLoading(false)
+    },
+  })
+
+  if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+    return (
+      <div className="auth-screen">
+        <section className="auth-card">
+          <p className="eyebrow">WEB Strategic Team</p>
+          <h1>この管理ツールはGoogleログインが必要です</h1>
+          <p className="intro">Vercelの環境変数に `VITE_GOOGLE_CLIENT_ID` が入っていないため、ログイン画面を出せません。</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (authLoading) {
+    return (
+      <div className="auth-screen">
+        <section className="auth-card">
+          <p className="eyebrow">WEB Strategic Team</p>
+          <h1>ログイン確認中です</h1>
+          <p className="intro">少しだけお待ちください。</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (!currentUserEmail) {
+    return (
+      <div className="auth-screen">
+        <section className="auth-card">
+          <p className="eyebrow">WEB Strategic Team</p>
+          <h1>Googleログインが必要です</h1>
+          <p className="intro">許可されているGoogleアカウントだけ、この管理ツールを開けます。</p>
+          {authError && <p className="auth-error">{authError}</p>}
+          <button className="primary auth-login-button" onClick={() => googleLogin()}>Googleでログイン</button>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
+      <div className="auth-topbar">
+        <div className="auth-user-box auth-user-box-top">
+          <span className="auth-user-email">{currentUserEmail}</span>
+          {isMasterUser && (
+            <button
+              className="auth-master-button"
+              onClick={() => {
+                setAllowedAccountMessage('')
+                setShowAllowedAccountsModal(true)
+              }}
+            >
+              マスター
+            </button>
+          )}
+          <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
+        </div>
+      </div>
       <header className="app-header">
         <div>
           <p className="eyebrow">WEB Strategic Team</p>
           <h1>WEB戦略チーム管理表</h1>
           <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
         </div>
-        <div className="header-panel">
+        <div className="header-panel header-panel-auth">
           <label>
             年
             <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
@@ -1240,6 +1512,11 @@ function App() {
               ))}
             </select>
           </label>
+          <div className="auth-user-box">
+            <span className="auth-user-email">{currentUserEmail}</span>
+            {isMasterUser && <span className="auth-master-badge">マスター</span>}
+            <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
+          </div>
         </div>
       </header>
 
@@ -1929,11 +2206,12 @@ function App() {
                             <input
                               type="checkbox"
                               checked={checkedHankyoIds.has(r.id)}
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const next = new Set(checkedHankyoIds)
                                 if (e.target.checked) next.add(r.id)
                                 else next.delete(r.id)
                                 setCheckedHankyoIds(next)
+                                await supabase.from('hankyo').update({ confirmed: e.target.checked }).eq('id', r.id)
                               }}
                             />
                           </td>
@@ -2133,6 +2411,53 @@ function App() {
         {/* ===== メンバー ===== */}
         {activePage === 'members' && (
           <section className="members-page">
+            {false ? (
+            <div className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>閲覧できるGoogleアカウント</h2>
+                  <p>ここに入っているGoogleアカウントだけ、この管理ツールを開けます。</p>
+                </div>
+              </div>
+
+              {isMasterUser ? (
+                <>
+                  <div className="access-manager-form">
+                    <input
+                      type="email"
+                      placeholder="追加したいGoogleアカウント"
+                      value={allowedAccountForm}
+                      onChange={(e) => setAllowedAccountForm(e.target.value)}
+                    />
+                    <button className="primary" onClick={addAllowedAccount} disabled={allowedAccountSaving}>
+                      {allowedAccountSaving ? '保存中...' : '追加'}
+                    </button>
+                  </div>
+                  <p className="access-manager-note">`trg.yshini@gmail.com` がマスターです。このアカウントだけが追加と削除をできます。</p>
+                </>
+              ) : (
+                <p className="access-manager-note">追加や削除はマスターアカウントだけができます。</p>
+              )}
+
+              {allowedAccountMessage && <p className="access-manager-message">{allowedAccountMessage}</p>}
+
+              <div className="access-account-list">
+                {allowedAccounts.map((account) => (
+                  <div key={account.id} className="access-account-card">
+                    <div>
+                      <strong>{account.email}</strong>
+                      {account.is_master && <span className="auth-master-badge access-master-badge">マスター</span>}
+                    </div>
+                    {isMasterUser && !account.is_master && (
+                      <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
+                        削除
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            ) : null}
 
             {/* 今日のタスク */}
             {import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -3086,6 +3411,50 @@ function App() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {showAllowedAccountsModal && (
+        <div className="modal-overlay" onClick={() => setShowAllowedAccountsModal(false)}>
+          <div className="modal-content access-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">閲覧できるGoogleアカウント</h3>
+              <button className="modal-close" onClick={() => setShowAllowedAccountsModal(false)}>×</button>
+            </div>
+
+            <p className="access-manager-note">ここに入っているGoogleアカウントだけ、この管理ツールを開けます。</p>
+
+            <div className="access-manager-form">
+              <input
+                type="email"
+                placeholder="追加したいGoogleアカウント"
+                value={allowedAccountForm}
+                onChange={(e) => setAllowedAccountForm(e.target.value)}
+              />
+              <button className="primary" onClick={addAllowedAccount} disabled={allowedAccountSaving}>
+                {allowedAccountSaving ? '保存中...' : '追加'}
+              </button>
+            </div>
+
+            <p className="access-manager-note">`trg.yshini@gmail.com` がマスターです。このアカウントだけが追加と削除をできます。</p>
+            {allowedAccountMessage && <p className="access-manager-message">{allowedAccountMessage}</p>}
+
+            <div className="access-account-list">
+              {allowedAccounts.map((account) => (
+                <div key={account.id} className="access-account-card">
+                  <div>
+                    <strong>{account.email}</strong>
+                    {account.is_master && <span className="auth-master-badge access-master-badge">マスター</span>}
+                  </div>
+                  {!account.is_master && (
+                    <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
+                      削除
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
