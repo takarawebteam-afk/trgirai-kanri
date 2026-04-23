@@ -452,9 +452,15 @@ function App() {
   const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
   const [hankyoInlineForm, setHankyoInlineForm] = useState<Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>>(defaultHankyoForm)
   const [hankyoSearch, setHankyoSearch] = useState('')
-  const [hankyoMonthFilter, setHankyoMonthFilter] = useState('all')
-  const [hankyoMediaFilter, setHankyoMediaFilter] = useState('all')
-  const [hankyoStoreFilter, setHankyoStoreFilter] = useState('all')
+  const [hankyoMonthFilters, setHankyoMonthFilters] = useState<string[]>([])
+  const [hankyoAccountFilters, setHankyoAccountFilters] = useState<string[]>([])
+  const [hankyoTriggerFilters, setHankyoTriggerFilters] = useState<string[]>([])
+  const [hankyoMediaFilters, setHankyoMediaFilters] = useState<string[]>([])
+  const [hankyoInquiryTypeFilters, setHankyoInquiryTypeFilters] = useState<string[]>([])
+  const [hankyoContactMethodFilters, setHankyoContactMethodFilters] = useState<string[]>([])
+  const [hankyoMoveInFilters, setHankyoMoveInFilters] = useState<string[]>([])
+  const [hankyoStoreFilters, setHankyoStoreFilters] = useState<string[]>([])
+  const [hankyoOpenFilter, setHankyoOpenFilter] = useState<string | null>(null)
   const [checkedHankyoIds, setCheckedHankyoIds] = useState<Set<string>>(new Set())
   const [showModal, setShowModal] = useState(false)
 
@@ -1326,12 +1332,17 @@ function App() {
   // 反響管理 フィルタリング & ページネーション
   const filteredHankyo = hankyoRecords.filter((r) => {
     if (hankyoSearch && !r.customer_name.includes(hankyoSearch)) return false
-    if (hankyoMonthFilter !== 'all' && r.inquiry_date) {
-      const m = new Date(r.inquiry_date).getMonth() + 1
-      if (String(m) !== hankyoMonthFilter) return false
+    if (hankyoMonthFilters.length > 0 && r.inquiry_date) {
+      const m = String(new Date(r.inquiry_date).getMonth() + 1)
+      if (!hankyoMonthFilters.includes(m)) return false
     }
-    if (hankyoMediaFilter !== 'all' && r.media !== hankyoMediaFilter) return false
-    if (hankyoStoreFilter !== 'all' && r.store !== hankyoStoreFilter) return false
+    if (hankyoAccountFilters.length > 0 && !hankyoAccountFilters.includes(r.account ?? '')) return false
+    if (hankyoTriggerFilters.length > 0 && !hankyoTriggerFilters.includes(r.trigger ?? '')) return false
+    if (hankyoMediaFilters.length > 0 && !hankyoMediaFilters.includes(r.media ?? '')) return false
+    if (hankyoInquiryTypeFilters.length > 0 && !hankyoInquiryTypeFilters.includes(r.inquiry_type ?? '')) return false
+    if (hankyoContactMethodFilters.length > 0 && !hankyoContactMethodFilters.includes(r.contact_method ?? '')) return false
+    if (hankyoMoveInFilters.length > 0 && !hankyoMoveInFilters.includes(r.move_in_timing ?? '')) return false
+    if (hankyoStoreFilters.length > 0 && !hankyoStoreFilters.includes(r.store ?? '')) return false
     return true
   })
 
@@ -2147,27 +2158,62 @@ function App() {
               </div>
 
               {/* 検索・フィルター */}
-              <div className="hankyo-toolbar">
+              <div className="hankyo-toolbar" onClick={() => setHankyoOpenFilter(null)}>
                 <input
                   className="hankyo-search"
                   placeholder="顧客名で検索..."
                   value={hankyoSearch}
                   onChange={(e) => { setHankyoSearch(e.target.value) }}
+                  onClick={(e) => e.stopPropagation()}
                 />
-                <select value={hankyoMonthFilter} onChange={(e) => { setHankyoMonthFilter(e.target.value) }}>
-                  <option value="all">全月</option>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={String(m)}>{m}月</option>
-                  ))}
-                </select>
-                <select value={hankyoMediaFilter} onChange={(e) => { setHankyoMediaFilter(e.target.value) }}>
-                  <option value="all">全媒体</option>
-                  {hankyoMedias.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <select value={hankyoStoreFilter} onChange={(e) => { setHankyoStoreFilter(e.target.value) }}>
-                  <option value="all">全店舗</option>
-                  {hankyoStores.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                {([
+                  { key: 'month', label: '月', selected: hankyoMonthFilters, setSelected: setHankyoMonthFilters, options: Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}月` })) },
+                  { key: 'account', label: 'アカウント', selected: hankyoAccountFilters, setSelected: setHankyoAccountFilters, options: hankyoAccounts.map(v => ({ value: v, label: v })) },
+                  { key: 'trigger', label: 'きっかけ', selected: hankyoTriggerFilters, setSelected: setHankyoTriggerFilters, options: hankyoTriggers.map(v => ({ value: v, label: v })) },
+                  { key: 'media', label: '媒体', selected: hankyoMediaFilters, setSelected: setHankyoMediaFilters, options: hankyoMedias.map(v => ({ value: v, label: v })) },
+                  { key: 'inquiryType', label: '問合内容', selected: hankyoInquiryTypeFilters, setSelected: setHankyoInquiryTypeFilters, options: hankyoInquiryTypes.map(v => ({ value: v, label: v })) },
+                  { key: 'contactMethod', label: '問合手段', selected: hankyoContactMethodFilters, setSelected: setHankyoContactMethodFilters, options: hankyoContactMethods.map(v => ({ value: v, label: v })) },
+                  { key: 'moveIn', label: '入居時期', selected: hankyoMoveInFilters, setSelected: setHankyoMoveInFilters, options: hankyoMoveInTimings.map(v => ({ value: v, label: v })) },
+                  { key: 'store', label: '店舗', selected: hankyoStoreFilters, setSelected: setHankyoStoreFilters, options: hankyoStores.map(v => ({ value: v, label: v })) },
+                ] as { key: string; label: string; selected: string[]; setSelected: React.Dispatch<React.SetStateAction<string[]>>; options: { value: string; label: string }[] }[]).map(({ key, label, selected, setSelected, options }) => (
+                  <div key={key} className="hankyo-multiselect" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className={`hankyo-multiselect-btn${selected.length > 0 ? ' active' : ''}`}
+                      onClick={() => setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)}
+                    >
+                      {selected.length === 0 ? `全${label}` : `${label}(${selected.length})`}
+                      <span className="hankyo-multiselect-arrow">▾</span>
+                    </button>
+                    {hankyoOpenFilter === key && (
+                      <div className="hankyo-multiselect-dropdown">
+                        <label className="hankyo-multiselect-item hankyo-multiselect-all">
+                          <input
+                            type="checkbox"
+                            checked={selected.length === 0}
+                            onChange={() => setSelected([])}
+                          />
+                          すべて
+                        </label>
+                        {options.map(opt => (
+                          <label key={opt.value} className="hankyo-multiselect-item">
+                            <input
+                              type="checkbox"
+                              checked={selected.includes(opt.value)}
+                              onChange={(e) => {
+                                setSelected(prev =>
+                                  e.target.checked
+                                    ? [...prev, opt.value]
+                                    : prev.filter(v => v !== opt.value)
+                                )
+                              }}
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
 
               <div className="table-wrap">

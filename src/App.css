@@ -748,7 +748,8 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 .auth-topbar {
   display: flex;
   justify-content: flex-end;
-  min-height: 18px;
+  min-height: 0;
+  margin-bottom: -14px;
 }
 
 .auth-user-box {
@@ -757,7 +758,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
-  padding: 2px 0;
+  padding: 0;
 }
 
 .header-panel-auth > .auth-user-box {
@@ -769,6 +770,18 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   color: var(--gray-500);
   font-weight: 600;
   line-height: 1;
+}
+
+.auth-master-button {
+  border: 1px solid var(--blue-400);
+  background: var(--blue-100);
+  color: var(--blue-700);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  line-height: 1.2;
+  cursor: pointer;
 }
 
 .auth-master-badge {
@@ -835,6 +848,10 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 
 .access-master-badge {
   margin-left: 8px;
+}
+
+.access-modal-content {
+  max-width: 760px;
 }
 
 .calendar-login-prompt {
@@ -1400,7 +1417,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 }
 
 .hankyo-search {
-  flex: 3;
+  flex: 1.2;
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--gray-200);
@@ -1416,21 +1433,73 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   box-shadow: 0 0 0 3px var(--blue-100);
 }
 
-.hankyo-toolbar select {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
+.hankyo-multiselect {
+  position: relative;
+  flex-shrink: 0;
+}
+.hankyo-multiselect-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-sm);
   font: inherit;
-  font-size: 0.85rem;
-  color: var(--gray-900);
+  font-size: 0.82rem;
+  color: var(--gray-700);
   background: var(--white);
   cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s;
 }
-.hankyo-toolbar select:focus {
-  outline: none;
+.hankyo-multiselect-btn.active {
   border-color: var(--blue-500);
+  color: var(--blue-600);
+  background: #eff6ff;
+}
+.hankyo-multiselect-btn:hover {
+  border-color: var(--gray-400);
+}
+.hankyo-multiselect-arrow {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+.hankyo-multiselect-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  min-width: 140px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px 0;
+}
+.hankyo-multiselect-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hankyo-multiselect-item:hover {
+  background: #f9fafb;
+}
+.hankyo-multiselect-all {
+  border-bottom: 1px solid var(--gray-100);
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+.hankyo-multiselect-item input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--blue-500);
 }
 
 .hankyo-dup-btn {
