@@ -3553,6 +3553,9 @@ function TodayTasksPanel() {
   const [accessToken, setAccessToken] = useState<string | null>(getSavedToken)
   const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
   const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
+  const [minutesMap, setMinutesMap] = useState<Record<string, number>>({})
+  const [minutePopup, setMinutePopup] = useState<{ key: string } | null>(null)
+  const [minuteInput, setMinuteInput] = useState('')
   const [calendarLoading, setCalendarLoading] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -3563,12 +3566,17 @@ function TodayTasksPanel() {
     const fetchChecked = async () => {
       const { data } = await supabase
         .from('checked_events')
-        .select('event_key')
+        .select('event_key, minutes')
         .eq('event_date', today)
       if (data) {
         const map: Record<string, boolean> = {}
-        data.forEach((row: { event_key: string }) => { map[row.event_key] = true })
+        const mmap: Record<string, number> = {}
+        data.forEach((row: { event_key: string; minutes: number | null }) => {
+          map[row.event_key] = true
+          if (row.minutes != null) mmap[row.event_key] = row.minutes
+        })
         setCheckedEvents(map)
+        setMinutesMap(mmap)
       }
     }
     fetchChecked()
@@ -3590,14 +3598,27 @@ function TodayTasksPanel() {
     }, ms)
   }, [])
 
-  const toggleCheck = async (key: string, checked: boolean) => {
-    // 楽観的UI更新
-    setCheckedEvents(prev => checked ? (() => { const n = { ...prev }; delete n[key]; return n })() : { ...prev, [key]: true })
+  const toggleCheck = (key: string, checked: boolean) => {
     if (checked) {
-      await supabase.from('checked_events').delete().eq('event_key', key)
+      setCheckedEvents(prev => { const n = { ...prev }; delete n[key]; return n })
+      setMinutesMap(prev => { const n = { ...prev }; delete n[key]; return n })
+      supabase.from('checked_events').delete().eq('event_key', key)
     } else {
-      await supabase.from('checked_events').upsert({ event_key: key, event_date: today })
+      setMinutePopup({ key })
+      setMinuteInput('')
     }
+  }
+
+  const confirmMinutes = async () => {
+    if (!minutePopup) return
+    const key = minutePopup.key
+    const normalized = minuteInput.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    const parsed = parseInt(normalized, 10)
+    const minsValue = isNaN(parsed) ? 0 : parsed
+    setCheckedEvents(prev => ({ ...prev, [key]: true }))
+    setMinutesMap(prev => ({ ...prev, [key]: minsValue }))
+    setMinutePopup(null)
+    await supabase.from('checked_events').upsert({ event_key: key, event_date: today, minutes: minsValue })
   }
 
   const fetchMemberEvents = useCallback(async (token: string) => {
@@ -3688,6 +3709,30 @@ function TodayTasksPanel() {
 
   return (
     <div className="panel">
+      {minutePopup && (
+        <div className="minute-popup-overlay" onClick={() => setMinutePopup(null)}>
+          <div className="minute-popup" onClick={e => e.stopPropagation()}>
+            <p>所要時間を入力</p>
+            <div className="minute-input-row">
+              <input
+                type="text"
+                inputMode="numeric"
+                className="minute-input"
+                value={minuteInput}
+                onChange={e => setMinuteInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmMinutes() }}
+                autoFocus
+                placeholder="例：30"
+              />
+              <span className="minute-unit">分</span>
+            </div>
+            <div className="minute-popup-buttons">
+              <button className="primary" onClick={confirmMinutes}>確定</button>
+              <button className="secondary" onClick={() => setMinutePopup(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="panel-heading">
         <div>
           <h2>今日のタスク</h2>
@@ -3729,6 +3774,9 @@ function TodayTasksPanel() {
                           <span className="event-checkbox">{checked ? '✓' : ''}</span>
                           <span className="event-time">{time}</span>
                           <span className="event-title" title={ev.summary}>{ev.summary}</span>
+                          {checked && minutesMap[key] != null && (
+                            <span className="event-minutes">{minutesMap[key]}分</span>
+                          )}
                         </li>
                       )
                     })}
