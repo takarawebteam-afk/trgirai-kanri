@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
+﻿import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
 import './App.css'
 import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
@@ -13,7 +14,7 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
 
 type StockRecord = {
   id: string
@@ -93,6 +94,63 @@ type DMRecord = {
   created_at?: string
 }
 
+type SnsPropertyPlatform = 'tiktok' | 'instagram' | 'youtube'
+
+type TiktokPropertyRecord = {
+  id: string
+  created_at?: string
+  memo: string
+  wp_registered: boolean
+  aos_registered: boolean
+  post_date: string
+  property_number: string
+  floor_plan: string
+  rent: string
+  area: string
+  nearest_station: string
+  document_url: string
+  property_name: string
+  room_number: string
+  address: string
+  management_company: string
+  contact: string
+}
+
+type InstagramPropertyRecord = {
+  id: string
+  created_at?: string
+  memo: string
+  wp_registered: boolean
+  category: string
+  post_date: string
+  property_number: string
+  floor_plan: string
+  rent: string
+  area: string
+  nearest_station: string
+  document_url: string
+  property_name: string
+  room_number: string
+  address: string
+  management_company: string
+  contact: string
+}
+
+type YoutubePropertyRecord = {
+  id: string
+  created_at?: string
+  memo: string
+  wp_registered: boolean
+  post_date: string
+  property_number: string
+  document_url: string
+  property_name: string
+  room_number: string
+  address: string
+  management_company: string
+  contact: string
+}
+
 type TaskItem = {
   id: string
   created_at?: string
@@ -165,7 +223,64 @@ const TEAM_MEMBERS = [
   { name: 'WEBチーム', calendarId: 'takara.webteam@gmail.com', color: '#0ea5e9' },
 ]
 
+const TEAM_MEMBER_OPTIONS = TEAM_MEMBERS.filter((member) => member.name !== 'WEBチーム')
+const MEMBER_NAME_BY_CALENDAR_ID = Object.fromEntries(TEAM_MEMBERS.map((member) => [member.calendarId, member.name])) as Record<string, string>
+
+const DEFAULT_TASK_REPORT_CATEGORIES = [
+  {
+    id: 'default-sns-post',
+    name: 'SNS投稿・予約投稿',
+    keywords: 'sns\n投稿\nyoutube\ntiktok\ninstagram\nthreads\n予約',
+    sort_order: 0,
+  },
+  {
+    id: 'default-analysis',
+    name: '分析・改善',
+    keywords: '数値入力\n数値,入力\nアカウント,数値\n分析\n改善\nレポート',
+    sort_order: 1,
+  },
+  {
+    id: 'default-other',
+    name: 'その他',
+    keywords: '',
+    sort_order: 999,
+  },
+] as const
+
+const TASK_REPORT_CHART_COLORS = ['#005AFF', '#03AF7A', '#F6AA00', '#4DC4FF', '#FF4B00', '#FFF100', '#990099', '#84919E', '#000000'] as const
+
 type CalendarEvent = { id: string; summary: string; start: string }
+
+type TaskReportRow = {
+  id: string
+  event_date: string
+  member_name: string
+  task_name: string
+  minutes: number
+  source: 'Googleカレンダー' | '追加タスク'
+  category: string
+  source_key: string
+  source_type: 'checked_events' | 'manual_tasks'
+}
+
+type TaskReportCategoryMaster = {
+  id: string
+  name: string
+  keywords: string
+  sort_order: number
+  created_at?: string
+}
+
+type TaskReportCategorySummary = {
+  category: string
+  detail: string
+  memberCounts: Record<string, number>
+  memberMinutes: Record<string, number>
+  totalCount: number
+  totalMinutes: number
+  averageMinutes: number
+  isCategoryTotal: boolean
+}
 
 type WeeklyScheduleItem = {
   id: string
@@ -265,6 +380,24 @@ const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
   sns: 'TikTok',
   area: '',
   property_number: '',
+}
+
+const defaultTiktokPropertyForm: Omit<TiktokPropertyRecord, 'id' | 'created_at'> = {
+  memo: '', wp_registered: false, aos_registered: false, post_date: '', property_number: '',
+  floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
+  property_name: '', room_number: '', address: '', management_company: '', contact: ''
+}
+
+const defaultInstagramPropertyForm: Omit<InstagramPropertyRecord, 'id' | 'created_at'> = {
+  memo: '', wp_registered: false, category: '', post_date: '', property_number: '',
+  floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
+  property_name: '', room_number: '', address: '', management_company: '', contact: ''
+}
+
+const defaultYoutubePropertyForm: Omit<YoutubePropertyRecord, 'id' | 'created_at'> = {
+  memo: '', wp_registered: false, post_date: '', property_number: '',
+  document_url: '', property_name: '', room_number: '', address: '',
+  management_company: '', contact: ''
 }
 
 const defaultStockForm = { deadline: '', required_count: 1, label: '', note: '', achieved_count: 0 }
@@ -473,6 +606,16 @@ function App() {
   const [dmAccountFilter, setDmAccountFilter] = useState('all')
   const [dmPage, setDmPage] = useState(1)
   const [dmAreaLoading, setDmAreaLoading] = useState(false)
+  const [activeSnsPropertyPlatform, setActiveSnsPropertyPlatform] = useState<SnsPropertyPlatform>('tiktok')
+  const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
+  const [tiktokInlineId, setTiktokInlineId] = useState<string | null>(null)
+  const [tiktokInlineForm, setTiktokInlineForm] = useState<Omit<TiktokPropertyRecord, 'id' | 'created_at'>>(defaultTiktokPropertyForm)
+  const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
+  const [instagramInlineId, setInstagramInlineId] = useState<string | null>(null)
+  const [instagramInlineForm, setInstagramInlineForm] = useState<Omit<InstagramPropertyRecord, 'id' | 'created_at'>>(defaultInstagramPropertyForm)
+  const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
+  const [youtubeInlineId, setYoutubeInlineId] = useState<string | null>(null)
+  const [youtubeInlineForm, setYoutubeInlineForm] = useState<Omit<YoutubePropertyRecord, 'id' | 'created_at'>>(defaultYoutubePropertyForm)
 
   // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
@@ -548,6 +691,21 @@ function App() {
     const { data } = await supabase.from('dm').select('*').order('date', { ascending: false }).order('created_at', { ascending: false })
     if (data) setDmRecords(data as DMRecord[])
   }
+
+  const fetchTiktokProperties = useCallback(async () => {
+    const { data } = await supabase.from('sns_tiktok_properties').select('*').order('property_number', { ascending: true })
+    if (data) setTiktokProperties(data as TiktokPropertyRecord[])
+  }, [])
+
+  const fetchInstagramProperties = useCallback(async () => {
+    const { data } = await supabase.from('sns_instagram_properties').select('*').order('property_number', { ascending: true })
+    if (data) setInstagramProperties(data as InstagramPropertyRecord[])
+  }, [])
+
+  const fetchYoutubeProperties = useCallback(async () => {
+    const { data } = await supabase.from('sns_youtube_properties').select('*').order('property_number', { ascending: true })
+    if (data) setYoutubeProperties(data as YoutubePropertyRecord[])
+  }, [])
 
   async function fetchStock() {
     const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
@@ -754,6 +912,9 @@ function App() {
     fetchMembers()
     fetchHankyo()
     fetchDm()
+    fetchTiktokProperties()
+    fetchInstagramProperties()
+    fetchYoutubeProperties()
     fetchStock()
     fetchBusho()
     fetchJishaShukyaku()
@@ -1172,6 +1333,57 @@ function App() {
     fetchDm()
   }
 
+  const startTiktokInline = (r: TiktokPropertyRecord) => {
+    setTiktokInlineId(r.id)
+    setTiktokInlineForm({ memo: r.memo, wp_registered: r.wp_registered, aos_registered: r.aos_registered, post_date: r.post_date, property_number: r.property_number, floor_plan: r.floor_plan, rent: r.rent, area: r.area, nearest_station: r.nearest_station, document_url: r.document_url, property_name: r.property_name, room_number: r.room_number, address: r.address, management_company: r.management_company, contact: r.contact })
+  }
+
+  const saveTiktokInline = async () => {
+    if (!tiktokInlineId) return
+    await supabase.from('sns_tiktok_properties').update(tiktokInlineForm).eq('id', tiktokInlineId)
+    setTiktokInlineId(null)
+    fetchTiktokProperties()
+  }
+
+  const addTiktokProperty = async () => {
+    await supabase.from('sns_tiktok_properties').insert([defaultTiktokPropertyForm])
+    fetchTiktokProperties()
+  }
+
+  const startInstagramInline = (r: InstagramPropertyRecord) => {
+    setInstagramInlineId(r.id)
+    setInstagramInlineForm({ memo: r.memo, wp_registered: r.wp_registered, category: r.category, post_date: r.post_date, property_number: r.property_number, floor_plan: r.floor_plan, rent: r.rent, area: r.area, nearest_station: r.nearest_station, document_url: r.document_url, property_name: r.property_name, room_number: r.room_number, address: r.address, management_company: r.management_company, contact: r.contact })
+  }
+
+  const saveInstagramInline = async () => {
+    if (!instagramInlineId) return
+    await supabase.from('sns_instagram_properties').update(instagramInlineForm).eq('id', instagramInlineId)
+    setInstagramInlineId(null)
+    fetchInstagramProperties()
+  }
+
+  const addInstagramProperty = async () => {
+    await supabase.from('sns_instagram_properties').insert([defaultInstagramPropertyForm])
+    fetchInstagramProperties()
+  }
+
+  const startYoutubeInline = (r: YoutubePropertyRecord) => {
+    setYoutubeInlineId(r.id)
+    setYoutubeInlineForm({ memo: r.memo, wp_registered: r.wp_registered, post_date: r.post_date, property_number: r.property_number, document_url: r.document_url, property_name: r.property_name, room_number: r.room_number, address: r.address, management_company: r.management_company, contact: r.contact })
+  }
+
+  const saveYoutubeInline = async () => {
+    if (!youtubeInlineId) return
+    await supabase.from('sns_youtube_properties').update(youtubeInlineForm).eq('id', youtubeInlineId)
+    setYoutubeInlineId(null)
+    fetchYoutubeProperties()
+  }
+
+  const addYoutubeProperty = async () => {
+    await supabase.from('sns_youtube_properties').insert([defaultYoutubePropertyForm])
+    fetchYoutubeProperties()
+  }
+
   // ===== ストック管理ハンドラー =====
   const handleStockSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1545,18 +1757,20 @@ function App() {
 
       <nav className="tab-nav" aria-label="主要メニュー">
         <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => { setActivePage('dashboard'); setShowModal(false) }}>ダッシュボード</button>
+        <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
         <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => { setActivePage('tasks'); setShowModal(false) }}>案件管理</button>
         <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => { setActivePage('taskmanagement'); setShowModal(false) }}>タスク管理</button>
-        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
         <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管理</button>
         <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管理</button>
         <button className={activePage === 'dm' ? 'active' : ''} onClick={() => { setActivePage('dm'); setShowModal(false) }}>DM管理</button>
-        <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック</button>
-        <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>ルール・マニュアル</button>
-        <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>メンバー</button>
-        <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
         <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
+        <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>当日業務管理</button>
+        <button className={activePage === 'taskreport' ? 'active' : ''} onClick={() => { setActivePage('taskreport'); setShowModal(false) }}>業務棚卸し</button>
         <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
+        <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック管理</button>
+        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
+        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false) }}>SNS物件管理</button>
+        <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>Note</button>
       </nav>
 
       <main className="page-content">
@@ -2103,6 +2317,273 @@ function App() {
           </>
         )}
 
+        {activePage === 'snsproperty' && (
+          <>
+            <div className="sns-property-subtabs">
+              <button
+                className={activeSnsPropertyPlatform === 'tiktok' ? 'active' : ''}
+                onClick={() => setActiveSnsPropertyPlatform('tiktok')}
+              >Karilun｜TikTok</button>
+              <button
+                className={activeSnsPropertyPlatform === 'instagram' ? 'active' : ''}
+                onClick={() => setActiveSnsPropertyPlatform('instagram')}
+              >Karilun｜Instagram</button>
+              <button
+                className={activeSnsPropertyPlatform === 'youtube' ? 'active' : ''}
+                onClick={() => setActiveSnsPropertyPlatform('youtube')}
+              >Karilun｜YouTube</button>
+            </div>
+
+            {activeSnsPropertyPlatform === 'tiktok' && (
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div><h2>Karilun｜TikTok 物件管理</h2><p>行をクリックして直接編集</p></div>
+                  <button className="primary" onClick={addTiktokProperty}>＋ 行を追加</button>
+                </div>
+                <div className="table-wrap">
+                  <table className="compact-list-table sns-property-table">
+                    <thead>
+                      <tr>
+                        <th>メモ</th><th>WP登録</th><th>AOS登録</th><th>投稿日</th>
+                        <th>物件番号</th><th>間取り</th><th>家賃</th><th>エリア</th>
+                        <th>最寄り駅</th><th>資料</th><th>物件名</th><th>号室</th>
+                        <th>住所</th><th>管理会社</th><th>連絡先</th><th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tiktokProperties.length === 0 && (
+                        <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      )}
+                      {tiktokProperties.map((r) => {
+                        const isEditing = tiktokInlineId === r.id
+                        const f = tiktokInlineForm
+                        return (
+                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startTiktokInline(r) }}>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setTiktokInlineForm({ ...f, memo: e.target.value })} /> : <span className="cell-truncate" title={r.memo}>{r.memo}</span>}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setTiktokInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input type="checkbox" checked={f.aos_registered} onChange={(e) => setTiktokInlineForm({ ...f, aos_registered: e.target.checked })} /> : (r.aos_registered ? '✓' : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" type="date" value={f.post_date} onChange={(e) => setTiktokInlineForm({ ...f, post_date: e.target.value })} /> : r.post_date}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setTiktokInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.floor_plan} onChange={(e) => setTiktokInlineForm({ ...f, floor_plan: e.target.value })} /> : r.floor_plan}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.rent} onChange={(e) => setTiktokInlineForm({ ...f, rent: e.target.value })} /> : r.rent}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.area} onChange={(e) => setTiktokInlineForm({ ...f, area: e.target.value })} /> : r.area}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.nearest_station} onChange={(e) => setTiktokInlineForm({ ...f, nearest_station: e.target.value })} /> : r.nearest_station}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setTiktokInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer">資料</a> : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setTiktokInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.room_number} onChange={(e) => setTiktokInlineForm({ ...f, room_number: e.target.value })} /> : r.room_number}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.address} onChange={(e) => setTiktokInlineForm({ ...f, address: e.target.value })} /> : <span className="cell-truncate" title={r.address}>{r.address}</span>}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.management_company} onChange={(e) => setTiktokInlineForm({ ...f, management_company: e.target.value })} /> : r.management_company}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.contact} onChange={(e) => setTiktokInlineForm({ ...f, contact: e.target.value })} /> : r.contact}
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div className="row-actions">
+                                {isEditing ? (
+                                  <><button className="primary" onClick={saveTiktokInline}>保存</button><button className="secondary" onClick={() => setTiktokInlineId(null)}>×</button></>
+                                ) : (
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('sns_tiktok_properties', r.id, fetchTiktokProperties, 'このレコードを削除しますか？')}>削除</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeSnsPropertyPlatform === 'instagram' && (
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div><h2>Karilun｜Instagram 物件管理</h2><p>行をクリックして直接編集</p></div>
+                  <button className="primary" onClick={addInstagramProperty}>＋ 行を追加</button>
+                </div>
+                <div className="table-wrap">
+                  <table className="compact-list-table sns-property-table">
+                    <thead>
+                      <tr>
+                        <th>メモ</th><th>WP登録</th><th>種別</th><th>投稿日</th>
+                        <th>物件番号</th><th>間取り</th><th>家賃</th><th>エリア</th>
+                        <th>最寄り駅</th><th>資料</th><th>物件名</th><th>号室</th>
+                        <th>住所</th><th>管理会社</th><th>連絡先</th><th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {instagramProperties.length === 0 && (
+                        <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      )}
+                      {instagramProperties.map((r) => {
+                        const isEditing = instagramInlineId === r.id
+                        const f = instagramInlineForm
+                        return (
+                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startInstagramInline(r) }}>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setInstagramInlineForm({ ...f, memo: e.target.value })} /> : <span className="cell-truncate" title={r.memo}>{r.memo}</span>}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setInstagramInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.category} onChange={(e) => setInstagramInlineForm({ ...f, category: e.target.value })} /> : r.category}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" type="date" value={f.post_date} onChange={(e) => setInstagramInlineForm({ ...f, post_date: e.target.value })} /> : r.post_date}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setInstagramInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.floor_plan} onChange={(e) => setInstagramInlineForm({ ...f, floor_plan: e.target.value })} /> : r.floor_plan}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.rent} onChange={(e) => setInstagramInlineForm({ ...f, rent: e.target.value })} /> : r.rent}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.area} onChange={(e) => setInstagramInlineForm({ ...f, area: e.target.value })} /> : r.area}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.nearest_station} onChange={(e) => setInstagramInlineForm({ ...f, nearest_station: e.target.value })} /> : r.nearest_station}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setInstagramInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer">資料</a> : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setInstagramInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.room_number} onChange={(e) => setInstagramInlineForm({ ...f, room_number: e.target.value })} /> : r.room_number}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.address} onChange={(e) => setInstagramInlineForm({ ...f, address: e.target.value })} /> : <span className="cell-truncate" title={r.address}>{r.address}</span>}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.management_company} onChange={(e) => setInstagramInlineForm({ ...f, management_company: e.target.value })} /> : r.management_company}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.contact} onChange={(e) => setInstagramInlineForm({ ...f, contact: e.target.value })} /> : r.contact}
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div className="row-actions">
+                                {isEditing ? (
+                                  <><button className="primary" onClick={saveInstagramInline}>保存</button><button className="secondary" onClick={() => setInstagramInlineId(null)}>×</button></>
+                                ) : (
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('sns_instagram_properties', r.id, fetchInstagramProperties, 'このレコードを削除しますか？')}>削除</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeSnsPropertyPlatform === 'youtube' && (
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div><h2>Karilun｜YouTube 物件管理</h2><p>行をクリックして直接編集</p></div>
+                  <button className="primary" onClick={addYoutubeProperty}>＋ 行を追加</button>
+                </div>
+                <div className="table-wrap">
+                  <table className="compact-list-table sns-property-table">
+                    <thead>
+                      <tr>
+                        <th>メモ</th><th>WP登録</th><th>投稿日</th><th>物件番号</th>
+                        <th>資料</th><th>物件名</th><th>号室</th>
+                        <th>住所</th><th>管理会社</th><th>連絡先</th><th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {youtubeProperties.length === 0 && (
+                        <tr><td colSpan={11} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      )}
+                      {youtubeProperties.map((r) => {
+                        const isEditing = youtubeInlineId === r.id
+                        const f = youtubeInlineForm
+                        return (
+                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startYoutubeInline(r) }}>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setYoutubeInlineForm({ ...f, memo: e.target.value })} /> : <span className="cell-truncate" title={r.memo}>{r.memo}</span>}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setYoutubeInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" type="date" value={f.post_date} onChange={(e) => setYoutubeInlineForm({ ...f, post_date: e.target.value })} /> : r.post_date}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setYoutubeInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setYoutubeInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer">資料</a> : '')}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setYoutubeInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.room_number} onChange={(e) => setYoutubeInlineForm({ ...f, room_number: e.target.value })} /> : r.room_number}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.address} onChange={(e) => setYoutubeInlineForm({ ...f, address: e.target.value })} /> : <span className="cell-truncate" title={r.address}>{r.address}</span>}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.management_company} onChange={(e) => setYoutubeInlineForm({ ...f, management_company: e.target.value })} /> : r.management_company}
+                            </td>
+                            <td onClick={(e) => isEditing && e.stopPropagation()}>
+                              {isEditing ? <input className="inline-input" value={f.contact} onChange={(e) => setYoutubeInlineForm({ ...f, contact: e.target.value })} /> : r.contact}
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div className="row-actions">
+                                {isEditing ? (
+                                  <><button className="primary" onClick={saveYoutubeInline}>保存</button><button className="secondary" onClick={() => setYoutubeInlineId(null)}>×</button></>
+                                ) : (
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('sns_youtube_properties', r.id, fetchYoutubeProperties, 'このレコードを削除しますか？')}>削除</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </>
+        )}
+
         {/* ===== 採用管理 ===== */}
         {activePage === 'recruitment' && (
           <>
@@ -2517,37 +2998,16 @@ function App() {
             </div>
             ) : null}
 
-            {/* 今日のタスク */}
+            {/* 今日の業務一覧 */}
             {import.meta.env.VITE_GOOGLE_CLIENT_ID
               ? <TodayTasksPanel />
               : (
                 <div className="panel">
-                  <div className="panel-heading"><div><h2>今日のタスク</h2></div></div>
+                  <div className="panel-heading"><div><h2>今日の業務一覧</h2></div></div>
                   <div className="calendar-login-prompt"><p>Google Calendar連携を有効にするにはVercelに環境変数を設定してください。</p></div>
                 </div>
               )
             }
-
-            {/* カレンダー埋め込み */}
-            <div className="panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>チームカレンダー</h2>
-                  <p>カレンダー上で直接イベントの追加・編集が可能です。</p>
-                </div>
-              </div>
-              <div className="calendar-wrap">
-                <iframe
-                  src="https://calendar.google.com/calendar/embed?src=takara.webteam%40gmail.com&src=trg.yshini%40gmail.com&src=izumiyurina2322%40gmail.com&src=takarabaito3%40gmail.com&src=takarabaito1%40gmail.com&ctz=Asia%2FTokyo"
-                  style={{ border: 0 }}
-                  width="100%"
-                  height="640"
-                  frameBorder={0}
-                  scrolling="no"
-                  title="チームカレンダー"
-                />
-              </div>
-            </div>
           </section>
         )}
 
@@ -3088,11 +3548,12 @@ function App() {
             </section>
           )
         })()}
+        {activePage === 'taskreport' && <TaskReportPanel />}
         {activePage === 'progress' && <ProgressPage />}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'progress' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && (
         <button
           className="fab"
           onClick={() => setShowModal(true)}
@@ -3104,7 +3565,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'progress' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div className="modal-content">
             <div className="modal-header">
@@ -3549,40 +4010,991 @@ function clearToken() {
   } catch { /* ignore */ }
 }
 
-function TodayTasksPanel() {
-  const [accessToken, setAccessToken] = useState<string | null>(getSavedToken)
-  const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
-  const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
-  const [minutesMap, setMinutesMap] = useState<Record<string, number>>({})
-  const [minutePopup, setMinutePopup] = useState<{ key: string } | null>(null)
-  const [minuteInput, setMinuteInput] = useState('')
-  const [calendarLoading, setCalendarLoading] = useState(false)
-  const today = new Date().toISOString().slice(0, 10)
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const silentLoginFnRef = useRef<(() => void) | null>(null)
+function normalizeTaskReportText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, '')
+}
 
-  // Supabaseから今日のチェック状態を読み込む（3秒ごとにポーリングして他PCと同期）
-  useEffect(() => {
-    const fetchChecked = async () => {
-      const { data } = await supabase
+function sortTaskReportCategories(categories: TaskReportCategoryMaster[]) {
+  return [...categories].sort((a, b) => {
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+    return a.name.localeCompare(b.name, 'ja')
+  })
+}
+
+function getTaskReportFallbackCategory(categories: TaskReportCategoryMaster[]) {
+  return sortTaskReportCategories(categories).find((category) => category.name === 'その他')?.name
+    || sortTaskReportCategories(categories)[0]?.name
+    || 'その他'
+}
+
+function buildTaskReportCategoryRules(categories: TaskReportCategoryMaster[]) {
+  return sortTaskReportCategories(categories).flatMap((category) =>
+    category.keywords
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => ({
+        category: category.name,
+        keywords: line.split(/[、,]/).map((keyword) => keyword.trim()).filter(Boolean),
+      })),
+  )
+}
+
+function getTaskReportCategoryOptions(categories: TaskReportCategoryMaster[]) {
+  const options = sortTaskReportCategories(categories).map((category) => category.name)
+  return options.length > 0 ? options : ['その他']
+}
+
+function classifyTaskReportName(taskName: string, categories: TaskReportCategoryMaster[] = [...DEFAULT_TASK_REPORT_CATEGORIES]) {
+  const normalized = normalizeTaskReportText(taskName)
+  const rules = buildTaskReportCategoryRules(categories)
+
+  for (const rule of rules) {
+    if (rule.keywords.some((keyword) => normalized.includes(normalizeTaskReportText(keyword)))) {
+      return { category: rule.category }
+    }
+  }
+
+  return { category: getTaskReportFallbackCategory(categories) }
+}
+
+function formatTaskReportHours(minutes: number) {
+  return (minutes / 60).toFixed(1).replace(/\.0$/, '')
+}
+
+function formatTaskReportTime(minutes: number) {
+  const safeMinutes = Math.max(0, minutes)
+  const hours = Math.floor(safeMinutes / 60)
+  const remainMinutes = safeMinutes % 60
+  if (hours === 0) return `${remainMinutes}分`
+  if (remainMinutes === 0) return `${hours}時間`
+  return `${hours}時間${remainMinutes}分`
+}
+
+function formatTaskReportChartAxis(value: number, metric: 'count' | 'minutes') {
+  if (metric === 'count') return `${value}件`
+  return `${Math.round((value / 60) * 10) / 10}h`
+}
+
+function TaskReportPanel() {
+  const today = new Date().toISOString().slice(0, 10)
+  const firstDayOfMonth = `${today.slice(0, 8)}01`
+  const [startDate, setStartDate] = useState(firstDayOfMonth)
+  const [endDate, setEndDate] = useState(today)
+  const [rows, setRows] = useState<TaskReportRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([])
+  const [chartMetric, setChartMetric] = useState<'count' | 'minutes'>('count')
+  const [savingRowId, setSavingRowId] = useState('')
+  const [listMonth, setListMonth] = useState(today.slice(0, 7))
+  const [listDate, setListDate] = useState(today)
+  const [categoryMasters, setCategoryMasters] = useState<TaskReportCategoryMaster[]>([...DEFAULT_TASK_REPORT_CATEGORIES])
+  const [categoryMastersReady, setCategoryMastersReady] = useState(false)
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [categoryModalLoading, setCategoryModalLoading] = useState(false)
+  const [categoryModalSaving, setCategoryModalSaving] = useState(false)
+  const [categoryModalError, setCategoryModalError] = useState('')
+  const [categoryDraft, setCategoryDraft] = useState({ id: '', name: '', keywords: '' })
+  const categoryOptions = getTaskReportCategoryOptions(categoryMasters)
+
+  const loadCategoryMasters = useCallback(async () => {
+    setCategoryModalLoading(true)
+
+    const { data, error: categoriesError } = await supabase
+      .from('task_report_categories')
+      .select('id, name, keywords, sort_order, created_at')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (categoriesError) {
+      setCategoryMasters([...DEFAULT_TASK_REPORT_CATEGORIES])
+      setCategoryModalError(`カテゴリ設定の読み込みに失敗しました: ${categoriesError.message}`)
+      setCategoryModalLoading(false)
+      setCategoryMastersReady(true)
+      return
+    }
+
+    const nextCategories = (data && data.length > 0 ? data : [...DEFAULT_TASK_REPORT_CATEGORIES]) as TaskReportCategoryMaster[]
+    setCategoryMasters(sortTaskReportCategories(nextCategories))
+    setCategoryModalError('')
+    setCategoryModalLoading(false)
+    setCategoryMastersReady(true)
+  }, [])
+
+  const fetchReport = useCallback(async () => {
+    if (!startDate || !endDate) {
+      setError('開始日と終了日を入れてください。')
+      return
+    }
+    if (startDate > endDate) {
+      setError('開始日は終了日より前にしてください。')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    const [calendarResult, manualResult] = await Promise.all([
+      supabase
         .from('checked_events')
-        .select('event_key, minutes')
-        .eq('event_date', today)
-      if (data) {
-        const map: Record<string, boolean> = {}
-        const mmap: Record<string, number> = {}
-        data.forEach((row: { event_key: string; minutes: number | null }) => {
-          map[row.event_key] = true
-          if (row.minutes != null) mmap[row.event_key] = row.minutes
-        })
-        setCheckedEvents(map)
-        setMinutesMap(mmap)
+        .select('event_key, event_date, minutes, task_name, member_calendar_id, member_name, category')
+        .gte('event_date', startDate)
+        .lte('event_date', endDate)
+        .not('task_name', 'is', null),
+      supabase
+        .from('manual_tasks')
+        .select('id, event_date, member_calendar_id, task_name, minutes, checked, category')
+        .eq('checked', true)
+        .gte('event_date', startDate)
+        .lte('event_date', endDate),
+    ])
+
+    if (calendarResult.error || manualResult.error) {
+      setError(`読み込みに失敗しました: ${calendarResult.error?.message || manualResult.error?.message}`)
+      setRows([])
+      setLoading(false)
+      return
+    }
+
+    const calendarRows = (calendarResult.data || [])
+      .filter((row) => row.member_calendar_id && MEMBER_NAME_BY_CALENDAR_ID[row.member_calendar_id])
+      .map((row) => {
+        const resolvedCategory = row.category || classifyTaskReportName(row.task_name || '', categoryMasters).category
+        return {
+          id: `calendar-${row.event_key}`,
+          event_date: row.event_date,
+          member_name: row.member_name || MEMBER_NAME_BY_CALENDAR_ID[row.member_calendar_id] || '未設定',
+          task_name: row.task_name || 'タイトルなし',
+          minutes: typeof row.minutes === 'number' ? row.minutes : 0,
+          source: 'Googleカレンダー' as const,
+          category: resolvedCategory,
+          source_key: row.event_key,
+          source_type: 'checked_events' as const,
+        }
+      })
+
+    const manualRows = (manualResult.data || [])
+      .filter((row) => row.member_calendar_id && MEMBER_NAME_BY_CALENDAR_ID[row.member_calendar_id])
+      .map((row) => {
+        const resolvedCategory = row.category || classifyTaskReportName(row.task_name || '', categoryMasters).category
+        return {
+          id: `manual-${row.id}`,
+          event_date: row.event_date,
+          member_name: MEMBER_NAME_BY_CALENDAR_ID[row.member_calendar_id] || '未設定',
+          task_name: row.task_name || 'タイトルなし',
+          minutes: typeof row.minutes === 'number' ? row.minutes : 0,
+          source: '追加タスク' as const,
+          category: resolvedCategory,
+          source_key: row.id,
+          source_type: 'manual_tasks' as const,
+        }
+      })
+
+    const mergedRows = [...calendarRows, ...manualRows].sort((a, b) => {
+      if (a.event_date === b.event_date) return a.member_name.localeCompare(b.member_name, 'ja')
+      return a.event_date < b.event_date ? 1 : -1
+    })
+
+    setRows(mergedRows)
+    void Promise.all([
+      ...(calendarResult.data || [])
+        .filter((row) => !row.category && row.task_name)
+        .map((row) =>
+          supabase
+            .from('checked_events')
+            .update({ category: classifyTaskReportName(row.task_name || '', categoryMasters).category })
+            .eq('event_key', row.event_key)
+            .eq('event_date', row.event_date),
+        ),
+      ...(manualResult.data || [])
+        .filter((row) => !row.category && row.task_name)
+        .map((row) =>
+          supabase
+            .from('manual_tasks')
+            .update({ category: classifyTaskReportName(row.task_name || '', categoryMasters).category })
+            .eq('id', row.id),
+        ),
+    ])
+    setLoading(false)
+  }, [categoryMasters, endDate, startDate])
+
+  useEffect(() => {
+    loadCategoryMasters()
+  }, [loadCategoryMasters])
+
+  useEffect(() => {
+    if (!categoryMastersReady) return
+    fetchReport()
+  }, [categoryMastersReady, fetchReport])
+
+  const memberNames = TEAM_MEMBER_OPTIONS.map((member) => member.name)
+  const totalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0)
+  const perMember = TEAM_MEMBER_OPTIONS.map((member) => {
+    const memberRows = rows.filter((row) => row.member_name === member.name)
+    const minutes = memberRows.reduce((sum, row) => sum + row.minutes, 0)
+    return {
+      name: member.name,
+      count: memberRows.length,
+      minutes,
+      averageMinutes: memberRows.length > 0 ? Math.round(minutes / memberRows.length) : 0,
+    }
+  })
+
+  const summaryCards = [
+    {
+      name: 'WEBチーム全体',
+      count: rows.length,
+      minutes: totalMinutes,
+      averageMinutes: rows.length > 0 ? Math.round(totalMinutes / rows.length) : 0,
+      tone: 'total',
+    },
+    ...perMember.map((member, index) => ({
+      ...member,
+      tone: `member-${index}`,
+    })),
+  ]
+
+  const createEmptyMemberMap = () =>
+    Object.fromEntries(memberNames.map((name) => [name, 0])) as Record<string, number>
+
+  const categoryMap = new Map<
+    string,
+    {
+      totals: Omit<TaskReportCategorySummary, 'category' | 'detail' | 'isCategoryTotal'>
+      details: Map<string, Omit<TaskReportCategorySummary, 'category' | 'detail' | 'isCategoryTotal'>>
+    }
+  >()
+
+  rows.forEach((row) => {
+    const category = row.category || classifyTaskReportName(row.task_name, categoryMasters).category
+    const detail = row.task_name.trim() || 'タイトルなし'
+
+    if (!categoryMap.has(category)) {
+      categoryMap.set(category, {
+        totals: {
+          memberCounts: createEmptyMemberMap(),
+          memberMinutes: createEmptyMemberMap(),
+          totalCount: 0,
+          totalMinutes: 0,
+          averageMinutes: 0,
+        },
+        details: new Map(),
+      })
+    }
+
+    const categoryEntry = categoryMap.get(category)!
+
+    if (!categoryEntry.details.has(detail)) {
+      categoryEntry.details.set(detail, {
+        memberCounts: createEmptyMemberMap(),
+        memberMinutes: createEmptyMemberMap(),
+        totalCount: 0,
+        totalMinutes: 0,
+        averageMinutes: 0,
+      })
+    }
+
+    const totalTarget = categoryEntry.totals
+    totalTarget.memberCounts[row.member_name] = (totalTarget.memberCounts[row.member_name] || 0) + 1
+    totalTarget.memberMinutes[row.member_name] = (totalTarget.memberMinutes[row.member_name] || 0) + row.minutes
+    totalTarget.totalCount += 1
+    totalTarget.totalMinutes += row.minutes
+    totalTarget.averageMinutes = totalTarget.totalCount > 0 ? Math.round(totalTarget.totalMinutes / totalTarget.totalCount) : 0
+
+    const detailTarget = categoryEntry.details.get(detail)!
+    detailTarget.memberCounts[row.member_name] = (detailTarget.memberCounts[row.member_name] || 0) + 1
+    detailTarget.memberMinutes[row.member_name] = (detailTarget.memberMinutes[row.member_name] || 0) + row.minutes
+    detailTarget.totalCount += 1
+    detailTarget.totalMinutes += row.minutes
+    detailTarget.averageMinutes = detailTarget.totalCount > 0 ? Math.round(detailTarget.totalMinutes / detailTarget.totalCount) : 0
+  })
+
+  const categorySections: Array<{
+    category: string
+    total: TaskReportCategorySummary
+    details: TaskReportCategorySummary[]
+  }> = []
+
+  const categoryOrder = [
+    ...categoryOptions,
+    ...Array.from(categoryMap.keys()).filter((category) => !categoryOptions.includes(category)),
+  ]
+
+  categoryOrder.forEach((category) => {
+    const categoryEntry = categoryMap.get(category)
+    if (!categoryEntry) return
+
+    categorySections.push({
+      category,
+      total: {
+        category,
+        detail: category,
+        ...categoryEntry.totals,
+        isCategoryTotal: true,
+      },
+      details: Array.from(categoryEntry.details.entries())
+        .sort((a, b) => b[1].totalCount - a[1].totalCount || b[1].totalMinutes - a[1].totalMinutes)
+        .map(([detail, summary]) => ({
+          category,
+          detail,
+          ...summary,
+          isCategoryTotal: false,
+        })),
+    })
+  })
+
+  const metricLabel = chartMetric === 'count' ? '件数' : '時間'
+  const loadBalanceChartData = [...perMember]
+    .sort((a, b) => {
+      const diff = chartMetric === 'count' ? b.count - a.count : b.minutes - a.minutes
+      if (diff !== 0) return diff
+      return a.name.localeCompare(b.name, 'ja')
+    })
+    .map((member) => ({
+      name: member.name,
+      value: chartMetric === 'count' ? member.count : member.minutes,
+    }))
+
+  const categoryBreakdownChartData = TEAM_MEMBER_OPTIONS.map((member) => {
+    const item: Record<string, string | number> = { name: member.name }
+    categorySections.forEach((section) => {
+      item[section.category] = chartMetric === 'count'
+        ? section.total.memberCounts[member.name] || 0
+        : section.total.memberMinutes[member.name] || 0
+    })
+    return item
+  })
+
+  const monthlyMap = new Map<string, { month: string; count: number; minutes: number }>()
+  rows.forEach((row) => {
+    const monthKey = row.event_date.slice(0, 7)
+    if (!monthlyMap.has(monthKey)) {
+      monthlyMap.set(monthKey, { month: monthKey.replace('-', '/'), count: 0, minutes: 0 })
+    }
+    const monthItem = monthlyMap.get(monthKey)!
+    monthItem.count += 1
+    monthItem.minutes += row.minutes
+  })
+
+  const monthlyTrendChartData = Array.from(monthlyMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'ja'))
+    .map(([, value]) => value)
+
+  const monthOptions = Array.from(new Set([today.slice(0, 7), ...rows.map((row) => row.event_date.slice(0, 7))]))
+    .sort((a, b) => b.localeCompare(a, 'ja'))
+
+  const filteredRows = rows.filter((row) => row.event_date === listDate)
+
+  const getLastDateOfMonth = (month: string) => {
+    const [year, monthNumber] = month.split('-').map(Number)
+    return new Date(year, monthNumber, 0).getDate()
+  }
+
+  const moveListDate = (diff: number) => {
+    const baseDate = new Date(`${listDate}T00:00:00`)
+    baseDate.setDate(baseDate.getDate() + diff)
+    const nextDate = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
+    const nextMonth = nextDate.slice(0, 7)
+    setListMonth(nextMonth)
+    setListDate(nextDate)
+  }
+
+  const toggleCategoryDetails = (category: string) => {
+    setExpandedCategories((current) =>
+      current.includes(category) ? current.filter((item) => item !== category) : [...current, category],
+    )
+  }
+
+  const updateRowCategory = async (rowId: string, sourceType: 'checked_events' | 'manual_tasks', sourceKey: string, eventDate: string, category: string) => {
+    const previousRows = rows
+    setRows((current) => current.map((row) => row.id === rowId ? { ...row, category } : row))
+    setSavingRowId(rowId)
+    setError('')
+
+    const { error: updateError } = sourceType === 'checked_events'
+      ? await supabase.from('checked_events').update({ category }).eq('event_key', sourceKey).eq('event_date', eventDate)
+      : await supabase.from('manual_tasks').update({ category }).eq('id', sourceKey)
+
+    setSavingRowId('')
+    if (updateError) {
+      setRows(previousRows)
+      setError(`カテゴリの保存に失敗しました: ${updateError.message}`)
+    }
+  }
+
+  const startCreateCategory = () => {
+    setCategoryDraft({ id: '', name: '', keywords: '' })
+    setCategoryModalError('')
+  }
+
+  const startEditCategory = (category: TaskReportCategoryMaster) => {
+    setCategoryDraft({
+      id: category.id,
+      name: category.name,
+      keywords: category.keywords || '',
+    })
+    setCategoryModalError('')
+  }
+
+  const saveCategoryMaster = async () => {
+    const name = categoryDraft.name.trim()
+    const keywords = categoryDraft.keywords
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join('\n')
+
+    if (!name) {
+      setCategoryModalError('カテゴリ名を入れてください。')
+      return
+    }
+
+    const duplicate = categoryMasters.find(
+      (category) => category.id !== categoryDraft.id && category.name.toLowerCase() === name.toLowerCase(),
+    )
+    if (duplicate) {
+      setCategoryModalError('同じ名前のカテゴリがすでにあります。')
+      return
+    }
+
+    const editingCategory = categoryMasters.find((category) => category.id === categoryDraft.id)
+    const nextSortOrder = editingCategory?.sort_order
+      ?? (categoryMasters.length > 0 ? Math.max(...categoryMasters.map((category) => category.sort_order || 0)) + 1 : 0)
+
+    setCategoryModalSaving(true)
+    setCategoryModalError('')
+
+    const payload = {
+      name,
+      keywords,
+      sort_order: nextSortOrder,
+    }
+
+    const { error: saveError } = categoryDraft.id
+      ? await supabase.from('task_report_categories').update(payload).eq('id', categoryDraft.id)
+      : await supabase.from('task_report_categories').insert(payload)
+
+    if (saveError) {
+      setCategoryModalSaving(false)
+      setCategoryModalError(`カテゴリ設定の保存に失敗しました: ${saveError.message}`)
+      return
+    }
+
+    if (editingCategory && editingCategory.name !== name) {
+      const [checkedEventsRename, manualTasksRename] = await Promise.all([
+        supabase.from('checked_events').update({ category: name }).eq('category', editingCategory.name),
+        supabase.from('manual_tasks').update({ category: name }).eq('category', editingCategory.name),
+      ])
+
+      if (checkedEventsRename.error || manualTasksRename.error) {
+        setCategoryModalSaving(false)
+        setCategoryModalError(`カテゴリ名の反映に失敗しました: ${checkedEventsRename.error?.message || manualTasksRename.error?.message}`)
+        return
       }
     }
-    fetchChecked()
-    const interval = setInterval(fetchChecked, 3000)
+
+    await loadCategoryMasters()
+    await fetchReport()
+    setCategoryDraft({ id: '', name: '', keywords: '' })
+    setCategoryModalSaving(false)
+  }
+
+  return (
+    <section className="task-report-page">
+      <div className="panel task-report-hero">
+        <div className="task-report-hero-top">
+          <div className="task-report-title-block">
+            <h2>WEBチームの業務棚卸し</h2>
+            <p>期間を選択すると、実行した業務と時間をまとめて見られます。</p>
+          </div>
+          <div className="task-report-filter">
+            <label>
+              開始日
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </label>
+            <label>
+              終了日
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </label>
+            <button className="primary" onClick={fetchReport} disabled={loading}>
+              {loading ? '読み込み中...' : '集計する'}
+            </button>
+          </div>
+        </div>
+        {error && <p className="task-report-error">{error}</p>}
+        <div className="task-report-member-grid">
+          {summaryCards.map((member) => (
+            <article key={member.name} className={`task-report-member-card ${member.tone}`}>
+              <span>{member.name}</span>
+              <strong>{member.count}件</strong>
+              <p>{formatTaskReportTime(member.minutes)}</p>
+              <small>平均 {member.averageMinutes}分/件</small>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <section className="panel table-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>カテゴリ別の集計表</h2>
+            <p>下の一覧で選んだカテゴリを使って、担当ごとの件数と時間をまとめています。</p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="compact-list-table task-report-matrix-table">
+            <thead>
+              <tr>
+                <th>カテゴリ / 細分類業務</th>
+                {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                  <Fragment key={`count-${member.name}`}>
+                    <th className={`task-report-member-head member-${index}`}>件数: {member.name}</th>
+                  </Fragment>
+                ))}
+                <th>件数: 合計</th>
+                {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                  <Fragment key={`hours-${member.name}`}>
+                    <th className={`task-report-member-head member-${index}`}>時間(h): {member.name}</th>
+                  </Fragment>
+                ))}
+                <th>時間(h): 合計</th>
+                <th>平均(分/件)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categorySections.length === 0 && (
+                <tr>
+                  <td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>
+                    この期間のタスクはまだありません
+                  </td>
+                </tr>
+              )}
+              {categorySections.map((section) => {
+                const isExpanded = expandedCategories.includes(section.category)
+                const categoryTone = section.category === '分析・改善' ? 'analysis' : 'sns'
+                return (
+                  <Fragment key={section.category}>
+                    <tr className={`task-report-category-row ${categoryTone} ${isExpanded ? 'expanded' : ''}`} onClick={() => toggleCategoryDetails(section.category)}>
+                      <td className="task-report-sticky-label">
+                        <button type="button" className="task-report-category-toggle">
+                          <span className="task-report-category-icon">{isExpanded ? '−' : '+'}</span>
+                          <span>{section.category}</span>
+                        </button>
+                      </td>
+                      {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                        <td key={`${section.category}-count-${member.name}`} className={`member-${index}`}>
+                          {section.total.memberCounts[member.name] > 0 ? section.total.memberCounts[member.name] : '-'}
+                        </td>
+                      ))}
+                      <td>{section.total.totalCount}</td>
+                      {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                        <td key={`${section.category}-minutes-${member.name}`} className={`member-${index}`}>
+                          {section.total.memberMinutes[member.name] > 0 ? formatTaskReportHours(section.total.memberMinutes[member.name]) : '-'}
+                        </td>
+                      ))}
+                      <td>{formatTaskReportHours(section.total.totalMinutes)}</td>
+                      <td>{section.total.averageMinutes}</td>
+                    </tr>
+                    {isExpanded && section.details.map((row, rowIndex) => (
+                      <tr key={`${row.category}-${row.detail}-${rowIndex}`} className={`task-report-detail-row ${categoryTone}`}>
+                        <td className="task-report-detail-label">
+                          <span className="task-report-detail-text" title={row.detail}>{row.detail}</span>
+                        </td>
+                        {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                          <td key={`${row.category}-${row.detail}-count-${member.name}`} className={`member-${index}`}>
+                            {row.memberCounts[member.name] > 0 ? row.memberCounts[member.name] : '-'}
+                          </td>
+                        ))}
+                        <td>{row.totalCount}</td>
+                        {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                          <td key={`${row.category}-${row.detail}-minutes-${member.name}`} className={`member-${index}`}>
+                            {row.memberMinutes[member.name] > 0 ? formatTaskReportHours(row.memberMinutes[member.name]) : '-'}
+                          </td>
+                        ))}
+                        <td>{formatTaskReportHours(row.totalMinutes)}</td>
+                        <td>{row.averageMinutes}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel task-report-chart-panel">
+        <div className="panel-heading task-report-chart-heading">
+          <div>
+            <h2>業務量の見える化</h2>
+            <p>件数と時間を切り替えながら、担当の偏りと月ごとの流れを見られます。</p>
+          </div>
+          <div className="task-report-chart-toggle" role="group" aria-label="グラフ表示切り替え">
+            <button type="button" className={chartMetric === 'count' ? 'active' : ''} onClick={() => setChartMetric('count')}>件数で見る</button>
+            <button type="button" className={chartMetric === 'minutes' ? 'active' : ''} onClick={() => setChartMetric('minutes')}>時間で見る</button>
+          </div>
+        </div>
+
+        <div className="task-report-chart-grid">
+          <article className="task-report-chart-card">
+            <div className="task-report-chart-card-head">
+              <h3>A｜メンバーの負荷バランス</h3>
+              <p>{metricLabel}の多い順で並べています。</p>
+            </div>
+            <div className="task-report-chart-box">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={loadBalanceChartData} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" tickFormatter={(value) => formatTaskReportChartAxis(Number(value), chartMetric)} stroke="#64748b" />
+                  <YAxis type="category" dataKey="name" width={64} stroke="#334155" />
+                  <Tooltip
+                    formatter={(value) => (
+                      chartMetric === 'count' ? [`${Number(value || 0)}件`, '件数'] : [formatTaskReportTime(Number(value || 0)), '時間']
+                    )}
+                    labelFormatter={(label) => `担当: ${label}`}
+                  />
+                  <Bar dataKey="value" name={metricLabel} fill="#005AFF" radius={[0, 10, 10, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </article>
+
+          <article className="task-report-chart-card">
+            <div className="task-report-chart-card-head">
+              <h3>B｜業務内訳の把握</h3>
+              <p>Aの中身を色分けして、どの仕事が多いかを見やすくしています。</p>
+            </div>
+            <div className="task-report-chart-box">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryBreakdownChartData} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" tickFormatter={(value) => formatTaskReportChartAxis(Number(value), chartMetric)} stroke="#64748b" />
+                  <YAxis type="category" dataKey="name" width={64} stroke="#334155" />
+                  <Tooltip
+                    formatter={(value) => (
+                      chartMetric === 'count' ? [`${Number(value || 0)}件`, metricLabel] : [formatTaskReportTime(Number(value || 0)), metricLabel]
+                    )}
+                  />
+                  <Legend />
+                  {categorySections.map((section, index) => (
+                    <Bar
+                      key={section.category}
+                      dataKey={section.category}
+                      stackId="task-report-categories"
+                      name={section.category}
+                      fill={TASK_REPORT_CHART_COLORS[index % TASK_REPORT_CHART_COLORS.length]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </article>
+
+          <article className="task-report-chart-card wide">
+            <div className="task-report-chart-card-head">
+              <h3>C｜月ごとの推移</h3>
+              <p>月ごとの合計で、忙しさの増え方や減り方を追いやすくしています。</p>
+            </div>
+            <div className="task-report-chart-box">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyTrendChartData} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="month" stroke="#64748b" />
+                  <YAxis tickFormatter={(value) => formatTaskReportChartAxis(Number(value), chartMetric)} stroke="#64748b" />
+                  <Tooltip
+                    formatter={(value) => (
+                      chartMetric === 'count' ? [`${Number(value || 0)}件`, '件数'] : [formatTaskReportTime(Number(value || 0)), '時間']
+                    )}
+                    labelFormatter={(label) => `${label}の合計`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey={chartMetric === 'count' ? 'count' : 'minutes'}
+                    name={metricLabel}
+                    stroke="#005AFF"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#005AFF' }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="panel table-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>元のタスク一覧</h2>
+            <p>ここでカテゴリを手で直すと、上の集計表にも反映されます。</p>
+          </div>
+          <div className="task-report-list-controls">
+            <label>
+              月
+              <select
+                className="task-report-list-month"
+                value={listMonth}
+                onChange={(e) => {
+                  const nextMonth = e.target.value
+                  const currentDay = Number(listDate.slice(8, 10))
+                  const lastDay = getLastDateOfMonth(nextMonth)
+                  const nextDay = Math.min(currentDay, lastDay)
+                  setListMonth(nextMonth)
+                  setListDate(`${nextMonth}-${String(nextDay).padStart(2, '0')}`)
+                }}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month} value={month}>
+                    {month.replace('-', '年')}月
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="task-report-list-day-nav">
+              <button type="button" className="task-report-day-button" onClick={() => moveListDate(-1)} aria-label="前の日へ">◀</button>
+              <span>{Number(listDate.slice(8, 10))}日</span>
+              <button type="button" className="task-report-day-button" onClick={() => moveListDate(1)} aria-label="次の日へ">▶</button>
+            </div>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="compact-list-table task-report-table">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>担当</th>
+                <th>
+                  <div className="task-report-category-head">
+                    <span>カテゴリ</span>
+                    <button type="button" className="task-report-manage-button" onClick={() => setShowCategoryModal(true)}>
+                      カテゴリ設定
+                    </button>
+                  </div>
+                </th>
+                <th>タスク名</th>
+                <th>分数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>
+                    この日のタスクはまだありません
+                  </td>
+                </tr>
+              )}
+              {filteredRows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.event_date}</td>
+                  <td>{row.member_name}</td>
+                  <td>
+                    <select
+                      className="task-report-category-select"
+                      value={row.category}
+                      onChange={(e) => updateRowCategory(row.id, row.source_type, row.source_key, row.event_date, e.target.value)}
+                      disabled={savingRowId === row.id}
+                    >
+                      {categoryOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{row.task_name}</td>
+                  <td>{row.minutes}分</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {showCategoryModal && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowCategoryModal(false) }}>
+          <div className="modal-content task-report-category-modal">
+            <div className="task-report-category-modal-header">
+              <div>
+                <h3>カテゴリ設定</h3>
+                <p>カテゴリ名と、自動で振り分けるときの手がかりになる言葉を登録できます。</p>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setShowCategoryModal(false)}>✕</button>
+            </div>
+
+            <div className="task-report-category-modal-body">
+              <div className="task-report-category-master-list">
+                <div className="task-report-category-master-list-head">
+                  <strong>登録ずみカテゴリ</strong>
+                  <button type="button" className="secondary" onClick={startCreateCategory}>新しく作る</button>
+                </div>
+                {categoryModalLoading && <p className="empty-text">読み込み中です...</p>}
+                {!categoryModalLoading && categoryMasters.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={`task-report-category-master-item ${categoryDraft.id === category.id ? 'active' : ''}`}
+                    onClick={() => startEditCategory(category)}
+                  >
+                    <strong>{category.name}</strong>
+                    <span>
+                      {category.keywords
+                        ? `${category.keywords.split(/\r?\n/).filter(Boolean).length}個の手がかり`
+                        : '手がかり未設定'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="task-report-category-editor">
+                <label>
+                  カテゴリ名
+                  <input
+                    type="text"
+                    value={categoryDraft.name}
+                    onChange={(e) => setCategoryDraft((current) => ({ ...current, name: e.target.value }))}
+                    placeholder="例：広告運用"
+                  />
+                </label>
+                <label>
+                  自動振り分けの手がかり
+                  <textarea
+                    value={categoryDraft.keywords}
+                    onChange={(e) => setCategoryDraft((current) => ({ ...current, keywords: e.target.value }))}
+                    rows={8}
+                    placeholder={'1行に1つずつ入れてください\n例：\n投稿\n分析\n数値,入力'}
+                  />
+                </label>
+                <p className="task-report-category-help">
+                  1行の中に「,」を入れると、その言葉が両方入っているときだけそのカテゴリになります。
+                </p>
+                {categoryModalError && <p className="task-report-error">{categoryModalError}</p>}
+                <div className="task-report-category-editor-actions">
+                  <button type="button" className="secondary" onClick={startCreateCategory}>入力を空にする</button>
+                  <button type="button" className="primary" onClick={saveCategoryMaster} disabled={categoryModalSaving}>
+                    {categoryModalSaving ? '保存中...' : categoryDraft.id ? '上書き保存' : '追加する'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function TodayTasksPanel() {
+  type ManualTask = {
+    id: string
+    event_date: string
+    member_calendar_id: string
+    task_name: string
+    minutes: number | null
+    checked: boolean
+    created_at?: string
+  }
+
+  const [accessToken, setAccessToken] = useState<string | null>(getSavedToken)
+  const [memberEvents, setMemberEvents] = useState<Record<string, CalendarEvent[]>>({})
+  const [manualTasks, setManualTasks] = useState<Record<string, ManualTask[]>>({})
+  const [checkedEvents, setCheckedEvents] = useState<Record<string, boolean>>({})
+  const [minutesMap, setMinutesMap] = useState<Record<string, number>>({})
+  const [minutePopup, setMinutePopup] = useState<{
+    mode: 'calendar' | 'manual'
+    key: string
+    summary: string
+    memberCalendarId: string
+    manualTaskId?: string
+  } | null>(null)
+  const [minuteInput, setMinuteInput] = useState('')
+  const [openAddFormMemberId, setOpenAddFormMemberId] = useState<string | null>(null)
+  const [newTaskName, setNewTaskName] = useState('')
+  const [newTaskMinutes, setNewTaskMinutes] = useState('')
+  const [manualTaskSaving, setManualTaskSaving] = useState(false)
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+  const [selectedViewDate, setSelectedViewDate] = useState(today)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const silentLoginFnRef = useRef<(() => void) | null>(null)
+  const pendingCheckKeysRef = useRef<Set<string>>(new Set())
+
+  const normalizeNumberText = (value: string) => value.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+  const formatSelectedDateLabel = (dateText: string) => new Date(`${dateText}T00:00:00`).toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  })
+  const moveSelectedDate = (diff: number) => {
+    const baseDate = new Date(`${selectedViewDate}T00:00:00`)
+    baseDate.setDate(baseDate.getDate() + diff)
+    const nextDate = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
+    setSelectedViewDate(nextDate)
+  }
+
+  // Supabaseから選択中の日付のチェック状態と手動追加業務を読み込む（3秒ごとにポーリングして他PCと同期）
+  useEffect(() => {
+    const fetchSelectedDateState = async () => {
+      const [checkedResult, manualResult] = await Promise.all([
+        supabase
+          .from('checked_events')
+          .select('event_key, minutes')
+          .eq('event_date', selectedViewDate),
+        supabase
+          .from('manual_tasks')
+          .select('id, event_date, member_calendar_id, task_name, minutes, checked, created_at')
+          .eq('event_date', selectedViewDate)
+          .order('created_at', { ascending: true }),
+      ])
+
+      if (checkedResult.data) {
+        const fetchedChecked: Record<string, boolean> = {}
+        const fetchedMinutes: Record<string, number> = {}
+        checkedResult.data.forEach((row: { event_key: string; minutes: number | null }) => {
+          fetchedChecked[row.event_key] = true
+          if (row.minutes != null) fetchedMinutes[row.event_key] = row.minutes
+        })
+
+        setCheckedEvents((prev) => {
+          const next = { ...fetchedChecked }
+          pendingCheckKeysRef.current.forEach((key) => {
+            if (prev[key]) next[key] = true
+            else delete next[key]
+          })
+          return next
+        })
+
+        setMinutesMap((prev) => {
+          const next = { ...fetchedMinutes }
+          pendingCheckKeysRef.current.forEach((key) => {
+            if (prev[key] != null) next[key] = prev[key]
+            else delete next[key]
+          })
+          return next
+        })
+      }
+
+      if (manualResult.data) {
+        const grouped: Record<string, ManualTask[]> = {}
+        manualResult.data.forEach((task: ManualTask) => {
+          if (!grouped[task.member_calendar_id]) grouped[task.member_calendar_id] = []
+          grouped[task.member_calendar_id].push(task)
+        })
+        setManualTasks(grouped)
+      }
+    }
+
+    fetchSelectedDateState()
+    const interval = setInterval(fetchSelectedDateState, 3000)
     return () => clearInterval(interval)
-  }, [today])
+  }, [selectedViewDate])
+
+  useEffect(() => {
+    setOpenAddFormMemberId(null)
+    setMinutePopup(null)
+    setNewTaskName('')
+    setNewTaskMinutes('')
+  }, [selectedViewDate])
 
   // タイマークリーンアップ
   useEffect(() => {
@@ -3598,34 +5010,178 @@ function TodayTasksPanel() {
     }, ms)
   }, [])
 
-  const toggleCheck = (key: string, checked: boolean) => {
+  const toggleCalendarCheck = async (key: string, checked: boolean, summary: string, memberCalendarId: string) => {
     if (checked) {
+      pendingCheckKeysRef.current.add(key)
       setCheckedEvents(prev => { const n = { ...prev }; delete n[key]; return n })
       setMinutesMap(prev => { const n = { ...prev }; delete n[key]; return n })
-      supabase.from('checked_events').delete().eq('event_key', key)
-    } else {
-      setMinutePopup({ key })
-      setMinuteInput('')
+      const { error } = await supabase
+        .from('checked_events')
+        .delete()
+        .eq('event_key', key)
+        .eq('event_date', selectedViewDate)
+      pendingCheckKeysRef.current.delete(key)
+      if (error) {
+        setCheckedEvents(prev => ({ ...prev, [key]: true }))
+      }
+      return
     }
+
+    setMinutePopup({ mode: 'calendar', key, summary, memberCalendarId })
+    setMinuteInput('')
   }
 
   const confirmMinutes = async () => {
     if (!minutePopup) return
-    const key = minutePopup.key
-    const normalized = minuteInput.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    const { key, summary, memberCalendarId, mode, manualTaskId } = minutePopup
+    const normalized = normalizeNumberText(minuteInput)
     const parsed = parseInt(normalized, 10)
-    const minsValue = isNaN(parsed) ? 0 : parsed
+    const memberName = MEMBER_NAME_BY_CALENDAR_ID[memberCalendarId] || '未設定'
+
+    if (mode === 'manual' && manualTaskId) {
+      const minutes = Number.isNaN(parsed) ? null : parsed
+      const beforeTasks = manualTasks[memberCalendarId] || []
+
+      setManualTasks(prev => ({
+        ...prev,
+        [memberCalendarId]: (prev[memberCalendarId] || []).map((item) =>
+          item.id === manualTaskId ? { ...item, checked: true, minutes } : item
+        ),
+      }))
+      setMinutePopup(null)
+
+      const { error } = await supabase
+        .from('manual_tasks')
+        .update({ checked: true, minutes })
+        .eq('id', manualTaskId)
+
+      if (error) {
+        setManualTasks(prev => ({
+          ...prev,
+          [memberCalendarId]: beforeTasks,
+        }))
+      }
+      return
+    }
+
+    const minsValue = Number.isNaN(parsed) ? 0 : parsed
+
+    pendingCheckKeysRef.current.add(key)
     setCheckedEvents(prev => ({ ...prev, [key]: true }))
     setMinutesMap(prev => ({ ...prev, [key]: minsValue }))
     setMinutePopup(null)
-    await supabase.from('checked_events').upsert({ event_key: key, event_date: today, minutes: minsValue })
+
+    const { error } = await supabase.from('checked_events').upsert({
+      event_key: key,
+      event_date: selectedViewDate,
+      minutes: minsValue,
+      task_name: summary,
+      member_calendar_id: memberCalendarId,
+      member_name: memberName,
+    })
+
+    pendingCheckKeysRef.current.delete(key)
+    if (error) {
+      setCheckedEvents(prev => { const n = { ...prev }; delete n[key]; return n })
+      setMinutesMap(prev => { const n = { ...prev }; delete n[key]; return n })
+    }
   }
 
-  const fetchMemberEvents = useCallback(async (token: string) => {
+  const toggleManualTaskCheck = async (task: ManualTask) => {
+    const beforeTasks = manualTasks[task.member_calendar_id] || []
+    const nextChecked = !task.checked
+
+    if (nextChecked) {
+      setMinutePopup({
+        mode: 'manual',
+        key: `manual:${task.id}`,
+        summary: task.task_name,
+        memberCalendarId: task.member_calendar_id,
+        manualTaskId: task.id,
+      })
+      setMinuteInput(task.minutes != null ? String(task.minutes) : '')
+      return
+    }
+
+    setManualTasks(prev => ({
+      ...prev,
+      [task.member_calendar_id]: (prev[task.member_calendar_id] || []).map((item) =>
+        item.id === task.id ? { ...item, checked: nextChecked, minutes: null } : item
+      ),
+    }))
+
+    const { error } = await supabase
+      .from('manual_tasks')
+      .update({ checked: nextChecked, minutes: null })
+      .eq('id', task.id)
+
+    if (error) {
+      setManualTasks(prev => ({
+        ...prev,
+        [task.member_calendar_id]: beforeTasks,
+      }))
+    }
+  }
+
+  const addManualTask = async (memberCalendarId: string) => {
+    const taskName = newTaskName.trim()
+    if (!taskName) return
+
+    setManualTaskSaving(true)
+    const normalized = normalizeNumberText(newTaskMinutes)
+    const parsed = parseInt(normalized, 10)
+    const minutes = Number.isNaN(parsed) ? null : parsed
+
+    const { data, error } = await supabase
+      .from('manual_tasks')
+      .insert({
+        event_date: selectedViewDate,
+        member_calendar_id: memberCalendarId,
+        task_name: taskName,
+        minutes,
+        checked: false,
+      })
+      .select('id, event_date, member_calendar_id, task_name, minutes, checked, created_at')
+      .single()
+
+    setManualTaskSaving(false)
+    if (error || !data) return
+
+    setManualTasks(prev => ({
+      ...prev,
+      [memberCalendarId]: [...(prev[memberCalendarId] || []), data as ManualTask],
+    }))
+    setNewTaskName('')
+    setNewTaskMinutes('')
+    setOpenAddFormMemberId(null)
+  }
+
+  const deleteManualTask = async (task: ManualTask) => {
+    const beforeTasks = manualTasks[task.member_calendar_id] || []
+
+    setManualTasks(prev => ({
+      ...prev,
+      [task.member_calendar_id]: (prev[task.member_calendar_id] || []).filter((item) => item.id !== task.id),
+    }))
+
+    const { error } = await supabase
+      .from('manual_tasks')
+      .delete()
+      .eq('id', task.id)
+
+    if (error) {
+      setManualTasks(prev => ({
+        ...prev,
+        [task.member_calendar_id]: beforeTasks,
+      }))
+    }
+  }
+
+  const fetchMemberEvents = useCallback(async (token: string, targetDate: string) => {
     setCalendarLoading(true)
-    const now = new Date()
-    const timeMin = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
-    const timeMax = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString()
+    const baseDate = new Date(`${targetDate}T00:00:00`)
+    const timeMin = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).toISOString()
+    const timeMax = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 23, 59, 59).toISOString()
     const results: Record<string, CalendarEvent[]> = {}
     await Promise.all(
       TEAM_MEMBERS.map(async (member) => {
@@ -3659,7 +5215,7 @@ function TodayTasksPanel() {
   useEffect(() => {
     const saved = getSavedToken()
     if (saved) {
-      fetchMemberEvents(saved)
+      fetchMemberEvents(saved, selectedViewDate)
       try {
         const expiry = localStorage.getItem(STORAGE_EXPIRY_KEY)
         if (expiry) {
@@ -3668,7 +5224,7 @@ function TodayTasksPanel() {
         }
       } catch { /* ignore */ }
     }
-  }, [fetchMemberEvents, scheduleRefresh])
+  }, [fetchMemberEvents, scheduleRefresh, selectedViewDate])
 
   // prompt:none でGoogleUIを出さずに無音再認証
   const silentLogin = useGoogleLogin({
@@ -3678,17 +5234,15 @@ function TodayTasksPanel() {
       const expiresIn = res.expires_in ?? 3600
       saveToken(res.access_token, expiresIn)
       setAccessToken(res.access_token)
-      fetchMemberEvents(res.access_token)
+      fetchMemberEvents(res.access_token, selectedViewDate)
       scheduleRefresh(expiresIn)
     },
     onError: () => {
-      // 無音再認証失敗→通常ログインボタンへ切り替え
       clearToken()
       setAccessToken(null)
     },
   })
 
-  // silentLoginをrefに保持（タイマーコールバックから参照するため）
   silentLoginFnRef.current = silentLogin
 
   const googleLogin = useGoogleLogin({
@@ -3697,7 +5251,7 @@ function TodayTasksPanel() {
       const expiresIn = res.expires_in ?? 3600
       saveToken(res.access_token, expiresIn)
       setAccessToken(res.access_token)
-      fetchMemberEvents(res.access_token)
+      fetchMemberEvents(res.access_token, selectedViewDate)
       scheduleRefresh(expiresIn)
       try {
         const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${res.access_token}` } })
@@ -3706,6 +5260,10 @@ function TodayTasksPanel() {
       } catch { /* ignore */ }
     },
   })
+
+  useEffect(() => {
+    if (accessToken) fetchMemberEvents(accessToken, selectedViewDate)
+  }, [accessToken, fetchMemberEvents, selectedViewDate])
 
   return (
     <div className="panel">
@@ -3735,13 +5293,32 @@ function TodayTasksPanel() {
       )}
       <div className="panel-heading">
         <div>
-          <h2>今日のタスク</h2>
-          <p>{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
+          <h2>{selectedViewDate === today ? '今日の業務一覧' : '業務一覧'}</h2>
+          <p>{formatSelectedDateLabel(selectedViewDate)}</p>
         </div>
-        {!accessToken
-          ? <button className="primary" onClick={() => googleLogin()}>Googleでログイン</button>
-          : <button className="secondary" onClick={() => fetchMemberEvents(accessToken)}>再読み込み</button>
-        }
+        <div className="today-task-toolbar">
+          <div className="today-task-date-nav">
+            <button type="button" className="today-task-day-button" onClick={() => moveSelectedDate(-1)} aria-label="前日">
+              ◀
+            </button>
+            <input
+              type="date"
+              className="today-task-date-input"
+              value={selectedViewDate}
+              onChange={(e) => setSelectedViewDate(e.target.value)}
+            />
+            <button type="button" className="today-task-day-button" onClick={() => moveSelectedDate(1)} aria-label="翌日">
+              ▶
+            </button>
+          </div>
+          <button type="button" className="secondary today-task-reset-button" onClick={() => setSelectedViewDate(today)} disabled={selectedViewDate === today}>
+            今日に戻す
+          </button>
+          {!accessToken
+            ? <button className="primary" onClick={() => googleLogin()}>Googleでログイン</button>
+            : <button className="secondary" onClick={() => fetchMemberEvents(accessToken, selectedViewDate)}>再読み込み</button>
+          }
+        </div>
       </div>
 
       {calendarLoading && (
@@ -3752,16 +5329,80 @@ function TodayTasksPanel() {
         <div className="today-tasks-grid">
           {TEAM_MEMBERS.filter(m => m.name !== 'WEBチーム').map((member) => {
             const events = memberEvents[member.calendarId] || []
+            const manualMemberTasks = manualTasks[member.calendarId] || []
+            const totalCount = events.length + manualMemberTasks.length
             return (
               <div key={member.calendarId} className="member-task-card">
                 <div className="member-task-header" style={{ borderLeft: `4px solid ${member.color}` }}>
                   <span className="member-name">{member.name}</span>
-                  <span className="member-event-count">{events.length}件</span>
+                  <span className="member-event-count">{totalCount}件</span>
                 </div>
-                {events.length === 0 ? (
+                <button
+                  type="button"
+                  className="manual-task-add-btn"
+                  onClick={() => {
+                    setOpenAddFormMemberId(openAddFormMemberId === member.calendarId ? null : member.calendarId)
+                    setNewTaskName('')
+                    setNewTaskMinutes('')
+                  }}
+                >
+                  ＋ 業務を追加
+                </button>
+                {openAddFormMemberId === member.calendarId && (
+                  <div className="manual-task-form">
+                    <input
+                      type="text"
+                      className="manual-task-input"
+                      value={newTaskName}
+                      onChange={(e) => setNewTaskName(e.target.value)}
+                      placeholder="業務名を入力"
+                    />
+                    <div className="manual-task-form-row">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="manual-task-minutes"
+                        value={newTaskMinutes}
+                        onChange={(e) => setNewTaskMinutes(e.target.value)}
+                        placeholder="分数 例：30"
+                      />
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => addManualTask(member.calendarId)}
+                        disabled={manualTaskSaving}
+                      >
+                        {manualTaskSaving ? '保存中...' : '追加'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {totalCount === 0 ? (
                   <p className="no-events">予定なし</p>
                 ) : (
                   <ul className="event-checklist">
+                    {manualMemberTasks.map((task) => (
+                      <li
+                        key={task.id}
+                        className={`event-item manual-task ${task.checked ? 'checked' : ''}`}
+                        onClick={() => toggleManualTaskCheck(task)}
+                      >
+                        <span className="event-checkbox">{task.checked ? '✓' : ''}</span>
+                        <span className="event-time">追加</span>
+                        {task.minutes != null && <span className="event-minutes">{task.minutes}分</span>}
+                        <span className="event-title" title={task.task_name}>{task.task_name}</span>
+                        <button
+                          type="button"
+                          className="manual-task-delete"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteManualTask(task)
+                          }}
+                        >
+                          削除
+                        </button>
+                      </li>
+                    ))}
                     {events.map((ev) => {
                       const key = `${member.calendarId}:${ev.id}`
                       const checked = !!checkedEvents[key]
@@ -3769,14 +5410,17 @@ function TodayTasksPanel() {
                         ? new Date(ev.start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
                         : '終日'
                       return (
-                        <li key={ev.id} className={`event-item ${checked ? 'checked' : ''}`}
-                          onClick={() => toggleCheck(key, checked)}>
+                        <li
+                          key={ev.id}
+                          className={`event-item ${checked ? 'checked' : ''}`}
+                          onClick={() => toggleCalendarCheck(key, checked, ev.summary, member.calendarId)}
+                        >
                           <span className="event-checkbox">{checked ? '✓' : ''}</span>
                           <span className="event-time">{time}</span>
-                          <span className="event-title" title={ev.summary}>{ev.summary}</span>
                           {checked && minutesMap[key] != null && (
                             <span className="event-minutes">{minutesMap[key]}分</span>
                           )}
+                          <span className="event-title" title={ev.summary}>{ev.summary}</span>
                         </li>
                       )
                     })}
