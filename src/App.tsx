@@ -585,7 +585,7 @@ function App() {
   const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
   const [hankyoInlineForm, setHankyoInlineForm] = useState<Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>>(defaultHankyoForm)
   const [hankyoSearch, setHankyoSearch] = useState('')
-  const [hankyoMonthFilters, setHankyoMonthFilters] = useState<string[]>([])
+  const [hankyoMonthFilters, setHankyoMonthFilters] = useState<string[]>([String(new Date().getMonth() + 1)])
   const [hankyoAccountFilters, setHankyoAccountFilters] = useState<string[]>([])
   const [hankyoTriggerFilters, setHankyoTriggerFilters] = useState<string[]>([])
   const [hankyoMediaFilters, setHankyoMediaFilters] = useState<string[]>([])
@@ -1766,10 +1766,10 @@ function App() {
         <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>当日業務管理</button>
         <button className={activePage === 'taskreport' ? 'active' : ''} onClick={() => { setActivePage('taskreport'); setShowModal(false) }}>業務棚卸し</button>
+        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false) }}>SNS物件管理</button>
         <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
         <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック管理</button>
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
-        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false) }}>SNS物件管理</button>
         <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>Note</button>
       </nav>
 
