@@ -261,7 +261,9 @@ th:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
 td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  overflow-x: auto;
+}
 
 /* 一覧の行高さをタスク管理タブにそろえる */
 .compact-list-table th {
@@ -2954,8 +2956,8 @@ button.manual-chip {
 /* ===== 進捗管理ページ ===== */
 
 .progress-summary {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -2969,7 +2971,8 @@ button.manual-chip {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 80px;
+  min-width: 0;
+  height: 100%;
 }
 
 .progress-stat--delay {
@@ -2981,7 +2984,8 @@ button.manual-chip {
   font-size: 0.72rem;
   color: var(--gray-400);
   font-weight: 600;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .progress-stat-value {
@@ -3042,6 +3046,9 @@ button.manual-chip {
   padding: 0;
   overflow: visible;
   min-width: 0;
+  width: calc(100% + 96px);
+  margin-left: -48px;
+  margin-right: -48px;
 }
 
 .progress-media-section + .progress-media-section {
@@ -3083,17 +3090,17 @@ button.manual-chip {
 
 .progress-table {
   border-collapse: collapse;
-  font-size: 0.81rem;
-  min-width: 2550px;
-  width: 100%;
+  font-size: 0.78rem;
+  min-width: 2920px;
+  width: max-content;
 }
 
 .progress-table th {
   background: var(--blue-50);
   border: 1px solid var(--gray-200);
-  padding: 5px 8px;
+  padding: 7px 10px;
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   white-space: nowrap;
   text-align: left;
   color: var(--gray-600);
@@ -3104,13 +3111,13 @@ button.manual-chip {
 
 .progress-table td {
   border: 1px solid var(--gray-100);
-  padding: 3px 8px;
+  padding: 1px 10px;
   vertical-align: middle;
   white-space: nowrap;
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   color: var(--gray-900);
   height: 28px;
-  line-height: 1.2;
+  line-height: 1.35;
   overflow: visible;
 }
 
@@ -3118,12 +3125,12 @@ button.manual-chip {
 .progress-cell-select {
   width: 100%;
   min-width: 0;
-  height: 22px;
+  height: 18px;
   padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   font-weight: 500;
   color: var(--gray-900);
   box-shadow: none;
@@ -3145,8 +3152,8 @@ button.manual-chip {
 
 .progress-editable-select-trigger {
   width: 100%;
-  min-height: 22px;
-  padding: 1px 6px;
+  min-height: 18px;
+  padding: 1px 18px 1px 8px;
   border: none;
   border-radius: 4px;
   background: transparent;
@@ -3212,7 +3219,7 @@ button.manual-chip {
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
   z-index: 9999;
   border-radius: 0 0 8px 8px;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
 }
 
 .progress-editable-select-options {
@@ -3234,7 +3241,7 @@ button.manual-chip {
 }
 
 .progress-editable-select-option {
-  padding: 8px 10px;
+  padding: 10px 12px;
   line-height: 1.4;
 }
 
@@ -3252,9 +3259,9 @@ button.manual-chip {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 40px;
   border-top: 1px solid #e2e8f0;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
 }
 
 .progress-cell-input::placeholder {
@@ -3284,18 +3291,18 @@ button.manual-chip {
 }
 
 .progress-cell-status {
-  padding: 2px 5px;
-  font-size: 0.72rem;
+  padding: 2px 16px 2px 6px;
+  font-size: 0.74rem;
   font-weight: 600;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  min-width: 56px;
+  min-width: 72px;
 }
 
 .progress-cell-status-select .progress-editable-select-trigger {
-  min-width: 56px;
-  font-size: 0.72rem;
+  min-width: 72px;
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
@@ -3310,7 +3317,8 @@ button.manual-chip {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-width: 44px;
+  width: 100%;
+  min-width: 0;
   min-height: 22px;
   cursor: pointer;
 }
@@ -3319,19 +3327,19 @@ button.manual-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   color: #2563eb;
   line-height: 1;
   text-decoration: none;
 }
 
 .progress-link-icon svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -3350,11 +3358,27 @@ button.manual-chip {
   background: #eff6ff;
   color: #1d4ed8;
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
+  padding: 2px 10px;
+  font-size: 0.74rem;
   font-weight: 700;
+  line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.progress-table-instagram th:nth-child(4),
+.progress-table-instagram td:nth-child(4) {
+  text-align: center;
+}
+
+.progress-table-tiktok th:nth-child(3),
+.progress-table-tiktok td:nth-child(3) {
+  text-align: center;
+}
+
+.progress-table-simple th:nth-child(3),
+.progress-table-simple td:nth-child(3) {
+  text-align: center;
 }
 
 .progress-copy-button:hover {
@@ -4263,8 +4287,19 @@ button.manual-chip {
 .sns-property-table thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 3;
   background: #f0f4fa;
+  box-shadow: 0 1px 0 var(--gray-200);
+}
+
+.sns-property-table-wrap {
+  overflow-y: auto;
+  position: relative;
+  max-height: calc(100vh - 220px);
+}
+
+.table-panel:has(.sns-property-table-wrap) {
+  overflow: visible;
 }
 
 .sns-property-table th,
@@ -4273,7 +4308,240 @@ button.manual-chip {
   white-space: nowrap;
 }
 
-.sns-property-table th:first-child,
-.sns-property-table td:first-child {
-  min-width: 120px;
+.sns-property-table th.sns-col-memo,
+.sns-property-table td.sns-col-memo {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  text-align: center;
+}
+
+.sns-property-table th.sns-col-property-name,
+.sns-property-table td.sns-col-property-name {
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+}
+
+.sns-property-table th.sns-col-check,
+.sns-property-table td.sns-col-check {
+  width: 116px;
+  min-width: 116px;
+  max-width: 116px;
+}
+
+.sns-property-table th.sns-col-date,
+.sns-property-table td.sns-col-date {
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+}
+
+.sns-property-table th.sns-col-code,
+.sns-property-table td.sns-col-code {
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
+}
+
+.sns-property-table th.sns-col-plan,
+.sns-property-table td.sns-col-plan {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+}
+
+.sns-property-table th.sns-col-rent,
+.sns-property-table td.sns-col-rent {
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
+}
+
+.sns-property-table th.sns-col-area,
+.sns-property-table td.sns-col-area {
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+}
+
+.sns-property-table th.sns-col-station,
+.sns-property-table td.sns-col-station {
+  width: 82px;
+  min-width: 82px;
+  max-width: 82px;
+}
+
+.sns-property-table th.sns-col-link,
+.sns-property-table td.sns-col-link {
+  width: 54px;
+  min-width: 54px;
+  max-width: 54px;
+  text-align: center;
+}
+
+.sns-property-table th.sns-col-room,
+.sns-property-table td.sns-col-room {
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+}
+
+.sns-property-table th.sns-col-address,
+.sns-property-table td.sns-col-address {
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+}
+
+.sns-property-table th.sns-col-company,
+.sns-property-table td.sns-col-company {
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+}
+
+.sns-property-table th.sns-col-contact,
+.sns-property-table td.sns-col-contact {
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+}
+
+.sns-property-table th.sns-col-actions,
+.sns-property-table td.sns-col-actions {
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
+}
+
+.sns-property-table th.sns-col-property-name,
+.sns-property-table td.sns-col-property-name {
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+}
+
+.sns-cell-input {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  padding: 1px 4px;
+}
+
+.sns-dropdown-display {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--gray-900);
+  cursor: pointer;
+  padding: 0 4px;
+  text-align: left;
+  font: inherit;
+}
+
+.sns-dropdown-display.is-open {
+  border-color: #7aa2ff;
+  background: #ffffff;
+}
+
+.sns-dropdown-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sns-dropdown-menu {
+  background: #fff;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  z-index: 9999;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+}
+
+.sns-dropdown-option {
+  width: 100%;
+  border: none;
+  background: #fff;
+  color: #1e293b;
+  text-align: left;
+  font: inherit;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.sns-dropdown-option:hover {
+  background: #d9f0df;
+}
+
+.sns-dropdown-option.is-active {
+  background: #c5e6cf;
+}
+
+.sns-dropdown-edit-button {
+  width: 100%;
+  border: none;
+  border-top: 1px solid #dbe4ef;
+  background: #fff;
+  color: #64748b;
+  text-align: center;
+  font: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.sns-dropdown-edit-button:hover {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.sns-link-button {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--blue-600);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.sns-link-button:hover {
+  text-decoration: underline;
+}
+
+.sns-property-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.memo-icon-button {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--blue-600);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.memo-icon-button:hover {
+  color: var(--blue-700);
+}
+
+.sns-property-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
