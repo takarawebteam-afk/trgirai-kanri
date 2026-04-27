@@ -2360,7 +2360,7 @@ function App() {
                         return (
                           <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startTiktokInline(r) }}>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setTiktokInlineForm({ ...f, memo: e.target.value })} /> : <span className="cell-truncate" title={r.memo}>{r.memo}</span>}
+                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setTiktokInlineForm({ ...f, memo: e.target.value })} /> : (r.memo ? <span className="memo-icon" title={r.memo} onClick={(e) => { e.stopPropagation(); setMemoToView(r.memo) }}>📝</span> : '')}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
                               {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setTiktokInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
@@ -2387,7 +2387,7 @@ function App() {
                               {isEditing ? <input className="inline-input" value={f.nearest_station} onChange={(e) => setTiktokInlineForm({ ...f, nearest_station: e.target.value })} /> : r.nearest_station}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setTiktokInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer">資料</a> : '')}
+                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setTiktokInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>🔗</a> : '')}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setTiktokInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
@@ -2448,7 +2448,7 @@ function App() {
                         return (
                           <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startInstagramInline(r) }}>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setInstagramInlineForm({ ...f, memo: e.target.value })} /> : <span className="cell-truncate" title={r.memo}>{r.memo}</span>}
+                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setInstagramInlineForm({ ...f, memo: e.target.value })} /> : (r.memo ? <span className="memo-icon" title={r.memo} onClick={(e) => { e.stopPropagation(); setMemoToView(r.memo) }}>📝</span> : '')}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
                               {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setInstagramInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
@@ -2475,7 +2475,7 @@ function App() {
                               {isEditing ? <input className="inline-input" value={f.nearest_station} onChange={(e) => setInstagramInlineForm({ ...f, nearest_station: e.target.value })} /> : r.nearest_station}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setInstagramInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer">資料</a> : '')}
+                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setInstagramInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>🔗</a> : '')}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setInstagramInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
@@ -2535,7 +2535,7 @@ function App() {
                         return (
                           <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startYoutubeInline(r) }}>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setYoutubeInlineForm({ ...f, memo: e.target.value })} /> : <span className="cell-truncate" title={r.memo}>{r.memo}</span>}
+                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setYoutubeInlineForm({ ...f, memo: e.target.value })} /> : (r.memo ? <span className="memo-icon" title={r.memo} onClick={(e) => { e.stopPropagation(); setMemoToView(r.memo) }}>📝</span> : '')}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
                               {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setYoutubeInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
@@ -2547,7 +2547,7 @@ function App() {
                               {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setYoutubeInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setYoutubeInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer">資料</a> : '')}
+                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setYoutubeInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>🔗</a> : '')}
                             </td>
                             <td onClick={(e) => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setYoutubeInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
