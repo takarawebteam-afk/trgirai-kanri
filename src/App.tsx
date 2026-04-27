@@ -585,7 +585,7 @@ function App() {
   const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
   const [hankyoInlineForm, setHankyoInlineForm] = useState<Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>>(defaultHankyoForm)
   const [hankyoSearch, setHankyoSearch] = useState('')
-  const [hankyoMonthFilters, setHankyoMonthFilters] = useState<string[]>([])
+  const [hankyoMonthFilters, setHankyoMonthFilters] = useState<string[]>([String(new Date().getMonth() + 1)])
   const [hankyoAccountFilters, setHankyoAccountFilters] = useState<string[]>([])
   const [hankyoTriggerFilters, setHankyoTriggerFilters] = useState<string[]>([])
   const [hankyoMediaFilters, setHankyoMediaFilters] = useState<string[]>([])
