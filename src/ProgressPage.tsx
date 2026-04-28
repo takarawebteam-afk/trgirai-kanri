@@ -1456,8 +1456,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       )}
 
       {selectOptionEditor && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelectOptionEditor(null) }}>
-          <div className="modal-content progress-select-editor-modal">
+        <div className="modal-overlay">
+          <div className="modal-content progress-select-editor-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{selectOptionEditor.title}の候補を編集</h2>
               <button className="modal-close" type="button" onClick={() => setSelectOptionEditor(null)}>
