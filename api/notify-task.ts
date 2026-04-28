@@ -42,6 +42,11 @@ async function postToSlack(text: string) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
+  const secret = process.env.NOTIFY_SECRET
+  if (secret && req.headers['x-notify-secret'] !== secret) {
+    return res.status(401).end()
+  }
+
   const {
     type,
     taskName,

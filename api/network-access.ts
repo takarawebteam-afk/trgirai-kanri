@@ -3,10 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 type AccessResult = {
   allowed: boolean
   reason: string
-  clientIp: string
 }
-
-const DEFAULT_OFFICE_ALLOWED_IPS = ['218.42.153.89']
 
 function normalizeList(value: string | undefined) {
   return String(value ?? '')
@@ -37,26 +34,23 @@ function isAllowedIp(clientIp: string, exactIps: string[], prefixes: string[]) {
 
 function buildResult(req: VercelRequest): AccessResult {
   const clientIp = extractClientIp(req)
-  const exactIps = [
-    ...DEFAULT_OFFICE_ALLOWED_IPS,
-    ...normalizeList(process.env.OFFICE_ALLOWED_IPS),
-  ]
+  const exactIps = normalizeList(process.env.OFFICE_ALLOWED_IPS)
   const prefixes = normalizeList(process.env.OFFICE_ALLOWED_IP_PREFIXES)
 
   if (!exactIps.length && !prefixes.length) {
-    return { allowed: false, reason: 'config_missing', clientIp }
+    return { allowed: false, reason: 'config_missing' }
   }
 
   if (isAllowedIp(clientIp, exactIps, prefixes)) {
-    return { allowed: true, reason: 'office_network', clientIp }
+    return { allowed: true, reason: 'office_network' }
   }
 
-  return { allowed: false, reason: 'outside_office_network', clientIp }
+  return { allowed: false, reason: 'outside_office_network' }
 }
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ allowed: false, reason: 'method_not_allowed', clientIp: '' })
+    return res.status(405).json({ allowed: false, reason: 'method_not_allowed' })
   }
 
   const result = buildResult(req)

@@ -870,9 +870,13 @@ function notifyTaskEvent(payload: {
   creator?: string
   members: Member[]
 }) {
+  const notifySecret = import.meta.env.VITE_NOTIFY_SECRET as string | undefined
   fetch('/api/notify-task', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(notifySecret ? { 'x-notify-secret': notifySecret } : {}),
+    },
     body: JSON.stringify(payload),
   }).catch(() => {})
 }
