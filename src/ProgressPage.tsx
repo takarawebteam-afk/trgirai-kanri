@@ -161,6 +161,8 @@ const MEDIA_OPTIONS = [
   '八尾｜アパマン八尾',
 ]
 
+const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾']
+
 const FORM_TABS: { key: FormTabKey; label: string }[] = [
   { key: 'basic', label: '① 基本情報' },
   { key: 'production', label: '② 制作' },
@@ -341,22 +343,26 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   async function getNextPropertyNumber(
     tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
   ) {
-    const prefix = tableName === 'sns_youtube_properties' ? 'Y' : 'K'
-    const digits = tableName === 'sns_youtube_properties' ? 3 : 4
+    const prefix =
+      tableName === 'sns_youtube_properties'
+        ? 'Y'
+        : tableName === 'sns_instagram_properties'
+          ? 'G'
+          : 'K'
+    const digits =
+      tableName === 'sns_tiktok_properties'
+        ? 4
+        : 3
     const { data } = await supabase
       .from(tableName)
       .select('property_number')
-      .order('created_at', { ascending: false })
-      .limit(200)
+      .like('property_number', `${prefix}%`)
+      .order('property_number', { ascending: false })
+      .limit(1)
 
-    const maxValue = (data || [])
-      .map((item) => String(item.property_number || ''))
-      .filter((value) => value.startsWith(prefix))
-      .reduce((max, value) => {
-        const match = value.match(/\d+/)
-        const current = match ? Number(match[0]) : 0
-        return Math.max(max, current)
-      }, 0)
+    const latestValue = String(data?.[0]?.property_number || '')
+    const match = latestValue.match(/\d+/)
+    const maxValue = match ? Number(match[0]) : 0
 
     return `${prefix}${String(maxValue + 1).padStart(digits, '0')}`
   }
@@ -443,6 +449,94 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
   }
 
+  void promoteToSnsProperty
+
+  function buildCommonSnsPropertyData(record: ProductionRecord) {
+    return {
+      property_name: record.property_name || '',
+      room_number: record.room_number || '',
+      address: record.property_address || '',
+      management_company: record.management_company || '',
+      contact: record.contact_info || '',
+      memo: record.memo || '',
+      wp_registered: toRegisteredLabel(record.wp_registered),
+      post_date: record.scheduled_post_date || '',
+      document_url: record.property_url || '',
+    }
+  }
+
+  function buildExtendedSnsPropertyData(record: ProductionRecord) {
+    return {
+      ...buildCommonSnsPropertyData(record),
+      floor_plan: record.floor_plan || '',
+      rent: record.rent || '',
+      area: record.area || '',
+      nearest_station: record.nearest_station || '',
+    }
+  }
+
+  async function promoteToSnsPropertySafe(record: ProductionRecord, trigger: 'post_completed' | 'youtube_reserved') {
+    if (trigger === 'post_completed') {
+      let tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | null = null
+      let target: PromoteTarget | null = null
+      let label = ''
+
+      if (isTikTokMedia(record.media)) {
+        tableName = 'sns_tiktok_properties'
+        target = 'tiktok'
+        label = 'Karilun｜TikTok'
+      } else if (isInstagramMedia(record.media)) {
+        tableName = 'sns_instagram_properties'
+        target = 'instagram'
+        label = 'Karilun｜Instagram'
+      }
+
+      if (!tableName) return
+      if (!window.confirm(`SNS物件管理の「${label}」へ反映しますか？`)) return
+
+      const insertData = {
+        property_number: await getNextPropertyNumber(tableName),
+        ...buildExtendedSnsPropertyData(record),
+        ...(tableName === 'sns_tiktok_properties'
+          ? { aos_registered: toRegisteredLabel(record.aos_registered) }
+          : { category: record.post_type || '' }),
+      }
+
+      const { error } = await supabase.from(tableName).insert([insertData])
+      if (error) {
+        alert(`SNS物件管理への反映に失敗しました。\n${error.message}`)
+        return
+      }
+
+      if (target) onSnsPropertyPromoted?.(target)
+    }
+
+    if (trigger === 'youtube_reserved') {
+      if (!isTikTokMedia(record.media)) return
+      if (!window.confirm('SNS物件管理の「Karilun｜YouTube」へ反映しますか？')) return
+
+      const insertData = {
+        property_number: await getNextPropertyNumber('sns_youtube_properties'),
+        ...buildCommonSnsPropertyData(record),
+      }
+
+      const { error } = await supabase.from('sns_youtube_properties').insert([insertData])
+      if (error) {
+        alert(`YouTube一覧への反映に失敗しました。\n${error.message}`)
+        return
+      }
+
+      onSnsPropertyPromoted?.('youtube')
+    }
+
+    if (window.confirm('反映できたので、この行を進捗管理から削除しますか？')) {
+      const { error } = await supabase.from('production_records').delete().eq('id', record.id)
+      if (!error) {
+        setRecords((prev) => prev.filter((item) => item.id !== record.id))
+      }
+    }
+  }
+
   async function updateField(id: string, field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
     const dbField = field === 'material_saved' ? 'shooting_date' : field
     const { error } = await supabase.from('production_records').update({ [dbField]: value }).eq('id', id)
@@ -451,20 +545,21 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       return
     }
 
-    let updatedRecord: ProductionRecord | null = null
-    setRecords((prev) =>
-      prev.map((record) => {
-        if (record.id !== id) return record
-        updatedRecord = {
-          ...record,
-          ...(field === 'material_saved' ? { material_saved: String(value) } : { [field]: value }),
-        }
-        return updatedRecord
-      }),
-    )
+    const currentRecord = records.find((record) => record.id === id) || null
+    const updatedRecord: ProductionRecord | null = currentRecord
+      ? {
+        ...currentRecord,
+        ...(field === 'material_saved' ? { material_saved: String(value) } : { [field]: value }),
+      }
+      : null
+
+    setRecords((prev) => prev.map((record) => {
+      if (record.id !== id || !updatedRecord) return record
+      return updatedRecord
+    }))
 
     if (updatedRecord && value === true && (field === 'post_completed' || field === 'youtube_reserved')) {
-      await promoteToSnsProperty(updatedRecord, field)
+      await promoteToSnsPropertySafe(updatedRecord, field)
     }
   }
 
@@ -1269,9 +1364,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <span className="progress-stat-label">全件数</span>
           <strong className="progress-stat-value">{records.length}</strong>
         </div>
-        {MEDIA_OPTIONS.map((media) => (
+        {MEDIA_OPTIONS.map((media, index) => (
           <div key={media} className="progress-stat">
-            <span className="progress-stat-label">{media}</span>
+            <span className="progress-stat-label">{SUMMARY_LABELS[index] || media}</span>
             <strong className="progress-stat-value">{records.filter((record) => getMediaDisplayName(record.media) === media).length}</strong>
           </div>
         ))}

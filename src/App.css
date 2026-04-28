@@ -2957,7 +2957,7 @@ button.manual-chip {
 
 .progress-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -2971,6 +2971,7 @@ button.manual-chip {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  align-items: center;
   min-width: 0;
   height: 100%;
 }
@@ -2993,6 +2994,7 @@ button.manual-chip {
   font-weight: 800;
   line-height: 1.1;
   color: var(--gray-900);
+  text-align: center;
 }
 
 .progress-page {
