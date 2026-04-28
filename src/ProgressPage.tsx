@@ -233,8 +233,17 @@ function toRegisteredLabel(value: boolean) {
 }
 
 function getStatusCellStyle(value: ProcessStatus) {
-  const color = PROCESS_COLORS[value]
+  const fallbackColor = PROCESS_COLORS[PROCESS_STATUSES[0]]
+  const color = PROCESS_COLORS[value] || fallbackColor
   return { background: color.bg, color: color.color }
+}
+
+function sanitizeProcessStatus(value: unknown): ProcessStatus {
+  return PROCESS_STATUSES.includes(value as ProcessStatus) ? (value as ProcessStatus) : PROCESS_STATUSES[0]
+}
+
+function sanitizeSelectText(value: unknown, fallback = '') {
+  return typeof value === 'string' && value.trim() ? value : fallback
 }
 
 function LinkIcon() {
@@ -263,33 +272,51 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   async function fetchRecords() {
     setLoading(true)
-    const { data } = await supabase
-      .from('production_records')
-      .select('*')
-      .order('created_at', { ascending: false })
+    try {
+      const { data, error } = await supabase
+        .from('production_records')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    if (data) {
-      const converted = data.map((record: any) => ({
-        ...defaultForm,
-        ...record,
-        media: getMediaDisplayName(record.media || ''),
-        material_saved: record.shooting_date || '',
-        post_type: record.post_type || '',
-        property_number: record.property_number || '',
-        youtube_reserved: Boolean(record.youtube_reserved),
-        post_completed: Boolean(record.post_completed),
-        aos_registered: Boolean(record.aos_registered),
-        wp_registered: Boolean(record.wp_registered),
-        device: record.device || '未設定',
-        video_duration: record.video_duration || '未設定',
-        audio_source: record.audio_source || '未登録',
-        floor_plan_order: record.floor_plan_order || '未着手',
-      }))
+      if (error) {
+        throw error
+      }
 
-      setRecords(converted as ProductionRecord[])
+      if (data) {
+        const converted = data.map((record: any) => ({
+          ...defaultForm,
+          ...record,
+          media: getMediaDisplayName(sanitizeSelectText(record.media, defaultForm.media)),
+          material_saved: sanitizeSelectText(record.shooting_date),
+          scheduled_post_date: sanitizeSelectText(record.scheduled_post_date),
+          post_type: sanitizeSelectText(record.post_type),
+          property_number: sanitizeSelectText(record.property_number),
+          youtube_reserved: Boolean(record.youtube_reserved),
+          post_completed: Boolean(record.post_completed),
+          aos_registered: Boolean(record.aos_registered),
+          wp_registered: Boolean(record.wp_registered),
+          device: sanitizeSelectText(record.device, defaultForm.device),
+          video_duration: sanitizeSelectText(record.video_duration, defaultForm.video_duration),
+          audio_source: sanitizeSelectText(record.audio_source, defaultForm.audio_source),
+          material_processing: sanitizeProcessStatus(record.material_processing),
+          text_overlay: sanitizeProcessStatus(record.text_overlay),
+          afureko: sanitizeProcessStatus(record.afureko),
+          floor_plan_order: sanitizeProcessStatus(record.floor_plan_order),
+          floor_plan_insert: sanitizeProcessStatus(record.floor_plan_insert),
+          floor_plan_check: sanitizeProcessStatus(record.floor_plan_check),
+          final_save: sanitizeProcessStatus(record.final_save),
+        }))
+
+        setRecords(converted as ProductionRecord[])
+      } else {
+        setRecords([])
+      }
+    } catch (error) {
+      console.error('progress fetch failed', error)
+      setRecords([])
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -826,11 +853,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   function renderProcessCell(record: ProductionRecord, field: keyof ProductionRecord) {
-    const value = (record[field] as ProcessStatus) || '未着手'
+    const value = String(record[field] || PROCESS_STATUSES[0]) as ProcessStatus
     return renderSelectCell(record, field, 'process', SELECT_OPTION_FIELD_LABELS[field] || '工程', 'progress-cell-status', getStatusCellStyle(value))
   }
 
-  function renderRegisterCell(record: ProductionRecord, field: 'wp_registered' | 'youtube_reserved') {
+  function renderRegisterCell(record: ProductionRecord, field: 'wp_registered' | 'aos_registered' | 'youtube_reserved') {
     return renderSelectCell(record, field, 'register', SELECT_OPTION_FIELD_LABELS[field] || '登録状況')
   }
 
@@ -945,7 +972,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-4">メモ</th>
             <th className="ptcol-group-4">投稿文</th>
             <th className="ptcol-group-4">WP登録</th>
+            <th className="ptcol-group-4">AOS登録</th>
             <th className="ptcol-group-4">YouTube</th>
+            <th className="ptcol-group-4">完成品保存</th>
             <th className="ptcol-group-4">音源</th>
             <th className="ptcol-group-5">完了</th>
             <th className="ptcol-group-5">削除</th>
@@ -977,7 +1006,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
+              <td className="ptcell-group-4">{renderRegisterCell(record, 'aos_registered')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'youtube_reserved')}</td>
+              <td className="ptcell-group-4">{renderProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-4">{renderSelectCell(record, 'audio_source', 'audio')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
