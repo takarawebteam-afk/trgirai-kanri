@@ -1377,10 +1377,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       </div>
 
       <section className="panel progress-table-panel">
-        <div className="panel-heading" style={{ padding: '20px 24px 10px' }}>
+        <div className="panel-heading progress-table-heading">
           <div>
             <h2>動画制作進捗一覧</h2>
-            <p>表示 {records.length} 件 / 全 {records.length} 件　遅延: <strong style={{ color: '#dc2626' }}>{delayedCount} 件</strong> 一覧の中でそのまま入力できます</p>
           </div>
         </div>
 

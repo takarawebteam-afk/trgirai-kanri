@@ -3053,6 +3053,11 @@ button.manual-chip {
   margin-right: -48px;
 }
 
+.progress-table-heading {
+  padding: 20px 24px 0;
+  margin-bottom: 0;
+}
+
 .progress-media-section + .progress-media-section {
   border-top: 1px solid var(--gray-100);
 }
