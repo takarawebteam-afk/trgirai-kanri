@@ -4541,13 +4541,16 @@ button.manual-chip {
   gap: 8px;
   align-items: center;
   margin-left: auto;
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
   justify-content: flex-end;
 }
 
 .sns-property-search-input {
-  width: min(100%, 360px);
-  min-width: 220px;
+  width: 100%;
+  max-width: 430px;
+  min-width: 160px;
+  flex: 1 1 260px;
   height: 40px;
   padding: 0 12px;
   border: 1px solid var(--gray-200);
