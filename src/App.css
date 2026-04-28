@@ -4540,6 +4540,47 @@ button.manual-chip {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sns-property-search-input {
+  width: min(100%, 360px);
+  min-width: 220px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  background: var(--white);
+}
+
+.sns-property-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--gray-200);
+  flex-wrap: wrap;
+}
+
+.sns-property-pagination button {
+  padding: 6px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--gray-700);
+  cursor: pointer;
+}
+
+.sns-property-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sns-property-page-info {
+  color: var(--gray-600);
+  font-size: 0.85rem;
 }
 
 .memo-icon-button {

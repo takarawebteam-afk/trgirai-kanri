@@ -437,6 +437,23 @@ const DEFAULT_SNS_AOS_OPTIONS = [
   '広告不可',
   '×',
 ] as const
+const SNS_PROPERTY_PAGE_SIZE = 100
+
+function normalizeSnsPropertySearch(value: string) {
+  return value.trim().toUpperCase()
+}
+
+function buildSnsPropertyPageInfo(totalCount: number, currentPage: number) {
+  const safeTotalCount = Math.max(0, totalCount)
+  const totalPages = Math.max(1, Math.ceil(safeTotalCount / SNS_PROPERTY_PAGE_SIZE))
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
+  return {
+    totalPages,
+    currentPage: safeCurrentPage,
+    from: safeTotalCount === 0 ? 0 : (safeCurrentPage - 1) * SNS_PROPERTY_PAGE_SIZE + 1,
+    to: safeTotalCount === 0 ? 0 : Math.min(safeCurrentPage * SNS_PROPERTY_PAGE_SIZE, safeTotalCount),
+  }
+}
 
 function normalizeSnsPropertyOptions(options: string[]) {
   return Array.from(new Set(options.map(option => option.trim()).filter(Boolean)))
@@ -466,14 +483,21 @@ function saveStoredSnsPropertyOptions(field: SnsPropertySelectField, options: st
 
 function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | undefined) {
   const normalizedPropertyNumber = String(propertyNumber || '').trim().toUpperCase()
-  const karilunMatch = normalizedPropertyNumber.match(/^K(\d{4})$/)
-  if (karilunMatch) {
-    const code = Number(karilunMatch[1])
+  const tikTokMatch = normalizedPropertyNumber.match(/^K(\d{4})$/)
+  if (tikTokMatch) {
+    const code = Number(tikTokMatch[1])
     if (code >= 922 && code <= 970) return 2026
     if (code >= 661 && code <= 921) return 2025
     if (code >= 369 && code <= 660) return 2024
     if (code >= 116 && code <= 368) return 2023
     return 2022
+  }
+
+  const instagramMatch = normalizedPropertyNumber.match(/^G(\d{3})$/)
+  if (instagramMatch) {
+    const code = Number(instagramMatch[1])
+    if (code >= 597) return 2026
+    return 2025
   }
 
   const youtubeMatch = normalizedPropertyNumber.match(/^Y(\d{3})$/)
@@ -924,6 +948,21 @@ function App() {
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
   const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
   const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
+  const [snsPropertySearch, setSnsPropertySearch] = useState<Record<SnsPropertyPlatform, string>>({
+    tiktok: '',
+    instagram: '',
+    youtube: '',
+  })
+  const [snsPropertyPage, setSnsPropertyPage] = useState<Record<SnsPropertyPlatform, number>>({
+    tiktok: 1,
+    instagram: 1,
+    youtube: 1,
+  })
+  const [snsPropertyTotalCount, setSnsPropertyTotalCount] = useState<Record<SnsPropertyPlatform, number>>({
+    tiktok: 0,
+    instagram: 0,
+    youtube: 0,
+  })
   const [snsPropertyOptions, setSnsPropertyOptions] = useState<Record<SnsPropertySelectField, string[]>>(() => ({
     wp_registered: getStoredSnsPropertyOptions('wp_registered') || normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
     aos_registered: getStoredSnsPropertyOptions('aos_registered') || normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
@@ -1005,22 +1044,55 @@ function App() {
     if (data) setDmRecords(data as DMRecord[])
   }
 
-  const fetchTiktokProperties = useCallback(async () => {
-    const { data } = await supabase.from('sns_tiktok_properties').select('*')
-    if (data) {
-      setTiktokProperties(sortSnsPropertyRowsByPropertyNumber(data as TiktokPropertyRecord[]))
+  async function fetchSnsPropertyPage<T extends { property_number: string; created_at?: string }>(
+    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    platform: SnsPropertyPlatform,
+    page: number,
+    search: string,
+    setter: React.Dispatch<React.SetStateAction<T[]>>,
+  ) {
+    const normalizedSearch = normalizeSnsPropertySearch(search)
+    const pageInfo = buildSnsPropertyPageInfo(Number.MAX_SAFE_INTEGER, page)
+    let query = supabase
+      .from(tableName)
+      .select('*', { count: 'exact' })
+      .order('property_number', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+
+    if (normalizedSearch) {
+      query = query.ilike('property_number', `%${normalizedSearch}%`)
     }
-  }, [])
+
+    const { data, count, error } = await query.range(
+      (pageInfo.currentPage - 1) * SNS_PROPERTY_PAGE_SIZE,
+      pageInfo.currentPage * SNS_PROPERTY_PAGE_SIZE - 1,
+    )
+
+    if (error) {
+      alert(`SNS物件データの読込に失敗しました。\n\n${error.message}`)
+      return
+    }
+
+    const totalCount = count ?? 0
+    const nextPageInfo = buildSnsPropertyPageInfo(totalCount, page)
+    setSnsPropertyTotalCount((prev) => ({ ...prev, [platform]: totalCount }))
+    if (nextPageInfo.currentPage !== page) {
+      setSnsPropertyPage((prev) => ({ ...prev, [platform]: nextPageInfo.currentPage }))
+    }
+    setter(sortSnsPropertyRowsByPropertyNumber((data || []) as T[]))
+  }
+
+  const fetchTiktokProperties = useCallback(async () => {
+    await fetchSnsPropertyPage('sns_tiktok_properties', 'tiktok', snsPropertyPage.tiktok, snsPropertySearch.tiktok, setTiktokProperties)
+  }, [snsPropertyPage.tiktok, snsPropertySearch.tiktok])
 
   const fetchInstagramProperties = useCallback(async () => {
-    const { data } = await supabase.from('sns_instagram_properties').select('*')
-    if (data) setInstagramProperties(sortSnsPropertyRowsByPropertyNumber(data as InstagramPropertyRecord[]))
-  }, [])
+    await fetchSnsPropertyPage('sns_instagram_properties', 'instagram', snsPropertyPage.instagram, snsPropertySearch.instagram, setInstagramProperties)
+  }, [snsPropertyPage.instagram, snsPropertySearch.instagram])
 
   const fetchYoutubeProperties = useCallback(async () => {
-    const { data } = await supabase.from('sns_youtube_properties').select('*')
-    if (data) setYoutubeProperties(sortSnsPropertyRowsByPropertyNumber(data as YoutubePropertyRecord[]))
-  }, [])
+    await fetchSnsPropertyPage('sns_youtube_properties', 'youtube', snsPropertyPage.youtube, snsPropertySearch.youtube, setYoutubeProperties)
+  }, [snsPropertyPage.youtube, snsPropertySearch.youtube])
 
   const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube') => {
     if (target === 'tiktok') {
@@ -1095,6 +1167,48 @@ function App() {
       ...recordValues,
     ])
   }, [instagramProperties, snsPropertyOptions, tiktokProperties, youtubeProperties])
+
+  const activeSnsPropertyTotalCount = snsPropertyTotalCount[activeSnsPropertyPlatform]
+  const activeSnsPropertyCurrentPage = snsPropertyPage[activeSnsPropertyPlatform]
+  const activeSnsPropertyPageInfo = buildSnsPropertyPageInfo(activeSnsPropertyTotalCount, activeSnsPropertyCurrentPage)
+
+  function updateSnsPropertySearch(platform: SnsPropertyPlatform, value: string) {
+    setSnsPropertySearch((prev) => ({ ...prev, [platform]: value }))
+    setSnsPropertyPage((prev) => ({ ...prev, [platform]: 1 }))
+  }
+
+  function moveSnsPropertyPage(platform: SnsPropertyPlatform, nextPage: number) {
+    setSnsPropertyPage((prev) => ({ ...prev, [platform]: Math.max(1, nextPage) }))
+  }
+
+  function renderSnsPropertyPagination() {
+    return (
+      <div className="sns-property-pagination">
+        <button
+          type="button"
+          onClick={() => moveSnsPropertyPage(activeSnsPropertyPlatform, activeSnsPropertyPageInfo.currentPage - 1)}
+          disabled={activeSnsPropertyPageInfo.currentPage <= 1}
+        >
+          前へ
+        </button>
+        <button
+          type="button"
+          onClick={() => moveSnsPropertyPage(activeSnsPropertyPlatform, activeSnsPropertyPageInfo.currentPage + 1)}
+          disabled={activeSnsPropertyPageInfo.currentPage >= activeSnsPropertyPageInfo.totalPages}
+        >
+          次へ
+        </button>
+        <span className="sns-property-page-info">
+          {activeSnsPropertyTotalCount === 0
+            ? '0件'
+            : `${activeSnsPropertyPageInfo.from}-${activeSnsPropertyPageInfo.to}件 / 全${activeSnsPropertyTotalCount}件`}
+        </span>
+        <span className="sns-property-page-info">
+          {activeSnsPropertyPageInfo.currentPage} / {activeSnsPropertyPageInfo.totalPages}ページ
+        </span>
+      </div>
+    )
+  }
 
   function openSnsPropertyOptionEditor(field: SnsPropertySelectField, title: string) {
     const currentOptions = getSnsPropertySelectOptions(field)
@@ -1410,9 +1524,6 @@ function App() {
     fetchMembers()
     fetchHankyo()
     fetchDm()
-    fetchTiktokProperties()
-    fetchInstagramProperties()
-    fetchYoutubeProperties()
     fetchStock()
     fetchBusho()
     fetchJishaShukyaku()
@@ -1426,6 +1537,27 @@ function App() {
 
     return () => { supabase.removeChannel(channel) }
   }, [currentUserEmail])
+
+  useEffect(() => {
+    if (!currentUserEmail || activePage !== 'snsproperty') return
+
+    if (activeSnsPropertyPlatform === 'tiktok') {
+      void fetchTiktokProperties()
+      return
+    }
+    if (activeSnsPropertyPlatform === 'instagram') {
+      void fetchInstagramProperties()
+      return
+    }
+    void fetchYoutubeProperties()
+  }, [
+    activePage,
+    activeSnsPropertyPlatform,
+    currentUserEmail,
+    fetchInstagramProperties,
+    fetchTiktokProperties,
+    fetchYoutubeProperties,
+  ])
 
   const yearOptions = Array.from(
     new Set([
@@ -2228,7 +2360,7 @@ function App() {
         <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>当日業務管理</button>
         <button className={activePage === 'taskreport' ? 'active' : ''} onClick={() => { setActivePage('taskreport'); setShowModal(false) }}>業務棚卸し</button>
-        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false); fetchTiktokProperties(); fetchInstagramProperties(); fetchYoutubeProperties() }}>SNS物件管理</button>
+        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false) }}>SNS物件管理</button>
         <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
         <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック管理</button>
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
@@ -2784,15 +2916,15 @@ function App() {
             <div className="sns-property-subtabs">
               <button
                 className={activeSnsPropertyPlatform === 'tiktok' ? 'active' : ''}
-                onClick={() => { setActiveSnsPropertyPlatform('tiktok'); fetchTiktokProperties() }}
+                onClick={() => { setActiveSnsPropertyPlatform('tiktok') }}
               >Karilun｜TikTok</button>
               <button
                 className={activeSnsPropertyPlatform === 'instagram' ? 'active' : ''}
-                onClick={() => { setActiveSnsPropertyPlatform('instagram'); fetchInstagramProperties() }}
+                onClick={() => { setActiveSnsPropertyPlatform('instagram') }}
               >Karilun｜Instagram</button>
               <button
                 className={activeSnsPropertyPlatform === 'youtube' ? 'active' : ''}
-                onClick={() => { setActiveSnsPropertyPlatform('youtube'); fetchYoutubeProperties() }}
+                onClick={() => { setActiveSnsPropertyPlatform('youtube') }}
               >Karilun｜YouTube</button>
             </div>
 
@@ -2801,6 +2933,15 @@ function App() {
                 <div className="panel-heading">
                   <div><h2>Karilun｜TikTok 物件管理</h2></div>
                   <div className="sns-property-toolbar">
+                    <input
+                      className="sns-property-search-input"
+                      value={snsPropertySearch.tiktok}
+                      onChange={(e) => updateSnsPropertySearch('tiktok', e.target.value)}
+                      placeholder="物件番号で検索"
+                    />
+                    {snsPropertySearch.tiktok && (
+                      <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('tiktok', '')}>×</button>
+                    )}
                     <button className="primary" onClick={addTiktokProperty}>＋ 行を追加</button>
                   </div>
                 </div>
@@ -2854,6 +2995,7 @@ function App() {
                     </tbody>
                   </table>
                 </div>
+                {renderSnsPropertyPagination()}
               </section>
             )}
 
@@ -2862,6 +3004,15 @@ function App() {
                 <div className="panel-heading">
                   <div><h2>Karilun｜Instagram 物件管理</h2></div>
                   <div className="sns-property-toolbar">
+                    <input
+                      className="sns-property-search-input"
+                      value={snsPropertySearch.instagram}
+                      onChange={(e) => updateSnsPropertySearch('instagram', e.target.value)}
+                      placeholder="物件番号で検索"
+                    />
+                    {snsPropertySearch.instagram && (
+                      <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('instagram', '')}>×</button>
+                    )}
                     <button className="primary" onClick={addInstagramProperty}>＋ 行を追加</button>
                   </div>
                 </div>
@@ -2912,6 +3063,7 @@ function App() {
                     </tbody>
                   </table>
                 </div>
+                {renderSnsPropertyPagination()}
               </section>
             )}
 
@@ -2920,6 +3072,15 @@ function App() {
                 <div className="panel-heading">
                   <div><h2>Karilun｜YouTube 物件管理</h2></div>
                   <div className="sns-property-toolbar">
+                    <input
+                      className="sns-property-search-input"
+                      value={snsPropertySearch.youtube}
+                      onChange={(e) => updateSnsPropertySearch('youtube', e.target.value)}
+                      placeholder="物件番号で検索"
+                    />
+                    {snsPropertySearch.youtube && (
+                      <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('youtube', '')}>×</button>
+                    )}
                     <button className="primary" onClick={addYoutubeProperty}>＋ 行を追加</button>
                   </div>
                 </div>
@@ -2964,6 +3125,7 @@ function App() {
                     </tbody>
                   </table>
                 </div>
+                {renderSnsPropertyPagination()}
               </section>
             )}
           </>
