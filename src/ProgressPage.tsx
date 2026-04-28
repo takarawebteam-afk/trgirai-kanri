@@ -54,9 +54,15 @@ type SelectMenuState = {
   id: string
   field: keyof ProductionRecord
   group: SelectOptionGroup
+  title: string
   top: number
   left: number
   width: number
+} | null
+type SelectOptionEditorState = {
+  group: SelectOptionGroup
+  title: string
+  items: string[]
 } | null
 
 const PROCESS_COLORS: Record<ProcessStatus, { bg: string; color: string }> = {
@@ -81,6 +87,68 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   duration: ['未設定', '15秒', '30秒', '45秒', '60秒', '編集中'],
   audio: ['未登録', '候補あり', '登録済'],
   register: ['未登録', '登録済'],
+}
+
+const SELECT_OPTION_STORAGE_PREFIX = 'progress_select_options:'
+const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
+  process: '工程',
+  device: '使用端末',
+  duration: '動画尺',
+  audio: '音源',
+  register: '登録状況',
+}
+const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
+  floor_plan_order: '図面発注',
+  material_processing: '素材加工',
+  floor_plan_insert: '図面挿入',
+  afureko: 'アフレコ',
+  text_overlay: 'テロップ',
+  floor_plan_check: '図面確認',
+  final_save: '最終保存',
+  device: '使用端末',
+  video_duration: '動画尺',
+  audio_source: '音源',
+  wp_registered: 'WP登録',
+  youtube_reserved: 'YouTube予約',
+}
+
+function normalizeSelectOptions(options: string[]) {
+  return Array.from(new Set(options.map((item) => item.trim()).filter(Boolean)))
+}
+
+function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
+  if (typeof window === 'undefined') {
+    return INITIAL_SELECT_OPTIONS
+  }
+
+  const next = { ...INITIAL_SELECT_OPTIONS }
+
+  ;(Object.keys(INITIAL_SELECT_OPTIONS) as SelectOptionGroup[]).forEach((group) => {
+    try {
+      const raw = window.localStorage.getItem(`${SELECT_OPTION_STORAGE_PREFIX}${group}`)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return
+
+      const normalized = normalizeSelectOptions(parsed.filter((item): item is string => typeof item === 'string'))
+      if (normalized.length > 0) {
+        next[group] = normalized
+      }
+    } catch {
+      next[group] = INITIAL_SELECT_OPTIONS[group]
+    }
+  })
+
+  return next
+}
+
+function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
+  if (typeof window === 'undefined') return
+
+  window.localStorage.setItem(
+    `${SELECT_OPTION_STORAGE_PREFIX}${group}`,
+    JSON.stringify(normalizeSelectOptions(options)),
+  )
 }
 
 const MEDIA_OPTIONS = [
@@ -184,8 +252,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   const [editId, setEditId] = useState<string | null>(null)
   const [copyTargetId, setCopyTargetId] = useState<string | null>(null)
   const [selectOptions, setSelectOptions] =
-    useState<Record<SelectOptionGroup, string[]>>(INITIAL_SELECT_OPTIONS)
+    useState<Record<SelectOptionGroup, string[]>>(() => getStoredSelectOptions())
   const [selectMenu, setSelectMenu] = useState<SelectMenuState>(null)
+  const [selectOptionEditor, setSelectOptionEditor] = useState<SelectOptionEditorState>(null)
   const selectMenuRef = useRef<HTMLDivElement | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -404,6 +473,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     record: ProductionRecord,
     field: keyof ProductionRecord,
     group: SelectOptionGroup,
+    title: string,
   ) {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
@@ -411,6 +481,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       id: record.id,
       field,
       group,
+      title,
       top: rect.bottom + 4,
       left: rect.left,
       width: Math.max(rect.width, 108),
@@ -418,10 +489,14 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   function updateSelectOptions(group: SelectOptionGroup) {
+    openSelectOptionEditor(group)
+    return
+
     const current = selectOptions[group]
     const answer = window.prompt('選択肢を1行ずつ入力してください。', current.join('\n'))
     if (answer === null) return
 
+    // @ts-expect-error 旧編集方式の名残。現在は return 済みで実行されない。
     const next = answer
       .split(/\r?\n/)
       .map((item) => item.trim())
@@ -431,6 +506,67 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
     setSelectOptions((prev) => ({ ...prev, [group]: next }))
     setSelectMenu(null)
+  }
+
+  function openSelectOptionEditor(group: SelectOptionGroup) {
+    const title = selectMenu?.title || SELECT_OPTION_GROUP_LABELS[group]
+
+    setSelectOptionEditor({
+      group,
+      title,
+      items: selectOptions[group].length > 0 ? [...selectOptions[group]] : [''],
+    })
+    setSelectMenu(null)
+  }
+
+  function updateSelectOptionItem(index: number, value: string) {
+    setSelectOptionEditor((prev) => {
+      if (!prev) return prev
+      const items = [...prev.items]
+      items[index] = value
+      return { ...prev, items }
+    })
+  }
+
+  function addSelectOptionItem() {
+    setSelectOptionEditor((prev) => {
+      if (!prev) return prev
+      return { ...prev, items: [...prev.items, ''] }
+    })
+  }
+
+  function removeSelectOptionItem(index: number) {
+    setSelectOptionEditor((prev) => {
+      if (!prev) return prev
+      const items = prev.items.filter((_, itemIndex) => itemIndex !== index)
+      return { ...prev, items: items.length > 0 ? items : [''] }
+    })
+  }
+
+  function moveSelectOptionItem(index: number, direction: 'up' | 'down') {
+    setSelectOptionEditor((prev) => {
+      if (!prev) return prev
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= prev.items.length) return prev
+
+      const items = [...prev.items]
+      ;[items[index], items[targetIndex]] = [items[targetIndex], items[index]]
+      return { ...prev, items }
+    })
+  }
+
+  function saveSelectOptionItems() {
+    if (!selectOptionEditor) return
+
+    const nextOptions = normalizeSelectOptions(selectOptionEditor.items)
+    if (nextOptions.length === 0) {
+      window.alert('候補を1つ以上入れてください。')
+      return
+    }
+
+    saveStoredSelectOptions(selectOptionEditor.group, nextOptions)
+    setSelectOptions((prev) => ({ ...prev, [selectOptionEditor.group]: nextOptions }))
+    setSelectOptionEditor(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -523,13 +659,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderDateCell(record: ProductionRecord, field: 'material_saved' | 'scheduled_post_date', delayed = false) {
     return (
-      <input
-        className={`progress-cell-input is-date${delayed ? ' is-delayed' : ''}`}
-        type="date"
-        value={record[field] || ''}
-        onChange={(e) => updateField(record.id, field, e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+        <input
+          className={`progress-cell-input is-date${delayed ? ' is-delayed' : ''}`}
+          type="date"
+          value={record[field] || ''}
+          onChange={(e) => updateField(record.id, field, e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
     )
   }
 
@@ -540,13 +678,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     className = 'progress-cell-input',
   ) {
     return (
-      <input
-        className={className}
-        value={String(record[field] || '')}
-        placeholder={placeholder}
-        onChange={(e) => updateField(record.id, field, e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+        <input
+          className={className}
+          value={String(record[field] || '')}
+          placeholder={placeholder}
+          onChange={(e) => updateField(record.id, field, e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
     )
   }
 
@@ -554,6 +694,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     record: ProductionRecord,
     field: keyof ProductionRecord,
     group: SelectOptionGroup,
+    title?: string,
     extraClassName = '',
     style?: React.CSSProperties,
   ) {
@@ -565,12 +706,22 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     const isOpen = selectMenu?.id === record.id && selectMenu.field === field
 
     return (
-      <div className={`progress-editable-select${isOpen ? ' is-open' : ''}`}>
+      <div
+        className={`progress-editable-select progress-cell-hitbox${isOpen ? ' is-open' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
           className={`progress-editable-select-trigger ${extraClassName}`.trim()}
           style={style}
-          onClick={(event) => openSelectMenu(event, record, field, group)}
+          onClick={(event) => openSelectMenu(
+            event,
+            record,
+            field,
+            group,
+            title || SELECT_OPTION_FIELD_LABELS[field] || SELECT_OPTION_GROUP_LABELS[group],
+          )}
         >
           <span className="progress-editable-select-label">{value}</span>
           <span className="progress-editable-select-caret" aria-hidden="true" />
@@ -581,11 +732,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderProcessCell(record: ProductionRecord, field: keyof ProductionRecord) {
     const value = (record[field] as ProcessStatus) || '未着手'
-    return renderSelectCell(record, field, 'process', 'progress-cell-status', getStatusCellStyle(value))
+    return renderSelectCell(record, field, 'process', SELECT_OPTION_FIELD_LABELS[field] || '工程', 'progress-cell-status', getStatusCellStyle(value))
   }
 
   function renderRegisterCell(record: ProductionRecord, field: 'wp_registered' | 'youtube_reserved') {
-    return renderSelectCell(record, field, 'register')
+    return renderSelectCell(record, field, 'register', SELECT_OPTION_FIELD_LABELS[field] || '登録状況')
   }
 
   function renderCheckboxCell(record: ProductionRecord, field: 'post_completed' | 'aos_registered') {
@@ -1206,6 +1357,70 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 ✎
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {selectOptionEditor && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelectOptionEditor(null) }}>
+          <div className="modal-content progress-select-editor-modal">
+            <div className="modal-header">
+              <h2 className="modal-title">{selectOptionEditor.title}の候補を編集</h2>
+              <button className="modal-close" type="button" onClick={() => setSelectOptionEditor(null)}>
+                ×
+              </button>
+            </div>
+
+            <div className="progress-select-editor-list">
+              {selectOptionEditor.items.map((item, index) => (
+                <div key={`${selectOptionEditor.group}-${index}`} className="progress-select-editor-row">
+                  <span className="progress-select-editor-grip" aria-hidden="true">⋮⋮</span>
+                  <input
+                    className="progress-select-editor-input"
+                    value={item}
+                    onChange={(e) => updateSelectOptionItem(index, e.target.value)}
+                    placeholder="候補名を入力"
+                  />
+                  <div className="progress-select-editor-actions">
+                    <button
+                      type="button"
+                      className="progress-select-editor-move-button"
+                      onClick={() => moveSelectOptionItem(index, 'up')}
+                      disabled={index === 0}
+                      title="上へ移動"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="progress-select-editor-move-button"
+                      onClick={() => moveSelectOptionItem(index, 'down')}
+                      disabled={index === selectOptionEditor.items.length - 1}
+                      title="下へ移動"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="progress-select-editor-delete"
+                    onClick={() => removeSelectOptionItem(index)}
+                    title="この候補を削除"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="progress-select-editor-add-wrap">
+              <button type="button" className="secondary" onClick={addSelectOptionItem}>項目を追加</button>
+            </div>
+
+            <div className="form-actions" style={{ marginTop: 12 }}>
+              <button type="button" className="secondary" onClick={() => setSelectOptionEditor(null)}>キャンセル</button>
+              <button type="button" className="primary" onClick={saveSelectOptionItems}>完了</button>
+            </div>
           </div>
         </div>
       )}

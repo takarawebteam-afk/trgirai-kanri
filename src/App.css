@@ -3136,6 +3136,16 @@ button.manual-chip {
   box-shadow: none;
 }
 
+.progress-cell-hitbox {
+  display: flex;
+  align-items: center;
+  width: calc(100% + 20px);
+  min-height: 28px;
+  margin: -1px -10px;
+  padding: 4px 10px;
+  box-sizing: border-box;
+}
+
 .progress-editable-select {
   position: relative;
   min-width: 0;
@@ -3465,28 +3475,28 @@ button.manual-chip {
 }
 
 .progress-select-editor-modal {
-  width: min(520px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
 }
 
 .progress-select-editor-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   max-height: 52vh;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 4px 6px 4px 0;
 }
 
 .progress-select-editor-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 40px 40px;
-  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) 48px 40px;
+  gap: 12px;
   align-items: center;
 }
 
 .progress-select-editor-grip {
   color: #9ca3af;
-  font-size: 1rem;
+  font-size: 1.05rem;
   text-align: center;
   user-select: none;
 }
@@ -3494,23 +3504,24 @@ button.manual-chip {
 .progress-select-editor-actions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .progress-select-editor-move-button {
-  width: 40px;
-  height: 17px;
-  border: none;
-  background: #f3f4f6;
+  width: 48px;
+  height: 24px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
   color: #4b5563;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   line-height: 1;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .progress-select-editor-move-button:hover:not(:disabled) {
-  background: #e5e7eb;
+  background: #eef2f7;
+  border-color: #cbd5e1;
 }
 
 .progress-select-editor-move-button:disabled {
@@ -3520,11 +3531,19 @@ button.manual-chip {
 
 .progress-select-editor-input {
   width: 100%;
-  padding: 12px 14px;
+  min-height: 60px;
+  padding: 16px 18px;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
   box-sizing: border-box;
+}
+
+.progress-select-editor-input:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .progress-select-editor-delete {
@@ -3546,7 +3565,7 @@ button.manual-chip {
 .progress-select-editor-add-wrap {
   display: flex;
   justify-content: flex-start;
-  margin-top: 14px;
+  margin-top: 18px;
 }
 
 .ptcol-group-1 { background: #dbeafe !important; }

@@ -1,0 +1,231 @@
+import { readFileSync } from 'node:fs'
+import { createClient } from '@supabase/supabase-js'
+
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1qXKOHfTUWbYgpxKh67ZW1GspFswJQ4DETQeREaCxH4M/export?format=csv&gid=0'
+
+function loadEnvFile(filePath) {
+  const env = {}
+  const content = readFileSync(filePath, 'utf8')
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+    const equalIndex = line.indexOf('=')
+    if (equalIndex === -1) continue
+    const key = line.slice(0, equalIndex).trim()
+    const value = line.slice(equalIndex + 1).trim().replace(/^['"]|['"]$/g, '')
+    env[key] = value
+  }
+  return env
+}
+
+function loadEnv() {
+  return {
+    ...loadEnvFile('.env'),
+    ...loadEnvFile('.env.local'),
+    ...process.env,
+  }
+}
+
+function parseCsv(text) {
+  const rows = []
+  let row = []
+  let cell = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]
+    const next = text[i + 1]
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"'
+        i += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+
+    if (char === ',' && !inQuotes) {
+      row.push(cell)
+      cell = ''
+      continue
+    }
+
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i += 1
+      row.push(cell)
+      rows.push(row)
+      row = []
+      cell = ''
+      continue
+    }
+
+    cell += char
+  }
+
+  if (cell || row.length > 0) {
+    row.push(cell)
+    rows.push(row)
+  }
+
+  return rows
+}
+
+function normalizeText(value) {
+  return String(value || '').trim()
+}
+
+function getPropertyNumberCode(propertyNumber) {
+  const match = normalizeText(propertyNumber).match(/^G(\d{3})$/i)
+  return match ? Number(match[1]) : null
+}
+
+function getInstagramYearFromPropertyNumber(propertyNumber) {
+  const code = getPropertyNumberCode(propertyNumber)
+  if (code === null) return null
+  if (code >= 485 && code <= 598) return 2026
+  if (code >= 133 && code <= 484) return 2025
+  if (code >= 1 && code <= 132) return 2024
+  return null
+}
+
+function normalizeInstagramPostDate(rawDate, propertyNumber) {
+  const text = normalizeText(rawDate)
+  if (!text) return ''
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+
+  const fullDateMatch = text.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/)
+  if (fullDateMatch) {
+    const [, year, month, day] = fullDateMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const firstDateText = text.split('/')[0].trim()
+  const monthDayMatch = firstDateText.match(/^(\d{1,2})月(\d{1,2})日$/)
+  if (!monthDayMatch) return ''
+
+  const year = getInstagramYearFromPropertyNumber(propertyNumber)
+  if (!year) return ''
+
+  const [, month, day] = monthDayMatch
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+}
+
+function toInstagramRecord(columns) {
+  const propertyNumber = normalizeText(columns[4])
+  return {
+    memo: normalizeText(columns[0]),
+    wp_registered: normalizeText(columns[1]),
+    category: normalizeText(columns[2]),
+    post_date: normalizeInstagramPostDate(columns[3], propertyNumber) || null,
+    property_number: propertyNumber,
+    floor_plan: normalizeText(columns[5]),
+    rent: normalizeText(columns[6]),
+    area: normalizeText(columns[7]),
+    nearest_station: normalizeText(columns[8]),
+    document_url: normalizeText(columns[14]),
+    property_name: normalizeText(columns[9]),
+    room_number: normalizeText(columns[10]),
+    address: normalizeText(columns[11]),
+    management_company: normalizeText(columns[12]),
+    contact: normalizeText(columns[13]),
+  }
+}
+
+async function fetchSheetRecords() {
+  const response = await fetch(SHEET_CSV_URL)
+  if (!response.ok) {
+    throw new Error(`Googleスプレッドシートの取得に失敗しました: ${response.status}`)
+  }
+
+  const csvText = new TextDecoder('utf-8').decode(await response.arrayBuffer())
+  const rows = parseCsv(csvText)
+
+  return rows
+    .slice(1)
+    .map(toInstagramRecord)
+    .filter((row) => /^G\d{3}$/i.test(row.property_number))
+}
+
+function groupByPropertyNumber(records) {
+  const map = new Map()
+  for (const record of records) {
+    map.set(record.property_number, record)
+  }
+  return map
+}
+
+async function main() {
+  const env = loadEnv()
+  const supabaseUrl = env.VITE_SUPABASE_URL
+  const supabaseKey = env.VITE_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('.env または .env.local の Supabase設定が見つかりません。')
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const sheetRecords = await fetchSheetRecords()
+  const nextMap = groupByPropertyNumber(sheetRecords)
+
+  const { data: currentData, error: fetchError } = await supabase
+    .from('sns_instagram_properties')
+    .select('id, property_number')
+
+  if (fetchError) {
+    throw new Error(`現在データの読み込みに失敗しました: ${fetchError.message}`)
+  }
+
+  const currentRows = currentData || []
+  const currentMap = new Map(currentRows.map((row) => [normalizeText(row.property_number), row.id]))
+
+  const updates = []
+  const inserts = []
+
+  for (const record of sheetRecords) {
+    const existingId = currentMap.get(record.property_number)
+    if (existingId) {
+      updates.push({ id: existingId, ...record })
+    } else {
+      inserts.push(record)
+    }
+  }
+
+  const deleteIds = currentRows
+    .filter((row) => {
+      const propertyNumber = normalizeText(row.property_number)
+      return propertyNumber && !nextMap.has(propertyNumber)
+    })
+    .map((row) => row.id)
+
+  if (deleteIds.length > 0) {
+    const { error } = await supabase.from('sns_instagram_properties').delete().in('id', deleteIds)
+    if (error) {
+      throw new Error(`不要データの削除に失敗しました: ${error.message}`)
+    }
+  }
+
+  for (const record of updates) {
+    const { id, ...payload } = record
+    const { error } = await supabase.from('sns_instagram_properties').update(payload).eq('id', id)
+    if (error) {
+      throw new Error(`更新に失敗しました (${record.property_number}): ${error.message}`)
+    }
+  }
+
+  if (inserts.length > 0) {
+    const { error } = await supabase.from('sns_instagram_properties').insert(inserts)
+    if (error) {
+      throw new Error(`新規追加に失敗しました: ${error.message}`)
+    }
+  }
+
+  console.log(`完了: 取得 ${sheetRecords.length}件 / 更新 ${updates.length}件 / 追加 ${inserts.length}件 / 削除 ${deleteIds.length}件`)
+}
+
+main().catch((error) => {
+  console.error(error.message)
+  process.exit(1)
+})

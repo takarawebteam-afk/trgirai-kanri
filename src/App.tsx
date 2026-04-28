@@ -1,4 +1,5 @@
 ﻿import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useGoogleLogin } from '@react-oauth/google'
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
 import './App.css'
@@ -100,8 +101,8 @@ type TiktokPropertyRecord = {
   id: string
   created_at?: string
   memo: string
-  wp_registered: boolean
-  aos_registered: boolean
+  wp_registered: string
+  aos_registered: string
   post_date: string
   property_number: string
   floor_plan: string
@@ -120,7 +121,7 @@ type InstagramPropertyRecord = {
   id: string
   created_at?: string
   memo: string
-  wp_registered: boolean
+  wp_registered: string
   category: string
   post_date: string
   property_number: string
@@ -140,7 +141,7 @@ type YoutubePropertyRecord = {
   id: string
   created_at?: string
   memo: string
-  wp_registered: boolean
+  wp_registered: string
   post_date: string
   property_number: string
   document_url: string
@@ -383,21 +384,334 @@ const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
 }
 
 const defaultTiktokPropertyForm: Omit<TiktokPropertyRecord, 'id' | 'created_at'> = {
-  memo: '', wp_registered: false, aos_registered: false, post_date: '', property_number: '',
+  memo: '', wp_registered: '', aos_registered: '', post_date: '', property_number: '',
   floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
   property_name: '', room_number: '', address: '', management_company: '', contact: ''
 }
 
 const defaultInstagramPropertyForm: Omit<InstagramPropertyRecord, 'id' | 'created_at'> = {
-  memo: '', wp_registered: false, category: '', post_date: '', property_number: '',
+  memo: '', wp_registered: '', category: '', post_date: '', property_number: '',
   floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
   property_name: '', room_number: '', address: '', management_company: '', contact: ''
 }
 
 const defaultYoutubePropertyForm: Omit<YoutubePropertyRecord, 'id' | 'created_at'> = {
-  memo: '', wp_registered: false, post_date: '', property_number: '',
+  memo: '', wp_registered: '', post_date: '', property_number: '',
   document_url: '', property_name: '', room_number: '', address: '',
   management_company: '', contact: ''
+}
+
+type SnsPropertySelectField = 'wp_registered' | 'aos_registered'
+
+type SnsPropertyOptionEditorState = {
+  field: SnsPropertySelectField
+  title: string
+  items: string[]
+}
+
+const SNS_PROPERTY_OPTION_STORAGE_PREFIX = 'sns_property_select_options:'
+const DEFAULT_SNS_WP_OPTIONS = [
+  '〇-新居',
+  '〇-泉',
+  '〇-米澤',
+  '〇-坂本',
+  '〇-吉田',
+  '準備中-新',
+  '準備中-泉',
+  '準備中-米',
+  '準備中‐吉',
+  '準備中‐坂',
+  '下書き済-泉',
+  '×',
+] as const
+const DEFAULT_SNS_AOS_OPTIONS = [
+  '〇-営業店',
+  '〇-RPA/APSS',
+  '〇-泉',
+  '〇-坂本',
+  '〇-吉田',
+  '〇-営業店依頼中',
+  '投稿部屋満室の為他建屋利用',
+  '登録前満室で登録未',
+  '他社サイトで対応',
+  '広告不可',
+  '×',
+] as const
+
+function normalizeSnsPropertyOptions(options: string[]) {
+  return Array.from(new Set(options.map(option => option.trim()).filter(Boolean)))
+}
+
+function getStoredSnsPropertyOptions(field: SnsPropertySelectField) {
+  if (typeof window === 'undefined') return null
+  const raw = window.localStorage.getItem(`${SNS_PROPERTY_OPTION_STORAGE_PREFIX}${field}`)
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return null
+    return normalizeSnsPropertyOptions(parsed.filter((item): item is string => typeof item === 'string'))
+  } catch {
+    return null
+  }
+}
+
+function saveStoredSnsPropertyOptions(field: SnsPropertySelectField, options: string[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(
+    `${SNS_PROPERTY_OPTION_STORAGE_PREFIX}${field}`,
+    JSON.stringify(normalizeSnsPropertyOptions(options)),
+  )
+}
+
+function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | undefined) {
+  const normalizedPropertyNumber = String(propertyNumber || '').trim().toUpperCase()
+  const karilunMatch = normalizedPropertyNumber.match(/^K(\d{4})$/)
+  if (karilunMatch) {
+    const code = Number(karilunMatch[1])
+    if (code >= 922 && code <= 970) return 2026
+    if (code >= 661 && code <= 921) return 2025
+    if (code >= 369 && code <= 660) return 2024
+    if (code >= 116 && code <= 368) return 2023
+    return 2022
+  }
+
+  const youtubeMatch = normalizedPropertyNumber.match(/^Y(\d{3})$/)
+  if (!youtubeMatch) return null
+
+  const code = Number(youtubeMatch[1])
+  if (code >= 545 && code <= 612) return 2026
+  if (code >= 201 && code <= 544) return 2025
+  if (code >= 1 && code <= 200) return 2024
+  return null
+}
+
+function normalizeSnsPropertyPostDate(postDate: string | null | undefined, propertyNumber: string | null | undefined) {
+  const rawDate = String(postDate || '').trim()
+  if (!rawDate) return ''
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) return rawDate
+
+  const slashDateMatch = rawDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+  if (slashDateMatch) {
+    const [, year, month, day] = slashDateMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const normalized = rawDate
+    .replace(/\s+/g, '')
+    .replace(/年/g, '/')
+    .replace(/月/g, '/')
+    .replace(/日/g, '')
+    .replace(/\./g, '/')
+    .replace(/-/g, '/')
+
+  const monthDayMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (!monthDayMatch) return rawDate
+
+  const year = getSnsPropertyYearFromPropertyNumber(propertyNumber)
+  if (!year) return rawDate
+
+  const [, month, day] = monthDayMatch
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+}
+
+function sortSnsPropertyRowsByPropertyNumber<T extends { property_number: string; created_at?: string }>(rows: T[]) {
+  return [...rows].sort((a, b) => {
+    if (!a.property_number && !b.property_number) {
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    }
+    if (!a.property_number) return 1
+    if (!b.property_number) return -1
+    return b.property_number.localeCompare(a.property_number, 'ja')
+  })
+}
+
+function SnsCellDropdown({
+  value,
+  options,
+  onChange,
+  onEdit,
+}: {
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+  onEdit?: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const boxRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node
+      if (!boxRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setOpen(false)
+      }
+    }
+
+    if (!open) return
+
+    const updatePosition = () => {
+      if (!boxRef.current) return
+      const rect = boxRef.current.getBoundingClientRect()
+      setMenuStyle({
+        position: 'fixed',
+        top: rect.bottom - 1,
+        left: rect.left,
+        width: Math.max(rect.width + 24, 120),
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [open])
+
+  const mergedOptions = Array.from(new Set([...options, ...(value ? [value] : [])]))
+
+  return (
+    <>
+      <button
+        ref={boxRef}
+        type="button"
+        className={`sns-dropdown-display${open ? ' is-open' : ''}`}
+        title={value || '未設定'}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className="sns-dropdown-text">{value || ''}</span>
+      </button>
+
+      {open && createPortal(
+        <div ref={menuRef} className="sns-dropdown-menu" style={menuStyle}>
+          <button
+            type="button"
+            className={`sns-dropdown-option${value === '' ? ' is-active' : ''}`}
+            onClick={() => {
+              onChange('')
+              setOpen(false)
+            }}
+          >
+            -
+          </button>
+          {mergedOptions.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={`sns-dropdown-option${option === value ? ' is-active' : ''}`}
+              onClick={() => {
+                onChange(option)
+                setOpen(false)
+              }}
+            >
+              {option}
+            </button>
+          ))}
+          {onEdit && (
+            <button
+              type="button"
+              className="sns-dropdown-edit-button"
+              title="候補を編集"
+              onClick={() => {
+                setOpen(false)
+                onEdit()
+              }}
+            >
+              ✎
+            </button>
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function SnsPropertyOptionEditorModal({
+  editor,
+  onClose,
+  onChangeItem,
+  onMoveItem,
+  onRemoveItem,
+  onAddItem,
+  onSave,
+}: {
+  editor: SnsPropertyOptionEditorState
+  onClose: () => void
+  onChangeItem: (index: number, value: string) => void
+  onMoveItem: (index: number, direction: 'up' | 'down') => void
+  onRemoveItem: (index: number) => void
+  onAddItem: () => void
+  onSave: () => void
+}) {
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal-content progress-select-editor-modal">
+        <div className="modal-header">
+          <h2 className="modal-title">{editor.title}の候補を編集</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="progress-select-editor-list">
+          {editor.items.map((item, index) => (
+            <div key={`${editor.field}-${index}`} className="progress-select-editor-row">
+              <span className="progress-select-editor-grip" aria-hidden="true">⋮⋮</span>
+              <input
+                className="progress-select-editor-input"
+                value={item}
+                onChange={(e) => onChangeItem(index, e.target.value)}
+                placeholder="候補名を入力"
+              />
+              <div className="progress-select-editor-actions">
+                <button
+                  type="button"
+                  className="progress-select-editor-move-button"
+                  onClick={() => onMoveItem(index, 'up')}
+                  disabled={index === 0}
+                  title="上へ移動"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="progress-select-editor-move-button"
+                  onClick={() => onMoveItem(index, 'down')}
+                  disabled={index === editor.items.length - 1}
+                  title="下へ移動"
+                >
+                  ↓
+                </button>
+              </div>
+              <button
+                type="button"
+                className="progress-select-editor-delete"
+                onClick={() => onRemoveItem(index)}
+                title="この候補を削除"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="progress-select-editor-add-wrap">
+          <button type="button" className="secondary" onClick={onAddItem}>候補を追加</button>
+        </div>
+
+        <div className="form-actions" style={{ marginTop: 12 }}>
+          <button type="button" className="secondary" onClick={onClose}>キャンセル</button>
+          <button type="button" className="primary" onClick={onSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const defaultStockForm = { deadline: '', required_count: 1, label: '', note: '', achieved_count: 0 }
@@ -608,14 +922,13 @@ function App() {
   const [dmAreaLoading, setDmAreaLoading] = useState(false)
   const [activeSnsPropertyPlatform, setActiveSnsPropertyPlatform] = useState<SnsPropertyPlatform>('tiktok')
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
-  const [tiktokInlineId, setTiktokInlineId] = useState<string | null>(null)
-  const [tiktokInlineForm, setTiktokInlineForm] = useState<Omit<TiktokPropertyRecord, 'id' | 'created_at'>>(defaultTiktokPropertyForm)
   const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
-  const [instagramInlineId, setInstagramInlineId] = useState<string | null>(null)
-  const [instagramInlineForm, setInstagramInlineForm] = useState<Omit<InstagramPropertyRecord, 'id' | 'created_at'>>(defaultInstagramPropertyForm)
   const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
-  const [youtubeInlineId, setYoutubeInlineId] = useState<string | null>(null)
-  const [youtubeInlineForm, setYoutubeInlineForm] = useState<Omit<YoutubePropertyRecord, 'id' | 'created_at'>>(defaultYoutubePropertyForm)
+  const [snsPropertyOptions, setSnsPropertyOptions] = useState<Record<SnsPropertySelectField, string[]>>(() => ({
+    wp_registered: getStoredSnsPropertyOptions('wp_registered') || normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
+    aos_registered: getStoredSnsPropertyOptions('aos_registered') || normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
+  }))
+  const [snsPropertyOptionEditor, setSnsPropertyOptionEditor] = useState<SnsPropertyOptionEditorState | null>(null)
 
   // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
@@ -693,19 +1006,33 @@ function App() {
   }
 
   const fetchTiktokProperties = useCallback(async () => {
-    const { data } = await supabase.from('sns_tiktok_properties').select('*').order('property_number', { ascending: true })
-    if (data) setTiktokProperties(data as TiktokPropertyRecord[])
+    const { data } = await supabase.from('sns_tiktok_properties').select('*')
+    if (data) {
+      setTiktokProperties(sortSnsPropertyRowsByPropertyNumber(data as TiktokPropertyRecord[]))
+    }
   }, [])
 
   const fetchInstagramProperties = useCallback(async () => {
-    const { data } = await supabase.from('sns_instagram_properties').select('*').order('property_number', { ascending: true })
-    if (data) setInstagramProperties(data as InstagramPropertyRecord[])
+    const { data } = await supabase.from('sns_instagram_properties').select('*')
+    if (data) setInstagramProperties(sortSnsPropertyRowsByPropertyNumber(data as InstagramPropertyRecord[]))
   }, [])
 
   const fetchYoutubeProperties = useCallback(async () => {
-    const { data } = await supabase.from('sns_youtube_properties').select('*').order('property_number', { ascending: true })
-    if (data) setYoutubeProperties(data as YoutubePropertyRecord[])
+    const { data } = await supabase.from('sns_youtube_properties').select('*')
+    if (data) setYoutubeProperties(sortSnsPropertyRowsByPropertyNumber(data as YoutubePropertyRecord[]))
   }, [])
+
+  const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube') => {
+    if (target === 'tiktok') {
+      fetchTiktokProperties()
+      return
+    }
+    if (target === 'instagram') {
+      fetchInstagramProperties()
+      return
+    }
+    fetchYoutubeProperties()
+  }, [fetchInstagramProperties, fetchTiktokProperties, fetchYoutubeProperties])
 
   async function fetchStock() {
     const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
@@ -752,6 +1079,177 @@ function App() {
 
     setAllowedAccounts(rows)
     return rows
+  }
+
+  const getSnsPropertySelectOptions = useCallback((field: SnsPropertySelectField) => {
+    const recordValues = field === 'wp_registered'
+      ? [
+          ...tiktokProperties.map((item) => item.wp_registered),
+          ...instagramProperties.map((item) => item.wp_registered),
+          ...youtubeProperties.map((item) => item.wp_registered),
+        ]
+      : tiktokProperties.map((item) => item.aos_registered)
+
+    return normalizeSnsPropertyOptions([
+      ...snsPropertyOptions[field],
+      ...recordValues,
+    ])
+  }, [instagramProperties, snsPropertyOptions, tiktokProperties, youtubeProperties])
+
+  function openSnsPropertyOptionEditor(field: SnsPropertySelectField, title: string) {
+    const currentOptions = getSnsPropertySelectOptions(field)
+    setSnsPropertyOptionEditor({
+      field,
+      title,
+      items: currentOptions.length > 0 ? [...currentOptions] : [''],
+    })
+  }
+
+  function updateSnsPropertyOptionItem(index: number, value: string) {
+    setSnsPropertyOptionEditor((prev) => {
+      if (!prev) return prev
+      const nextItems = [...prev.items]
+      nextItems[index] = value
+      return { ...prev, items: nextItems }
+    })
+  }
+
+  function addSnsPropertyOptionItem() {
+    setSnsPropertyOptionEditor((prev) => {
+      if (!prev) return prev
+      return { ...prev, items: [...prev.items, ''] }
+    })
+  }
+
+  function removeSnsPropertyOptionItem(index: number) {
+    setSnsPropertyOptionEditor((prev) => {
+      if (!prev) return prev
+      const nextItems = prev.items.filter((_, itemIndex) => itemIndex !== index)
+      return { ...prev, items: nextItems.length > 0 ? nextItems : [''] }
+    })
+  }
+
+  function moveSnsPropertyOptionItem(index: number, direction: 'up' | 'down') {
+    setSnsPropertyOptionEditor((prev) => {
+      if (!prev) return prev
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= prev.items.length) return prev
+
+      const nextItems = [...prev.items]
+      const [movedItem] = nextItems.splice(index, 1)
+      nextItems.splice(targetIndex, 0, movedItem)
+      return { ...prev, items: nextItems }
+    })
+  }
+
+  function saveSnsPropertyOptionItems() {
+    if (!snsPropertyOptionEditor) return
+
+    const nextOptions = normalizeSnsPropertyOptions(snsPropertyOptionEditor.items)
+    if (nextOptions.length === 0) {
+      alert('候補を1つ以上入れてください。')
+      return
+    }
+
+    saveStoredSnsPropertyOptions(snsPropertyOptionEditor.field, nextOptions)
+    setSnsPropertyOptions((prev) => ({ ...prev, [snsPropertyOptionEditor.field]: nextOptions }))
+    setSnsPropertyOptionEditor(null)
+  }
+
+  async function updateSnsPropertyRow<T extends { id: string }>(
+    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    id: string,
+    field: string,
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<T[]>>,
+  ) {
+    const payload = field === 'post_date' ? { [field]: value || null } : { [field]: value }
+    const { error } = await supabase.from(tableName).update(payload).eq('id', id)
+
+    if (error) {
+      alert(`保存に失敗しました。\n\n${error.message}`)
+      return
+    }
+
+    setter((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)))
+  }
+
+  function renderSnsTextInput(
+    cellKey: string,
+    value: string,
+    onSave: (value: string) => void,
+    options?: { type?: 'text' | 'date'; placeholder?: string },
+  ) {
+    return (
+      <input
+        key={`${cellKey}:${value}`}
+        className={`progress-cell-input sns-cell-input${options?.type === 'date' ? ' is-date' : ''}`}
+        type={options?.type || 'text'}
+        defaultValue={value || ''}
+        title={value || options?.placeholder || ''}
+        placeholder={options?.placeholder}
+        onBlur={(event) => {
+          const nextValue = event.target.value
+          if (nextValue !== (value || '')) onSave(nextValue)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            ;(event.target as HTMLInputElement).blur()
+          }
+        }}
+      />
+    )
+  }
+
+  function renderSnsSelect(
+    value: string,
+    options: string[],
+    onSave: (value: string) => void,
+    onEdit?: () => void,
+  ) {
+    return <SnsCellDropdown value={value} options={options} onChange={onSave} onEdit={onEdit} />
+  }
+
+  function renderSnsMemoCell(
+    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    id: string,
+    memo: string,
+    setter: React.Dispatch<React.SetStateAction<any[]>>,
+  ) {
+    return (
+      <button
+        type="button"
+        className="memo-icon-button"
+        title={memo ? 'クリックでメモ表示' : 'クリックでメモ追加'}
+        onClick={() => {
+          if (memo) {
+            setMemoToView(memo)
+            return
+          }
+          const nextValue = window.prompt('メモを入力してください', '')
+          if (nextValue === null) return
+          updateSnsPropertyRow(tableName, id, 'memo', nextValue, setter)
+        }}
+        onDoubleClick={() => {
+          const nextValue = window.prompt('メモを編集してください', memo || '')
+          if (nextValue === null) return
+          updateSnsPropertyRow(tableName, id, 'memo', nextValue, setter)
+        }}
+      >
+        {memo ? '📝' : '＋'}
+      </button>
+    )
+  }
+
+  async function editSnsPropertyUrl(
+    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    id: string,
+    currentValue: string,
+    setter: React.Dispatch<React.SetStateAction<any[]>>,
+  ) {
+    const nextValue = window.prompt('資料URLを入力してください', currentValue || '')
+    if (nextValue === null) return
+    await updateSnsPropertyRow(tableName, id, 'document_url', nextValue.trim(), setter)
   }
 
   async function fetchGoogleUserEmail(token: string) {
@@ -1333,50 +1831,14 @@ function App() {
     fetchDm()
   }
 
-  const startTiktokInline = (r: TiktokPropertyRecord) => {
-    setTiktokInlineId(r.id)
-    setTiktokInlineForm({ memo: r.memo, wp_registered: r.wp_registered, aos_registered: r.aos_registered, post_date: r.post_date, property_number: r.property_number, floor_plan: r.floor_plan, rent: r.rent, area: r.area, nearest_station: r.nearest_station, document_url: r.document_url, property_name: r.property_name, room_number: r.room_number, address: r.address, management_company: r.management_company, contact: r.contact })
-  }
-
-  const saveTiktokInline = async () => {
-    if (!tiktokInlineId) return
-    await supabase.from('sns_tiktok_properties').update(tiktokInlineForm).eq('id', tiktokInlineId)
-    setTiktokInlineId(null)
-    fetchTiktokProperties()
-  }
-
   const addTiktokProperty = async () => {
     await supabase.from('sns_tiktok_properties').insert([defaultTiktokPropertyForm])
     fetchTiktokProperties()
   }
 
-  const startInstagramInline = (r: InstagramPropertyRecord) => {
-    setInstagramInlineId(r.id)
-    setInstagramInlineForm({ memo: r.memo, wp_registered: r.wp_registered, category: r.category, post_date: r.post_date, property_number: r.property_number, floor_plan: r.floor_plan, rent: r.rent, area: r.area, nearest_station: r.nearest_station, document_url: r.document_url, property_name: r.property_name, room_number: r.room_number, address: r.address, management_company: r.management_company, contact: r.contact })
-  }
-
-  const saveInstagramInline = async () => {
-    if (!instagramInlineId) return
-    await supabase.from('sns_instagram_properties').update(instagramInlineForm).eq('id', instagramInlineId)
-    setInstagramInlineId(null)
-    fetchInstagramProperties()
-  }
-
   const addInstagramProperty = async () => {
     await supabase.from('sns_instagram_properties').insert([defaultInstagramPropertyForm])
     fetchInstagramProperties()
-  }
-
-  const startYoutubeInline = (r: YoutubePropertyRecord) => {
-    setYoutubeInlineId(r.id)
-    setYoutubeInlineForm({ memo: r.memo, wp_registered: r.wp_registered, post_date: r.post_date, property_number: r.property_number, document_url: r.document_url, property_name: r.property_name, room_number: r.room_number, address: r.address, management_company: r.management_company, contact: r.contact })
-  }
-
-  const saveYoutubeInline = async () => {
-    if (!youtubeInlineId) return
-    await supabase.from('sns_youtube_properties').update(youtubeInlineForm).eq('id', youtubeInlineId)
-    setYoutubeInlineId(null)
-    fetchYoutubeProperties()
   }
 
   const addYoutubeProperty = async () => {
@@ -1766,7 +2228,7 @@ function App() {
         <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
         <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>当日業務管理</button>
         <button className={activePage === 'taskreport' ? 'active' : ''} onClick={() => { setActivePage('taskreport'); setShowModal(false) }}>業務棚卸し</button>
-        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false) }}>SNS物件管理</button>
+        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false); fetchTiktokProperties(); fetchInstagramProperties(); fetchYoutubeProperties() }}>SNS物件管理</button>
         <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
         <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック管理</button>
         <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
@@ -2322,32 +2784,37 @@ function App() {
             <div className="sns-property-subtabs">
               <button
                 className={activeSnsPropertyPlatform === 'tiktok' ? 'active' : ''}
-                onClick={() => setActiveSnsPropertyPlatform('tiktok')}
+                onClick={() => { setActiveSnsPropertyPlatform('tiktok'); fetchTiktokProperties() }}
               >Karilun｜TikTok</button>
               <button
                 className={activeSnsPropertyPlatform === 'instagram' ? 'active' : ''}
-                onClick={() => setActiveSnsPropertyPlatform('instagram')}
+                onClick={() => { setActiveSnsPropertyPlatform('instagram'); fetchInstagramProperties() }}
               >Karilun｜Instagram</button>
               <button
                 className={activeSnsPropertyPlatform === 'youtube' ? 'active' : ''}
-                onClick={() => setActiveSnsPropertyPlatform('youtube')}
+                onClick={() => { setActiveSnsPropertyPlatform('youtube'); fetchYoutubeProperties() }}
               >Karilun｜YouTube</button>
             </div>
 
             {activeSnsPropertyPlatform === 'tiktok' && (
               <section className="panel table-panel">
                 <div className="panel-heading">
-                  <div><h2>Karilun｜TikTok 物件管理</h2><p>行をクリックして直接編集</p></div>
-                  <button className="primary" onClick={addTiktokProperty}>＋ 行を追加</button>
+                  <div><h2>Karilun｜TikTok 物件管理</h2></div>
+                  <div className="sns-property-toolbar">
+                    <button className="primary" onClick={addTiktokProperty}>＋ 行を追加</button>
+                  </div>
                 </div>
-                <div className="table-wrap">
+                <div className="table-wrap sns-property-table-wrap">
                   <table className="compact-list-table sns-property-table">
                     <thead>
                       <tr>
-                        <th>メモ</th><th>WP登録</th><th>AOS登録</th><th>投稿日</th>
-                        <th>物件番号</th><th>間取り</th><th>家賃</th><th>エリア</th>
-                        <th>最寄り駅</th><th>資料</th><th>物件名</th><th>号室</th>
-                        <th>住所</th><th>管理会社</th><th>連絡先</th><th>操作</th>
+                        <th className="sns-col-memo">メモ</th>
+                        <th className="sns-col-check">WP登録</th>
+                        <th className="sns-col-check">AOS登録</th>
+                        <th className="sns-col-date">投稿日</th>
+                        <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
+                        <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2355,62 +2822,30 @@ function App() {
                         <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {tiktokProperties.map((r) => {
-                        const isEditing = tiktokInlineId === r.id
-                        const f = tiktokInlineForm
                         return (
-                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startTiktokInline(r) }}>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setTiktokInlineForm({ ...f, memo: e.target.value })} /> : (r.memo ? <span className="memo-icon" title={r.memo} onClick={(e) => { e.stopPropagation(); setMemoToView(r.memo) }}>📝</span> : '')}
+                          <tr key={r.id} className="row-hoverable">
+                            <td className="sns-col-memo">{renderSnsMemoCell('sns_tiktok_properties', r.id, r.memo, setTiktokProperties)}</td>
+                            <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'wp_registered', value, setTiktokProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
+                            <td className="sns-col-check">{renderSnsSelect(r.aos_registered, getSnsPropertySelectOptions('aos_registered'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'aos_registered', value, setTiktokProperties), () => openSnsPropertyOptionEditor('aos_registered', 'AOS登録'))}</td>
+                            <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'post_date', value, setTiktokProperties), { type: 'date' })}</td>
+                            <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'property_number', value, setTiktokProperties))}</td>
+                            <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:floor_plan`, r.floor_plan, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'floor_plan', value, setTiktokProperties))}</td>
+                            <td className="sns-col-rent">{renderSnsTextInput(`${r.id}:rent`, r.rent, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'rent', value, setTiktokProperties))}</td>
+                            <td className="sns-col-area">{renderSnsTextInput(`${r.id}:area`, r.area, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'area', value, setTiktokProperties))}</td>
+                            <td className="sns-col-station">{renderSnsTextInput(`${r.id}:nearest_station`, r.nearest_station, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'nearest_station', value, setTiktokProperties))}</td>
+                            <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editSnsPropertyUrl('sns_tiktok_properties', r.id, r.document_url, setTiktokProperties)}>
+                                🔗
+                              </button>
                             </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setTiktokInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input type="checkbox" checked={f.aos_registered} onChange={(e) => setTiktokInlineForm({ ...f, aos_registered: e.target.checked })} /> : (r.aos_registered ? '✓' : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" type="date" value={f.post_date} onChange={(e) => setTiktokInlineForm({ ...f, post_date: e.target.value })} /> : r.post_date}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setTiktokInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.floor_plan} onChange={(e) => setTiktokInlineForm({ ...f, floor_plan: e.target.value })} /> : r.floor_plan}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.rent} onChange={(e) => setTiktokInlineForm({ ...f, rent: e.target.value })} /> : r.rent}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.area} onChange={(e) => setTiktokInlineForm({ ...f, area: e.target.value })} /> : r.area}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.nearest_station} onChange={(e) => setTiktokInlineForm({ ...f, nearest_station: e.target.value })} /> : r.nearest_station}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setTiktokInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>🔗</a> : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setTiktokInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.room_number} onChange={(e) => setTiktokInlineForm({ ...f, room_number: e.target.value })} /> : r.room_number}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.address} onChange={(e) => setTiktokInlineForm({ ...f, address: e.target.value })} /> : <span className="cell-truncate" title={r.address}>{r.address}</span>}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.management_company} onChange={(e) => setTiktokInlineForm({ ...f, management_company: e.target.value })} /> : r.management_company}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.contact} onChange={(e) => setTiktokInlineForm({ ...f, contact: e.target.value })} /> : r.contact}
-                            </td>
-                            <td onClick={(e) => e.stopPropagation()}>
+                            <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'property_name', value, setTiktokProperties))}</td>
+                            <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'room_number', value, setTiktokProperties))}</td>
+                            <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'address', value, setTiktokProperties))}</td>
+                            <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'management_company', value, setTiktokProperties))}</td>
+                            <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'contact', value, setTiktokProperties))}</td>
+                            <td className="sns-col-actions">
                               <div className="row-actions">
-                                {isEditing ? (
-                                  <><button className="primary" onClick={saveTiktokInline}>保存</button><button className="secondary" onClick={() => setTiktokInlineId(null)}>×</button></>
-                                ) : (
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('sns_tiktok_properties', r.id, fetchTiktokProperties, 'このレコードを削除しますか？')}>削除</button>
-                                )}
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_tiktok_properties', r.id, fetchTiktokProperties, 'このレコードを削除しますか？')}>削除</button>
                               </div>
                             </td>
                           </tr>
@@ -2425,17 +2860,19 @@ function App() {
             {activeSnsPropertyPlatform === 'instagram' && (
               <section className="panel table-panel">
                 <div className="panel-heading">
-                  <div><h2>Karilun｜Instagram 物件管理</h2><p>行をクリックして直接編集</p></div>
-                  <button className="primary" onClick={addInstagramProperty}>＋ 行を追加</button>
+                  <div><h2>Karilun｜Instagram 物件管理</h2></div>
+                  <div className="sns-property-toolbar">
+                    <button className="primary" onClick={addInstagramProperty}>＋ 行を追加</button>
+                  </div>
                 </div>
-                <div className="table-wrap">
+                <div className="table-wrap sns-property-table-wrap">
                   <table className="compact-list-table sns-property-table">
                     <thead>
                       <tr>
-                        <th>メモ</th><th>WP登録</th><th>種別</th><th>投稿日</th>
-                        <th>物件番号</th><th>間取り</th><th>家賃</th><th>エリア</th>
-                        <th>最寄り駅</th><th>資料</th><th>物件名</th><th>号室</th>
-                        <th>住所</th><th>管理会社</th><th>連絡先</th><th>操作</th>
+                        <th className="sns-col-memo">メモ</th><th className="sns-col-check">WP登録</th><th className="sns-col-plan">種別</th><th className="sns-col-date">投稿日</th>
+                        <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
+                        <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2443,62 +2880,30 @@ function App() {
                         <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {instagramProperties.map((r) => {
-                        const isEditing = instagramInlineId === r.id
-                        const f = instagramInlineForm
                         return (
-                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startInstagramInline(r) }}>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setInstagramInlineForm({ ...f, memo: e.target.value })} /> : (r.memo ? <span className="memo-icon" title={r.memo} onClick={(e) => { e.stopPropagation(); setMemoToView(r.memo) }}>📝</span> : '')}
+                          <tr key={r.id} className="row-hoverable">
+                            <td className="sns-col-memo">{renderSnsMemoCell('sns_instagram_properties', r.id, r.memo, setInstagramProperties)}</td>
+                            <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'wp_registered', value, setInstagramProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
+                            <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'category', value, setInstagramProperties))}</td>
+                            <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'post_date', value, setInstagramProperties), { type: 'date' })}</td>
+                            <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'property_number', value, setInstagramProperties))}</td>
+                            <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:floor_plan`, r.floor_plan, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'floor_plan', value, setInstagramProperties))}</td>
+                            <td className="sns-col-rent">{renderSnsTextInput(`${r.id}:rent`, r.rent, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'rent', value, setInstagramProperties))}</td>
+                            <td className="sns-col-area">{renderSnsTextInput(`${r.id}:area`, r.area, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'area', value, setInstagramProperties))}</td>
+                            <td className="sns-col-station">{renderSnsTextInput(`${r.id}:nearest_station`, r.nearest_station, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'nearest_station', value, setInstagramProperties))}</td>
+                            <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editSnsPropertyUrl('sns_instagram_properties', r.id, r.document_url, setInstagramProperties)}>
+                                🔗
+                              </button>
                             </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setInstagramInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.category} onChange={(e) => setInstagramInlineForm({ ...f, category: e.target.value })} /> : r.category}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" type="date" value={f.post_date} onChange={(e) => setInstagramInlineForm({ ...f, post_date: e.target.value })} /> : r.post_date}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setInstagramInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.floor_plan} onChange={(e) => setInstagramInlineForm({ ...f, floor_plan: e.target.value })} /> : r.floor_plan}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.rent} onChange={(e) => setInstagramInlineForm({ ...f, rent: e.target.value })} /> : r.rent}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.area} onChange={(e) => setInstagramInlineForm({ ...f, area: e.target.value })} /> : r.area}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.nearest_station} onChange={(e) => setInstagramInlineForm({ ...f, nearest_station: e.target.value })} /> : r.nearest_station}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setInstagramInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>🔗</a> : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setInstagramInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.room_number} onChange={(e) => setInstagramInlineForm({ ...f, room_number: e.target.value })} /> : r.room_number}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.address} onChange={(e) => setInstagramInlineForm({ ...f, address: e.target.value })} /> : <span className="cell-truncate" title={r.address}>{r.address}</span>}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.management_company} onChange={(e) => setInstagramInlineForm({ ...f, management_company: e.target.value })} /> : r.management_company}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.contact} onChange={(e) => setInstagramInlineForm({ ...f, contact: e.target.value })} /> : r.contact}
-                            </td>
-                            <td onClick={(e) => e.stopPropagation()}>
+                            <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'property_name', value, setInstagramProperties))}</td>
+                            <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'room_number', value, setInstagramProperties))}</td>
+                            <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'address', value, setInstagramProperties))}</td>
+                            <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'management_company', value, setInstagramProperties))}</td>
+                            <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'contact', value, setInstagramProperties))}</td>
+                            <td className="sns-col-actions">
                               <div className="row-actions">
-                                {isEditing ? (
-                                  <><button className="primary" onClick={saveInstagramInline}>保存</button><button className="secondary" onClick={() => setInstagramInlineId(null)}>×</button></>
-                                ) : (
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('sns_instagram_properties', r.id, fetchInstagramProperties, 'このレコードを削除しますか？')}>削除</button>
-                                )}
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_instagram_properties', r.id, fetchInstagramProperties, 'このレコードを削除しますか？')}>削除</button>
                               </div>
                             </td>
                           </tr>
@@ -2513,16 +2918,18 @@ function App() {
             {activeSnsPropertyPlatform === 'youtube' && (
               <section className="panel table-panel">
                 <div className="panel-heading">
-                  <div><h2>Karilun｜YouTube 物件管理</h2><p>行をクリックして直接編集</p></div>
-                  <button className="primary" onClick={addYoutubeProperty}>＋ 行を追加</button>
+                  <div><h2>Karilun｜YouTube 物件管理</h2></div>
+                  <div className="sns-property-toolbar">
+                    <button className="primary" onClick={addYoutubeProperty}>＋ 行を追加</button>
+                  </div>
                 </div>
-                <div className="table-wrap">
+                <div className="table-wrap sns-property-table-wrap">
                   <table className="compact-list-table sns-property-table">
                     <thead>
                       <tr>
-                        <th>メモ</th><th>WP登録</th><th>投稿日</th><th>物件番号</th>
-                        <th>資料</th><th>物件名</th><th>号室</th>
-                        <th>住所</th><th>管理会社</th><th>連絡先</th><th>操作</th>
+                        <th className="sns-col-memo">メモ</th><th className="sns-col-check">WP登録</th><th className="sns-col-date">投稿日</th><th className="sns-col-code">物件番号</th>
+                        <th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2530,47 +2937,25 @@ function App() {
                         <tr><td colSpan={11} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {youtubeProperties.map((r) => {
-                        const isEditing = youtubeInlineId === r.id
-                        const f = youtubeInlineForm
                         return (
-                          <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startYoutubeInline(r) }}>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.memo} onChange={(e) => setYoutubeInlineForm({ ...f, memo: e.target.value })} /> : (r.memo ? <span className="memo-icon" title={r.memo} onClick={(e) => { e.stopPropagation(); setMemoToView(r.memo) }}>📝</span> : '')}
+                          <tr key={r.id} className="row-hoverable">
+                            <td className="sns-col-memo">{renderSnsMemoCell('sns_youtube_properties', r.id, r.memo, setYoutubeProperties)}</td>
+                            <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'wp_registered', value, setYoutubeProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
+                            <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'post_date', value, setYoutubeProperties), { type: 'date' })}</td>
+                            <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_number', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editSnsPropertyUrl('sns_youtube_properties', r.id, r.document_url, setYoutubeProperties)}>
+                                🔗
+                              </button>
                             </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input type="checkbox" checked={f.wp_registered} onChange={(e) => setYoutubeInlineForm({ ...f, wp_registered: e.target.checked })} /> : (r.wp_registered ? '✓' : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" type="date" value={f.post_date} onChange={(e) => setYoutubeInlineForm({ ...f, post_date: e.target.value })} /> : r.post_date}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.property_number} onChange={(e) => setYoutubeInlineForm({ ...f, property_number: e.target.value })} /> : r.property_number}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.document_url} onChange={(e) => setYoutubeInlineForm({ ...f, document_url: e.target.value })} /> : (r.document_url ? <a href={r.document_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>🔗</a> : '')}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.property_name} onChange={(e) => setYoutubeInlineForm({ ...f, property_name: e.target.value })} /> : r.property_name}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.room_number} onChange={(e) => setYoutubeInlineForm({ ...f, room_number: e.target.value })} /> : r.room_number}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.address} onChange={(e) => setYoutubeInlineForm({ ...f, address: e.target.value })} /> : <span className="cell-truncate" title={r.address}>{r.address}</span>}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.management_company} onChange={(e) => setYoutubeInlineForm({ ...f, management_company: e.target.value })} /> : r.management_company}
-                            </td>
-                            <td onClick={(e) => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" value={f.contact} onChange={(e) => setYoutubeInlineForm({ ...f, contact: e.target.value })} /> : r.contact}
-                            </td>
-                            <td onClick={(e) => e.stopPropagation()}>
+                            <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_name', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'room_number', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'address', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'management_company', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'contact', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-actions">
                               <div className="row-actions">
-                                {isEditing ? (
-                                  <><button className="primary" onClick={saveYoutubeInline}>保存</button><button className="secondary" onClick={() => setYoutubeInlineId(null)}>×</button></>
-                                ) : (
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('sns_youtube_properties', r.id, fetchYoutubeProperties, 'このレコードを削除しますか？')}>削除</button>
-                                )}
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_youtube_properties', r.id, fetchYoutubeProperties, 'このレコードを削除しますか？')}>削除</button>
                               </div>
                             </td>
                           </tr>
@@ -3549,7 +3934,7 @@ function App() {
           )
         })()}
         {activePage === 'taskreport' && <TaskReportPanel />}
-        {activePage === 'progress' && <ProgressPage />}
+        {activePage === 'progress' && <ProgressPage onSnsPropertyPromoted={handleSnsPropertyPromoted} />}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
@@ -3977,6 +4362,19 @@ function App() {
           </div>
         </div>
       )}
+
+      {snsPropertyOptionEditor && (
+        <SnsPropertyOptionEditorModal
+          editor={snsPropertyOptionEditor}
+          onClose={() => setSnsPropertyOptionEditor(null)}
+          onChangeItem={updateSnsPropertyOptionItem}
+          onMoveItem={moveSnsPropertyOptionItem}
+          onRemoveItem={removeSnsPropertyOptionItem}
+          onAddItem={addSnsPropertyOptionItem}
+          onSave={saveSnsPropertyOptionItems}
+        />
+      )}
+
     </div>
   )
 }
@@ -5431,6 +5829,7 @@ function TodayTasksPanel() {
           })}
         </div>
       )}
+
     </div>
   )
 }
