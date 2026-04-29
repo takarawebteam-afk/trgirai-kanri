@@ -611,6 +611,7 @@ function SnsCellDropdown({
         onClick={() => setOpen((prev) => !prev)}
       >
         <span className="sns-dropdown-text">{value || ''}</span>
+        <span className="sns-dropdown-caret" aria-hidden="true" />
       </button>
 
       {open && createPortal(
@@ -648,7 +649,7 @@ function SnsCellDropdown({
                 onEdit()
               }}
             >
-              ✎
+              編集
             </button>
           )}
         </div>,
@@ -676,7 +677,7 @@ function SnsPropertyOptionEditorModal({
   onSave: () => void
 }) {
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-content progress-select-editor-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">{editor.title}の候補を編集</h2>
@@ -734,6 +735,25 @@ function SnsPropertyOptionEditorModal({
           <button type="button" className="primary" onClick={onSave}>保存</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function SnsPropertyHeader({
+  title,
+  onEdit,
+}: {
+  title: string
+  onEdit?: () => void
+}) {
+  return (
+    <div className="sns-property-header-cell">
+      <span>{title}</span>
+      {onEdit && (
+        <button type="button" className="sns-property-header-edit-button" onClick={onEdit}>
+          編集
+        </button>
+      )}
     </div>
   )
 }
@@ -2954,8 +2974,12 @@ function App() {
                     <thead>
                       <tr>
                         <th className="sns-col-memo">メモ</th>
-                        <th className="sns-col-check">WP登録</th>
-                        <th className="sns-col-check">AOS登録</th>
+                        <th className="sns-col-check">
+                          <SnsPropertyHeader title="WP登録" onEdit={() => openSnsPropertyOptionEditor('wp_registered', 'WP登録')} />
+                        </th>
+                        <th className="sns-col-check">
+                          <SnsPropertyHeader title="AOS登録" onEdit={() => openSnsPropertyOptionEditor('aos_registered', 'AOS登録')} />
+                        </th>
                         <th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
@@ -3024,7 +3048,7 @@ function App() {
                   <table className="compact-list-table sns-property-table">
                     <thead>
                       <tr>
-                        <th className="sns-col-memo">メモ</th><th className="sns-col-check">WP登録</th><th className="sns-col-plan">種別</th><th className="sns-col-date">投稿日</th>
+                        <th className="sns-col-memo">メモ</th><th className="sns-col-check"><SnsPropertyHeader title="WP登録" onEdit={() => openSnsPropertyOptionEditor('wp_registered', 'WP登録')} /></th><th className="sns-col-plan">種別</th><th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
                         <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
@@ -3092,7 +3116,7 @@ function App() {
                   <table className="compact-list-table sns-property-table">
                     <thead>
                       <tr>
-                        <th className="sns-col-memo">メモ</th><th className="sns-col-check">WP登録</th><th className="sns-col-date">投稿日</th><th className="sns-col-code">物件番号</th>
+                        <th className="sns-col-memo">メモ</th><th className="sns-col-check"><SnsPropertyHeader title="WP登録" onEdit={() => openSnsPropertyOptionEditor('wp_registered', 'WP登録')} /></th><th className="sns-col-date">投稿日</th><th className="sns-col-code">物件番号</th>
                         <th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
                         <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>

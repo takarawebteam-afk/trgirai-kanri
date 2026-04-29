@@ -65,12 +65,6 @@ type SelectOptionEditorState = {
   items: string[]
 } | null
 
-const PROCESS_COLORS: Record<ProcessStatus, { bg: string; color: string }> = {
-  '未着手': { bg: '#f3f4f6', color: '#6b7280' },
-  '進行中': { bg: '#fef3c7', color: '#92400e' },
-  '完了': { bg: '#dcfce7', color: '#166534' },
-}
-
 const PROCESS_STATUSES: ProcessStatus[] = ['未着手', '進行中', '完了']
 const ASSIGNEE_OPTIONS = ['泉', '坂本', '吉田', '新居']
 const DEVICE_OPTIONS = ['未設定', 'iPhone', 'Android', 'カメラ', 'その他']
@@ -116,6 +110,25 @@ function normalizeSelectOptions(options: string[]) {
   return Array.from(new Set(options.map((item) => item.trim()).filter(Boolean)))
 }
 
+function normalizeRegisterOptions(options: string[]) {
+  const normalized = normalizeSelectOptions(options)
+  const fallback = [...INITIAL_SELECT_OPTIONS.register]
+
+  if (normalized.length === 0) return fallback
+  if (normalized.length === 1) return [normalized[0], fallback[1]]
+  return [normalized[0], normalized[1]]
+}
+
+function getRegisterLabel(value: boolean, options: string[]) {
+  const [uncheckedLabel, checkedLabel] = normalizeRegisterOptions(options)
+  return value ? checkedLabel : uncheckedLabel
+}
+
+function getRegisterValueFromLabel(label: string, options: string[]) {
+  const [, checkedLabel] = normalizeRegisterOptions(options)
+  return label === checkedLabel
+}
+
 function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
   if (typeof window === 'undefined') {
     return INITIAL_SELECT_OPTIONS
@@ -130,7 +143,9 @@ function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
       const parsed = JSON.parse(raw)
       if (!Array.isArray(parsed)) return
 
-      const normalized = normalizeSelectOptions(parsed.filter((item): item is string => typeof item === 'string'))
+      const normalized = group === 'register'
+        ? normalizeRegisterOptions(parsed.filter((item): item is string => typeof item === 'string'))
+        : normalizeSelectOptions(parsed.filter((item): item is string => typeof item === 'string'))
       if (normalized.length > 0) {
         next[group] = normalized
       }
@@ -147,7 +162,7 @@ function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
 
   window.localStorage.setItem(
     `${SELECT_OPTION_STORAGE_PREFIX}${group}`,
-    JSON.stringify(normalizeSelectOptions(options)),
+    JSON.stringify(group === 'register' ? normalizeRegisterOptions(options) : normalizeSelectOptions(options)),
   )
 }
 
@@ -252,12 +267,6 @@ function isInstagramMedia(media: string) {
 
 function toRegisteredLabel(value: boolean) {
   return value ? '登録済' : ''
-}
-
-function getStatusCellStyle(value: ProcessStatus) {
-  const fallbackColor = PROCESS_COLORS[PROCESS_STATUSES[0]]
-  const color = PROCESS_COLORS[value] || fallbackColor
-  return { background: color.bg, color: color.color }
 }
 
 function sanitizeProcessStatus(value: unknown): ProcessStatus {
@@ -702,7 +711,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   function saveSelectOptionItems() {
     if (!selectOptionEditor) return
 
-    const nextOptions = normalizeSelectOptions(selectOptionEditor.items)
+    const nextOptions = selectOptionEditor.group === 'register'
+      ? normalizeRegisterOptions(selectOptionEditor.items)
+      : normalizeSelectOptions(selectOptionEditor.items)
     if (nextOptions.length === 0) {
       window.alert('候補を1つ以上入れてください。')
       return
@@ -845,7 +856,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     const options = selectOptions[group]
     const value =
       group === 'register'
-        ? Boolean(record[field]) ? '登録済' : '未登録'
+        ? getRegisterLabel(Boolean(record[field]), options)
         : String(record[field] || options[0] || '')
     const isOpen = selectMenu?.id === record.id && selectMenu.field === field
 
@@ -875,8 +886,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   function renderProcessCell(record: ProductionRecord, field: keyof ProductionRecord) {
-    const value = String(record[field] || PROCESS_STATUSES[0]) as ProcessStatus
-    return renderSelectCell(record, field, 'process', SELECT_OPTION_FIELD_LABELS[field] || '工程', 'progress-cell-status', getStatusCellStyle(value))
+    return renderSelectCell(record, field, 'process', SELECT_OPTION_FIELD_LABELS[field] || '工程')
   }
 
   function renderRegisterCell(record: ProductionRecord, field: 'wp_registered' | 'aos_registered' | 'youtube_reserved') {
@@ -1480,7 +1490,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 type="button"
                 className={`progress-editable-select-option${
                   (selectMenu.group === 'register'
-                    ? (Boolean(records.find((record) => record.id === selectMenu.id)?.[selectMenu.field]) ? '登録済' : '未登録')
+                    ? getRegisterLabel(
+                        Boolean(records.find((record) => record.id === selectMenu.id)?.[selectMenu.field]),
+                        selectOptions.register,
+                      )
                     : String(records.find((record) => record.id === selectMenu.id)?.[selectMenu.field] || '')) === option
                     ? ' is-active'
                     : ''
@@ -1489,7 +1502,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   updateField(
                     selectMenu.id,
                     selectMenu.field,
-                    selectMenu.group === 'register' ? option === '登録済' : option,
+                    selectMenu.group === 'register'
+                      ? getRegisterValueFromLabel(option, selectOptions.register)
+                      : option,
                   )
                   setSelectMenu(null)
                 }}
@@ -1497,15 +1512,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 {option}
               </button>
             ))}
-            {selectMenu.group !== 'register' && (
-              <button
-                type="button"
-                className="progress-editable-select-edit"
-                onClick={() => updateSelectOptions(selectMenu.group)}
-              >
-                ✎
-              </button>
-            )}
+            <button
+              type="button"
+              className="progress-editable-select-edit"
+              onClick={() => updateSelectOptions(selectMenu.group)}
+              title="編集"
+              aria-label="編集"
+            >
+              ✎
+            </button>
           </div>
         </div>
       )}

@@ -3173,10 +3173,11 @@ button.manual-chip {
 
 .progress-editable-select-trigger {
   width: 100%;
-  min-height: 18px;
-  padding: 1px 18px 1px 8px;
-  border: none;
-  border-radius: 4px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 2px 0 0;
+  border: 1px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -3199,11 +3200,17 @@ button.manual-chip {
 }
 
 .progress-editable-select-trigger:hover {
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .data-form .progress-editable-select-trigger:hover {
   background: #f8fafc;
+}
+
+.progress-editable-select.is-open .progress-editable-select-trigger {
+  background: #ffffff;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.16);
 }
 
 .progress-editable-select-label {
@@ -3224,12 +3231,15 @@ button.manual-chip {
 }
 
 .progress-editable-select-caret::before {
-  content: '';
+  content: "";
   position: absolute;
-  inset: 2px 1px 3px;
-  border-left: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(-45deg);
+  top: 2px;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
 }
 
 .progress-editable-select-menu {
@@ -3237,10 +3247,10 @@ button.manual-chip {
   min-width: 120px;
   background: #fff;
   border: 1px solid #cbd5e1;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
   z-index: 9999;
   border-radius: 0 0 8px 8px;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
 }
 
 .progress-editable-select-options {
@@ -3255,20 +3265,20 @@ button.manual-chip {
   width: 100%;
   border: none;
   background: #fff;
-  color: #334155;
+  color: #1e293b;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
 .progress-editable-select-option {
-  padding: 10px 12px;
+  padding: 5px 8px;
   line-height: 1.4;
 }
 
 .progress-editable-select-option:hover,
 .progress-editable-select-edit:hover {
-  background: #f8fafc;
+  background: #d9f0df;
 }
 
 .progress-editable-select-option.is-active {
@@ -3280,9 +3290,9 @@ button.manual-chip {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: 36px;
   border-top: 1px solid #e2e8f0;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
 }
 
 .progress-cell-input::placeholder {
@@ -3311,21 +3321,6 @@ button.manual-chip {
   -moz-appearance: none;
 }
 
-.progress-cell-status {
-  padding: 2px 16px 2px 6px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  min-width: 72px;
-}
-
-.progress-cell-status-select .progress-editable-select-trigger {
-  min-width: 72px;
-  font-size: 0.74rem;
-  font-weight: 600;
-}
 
 .progress-checkbox-cell {
   display: flex;
@@ -4371,6 +4366,31 @@ button.manual-chip {
   max-width: 116px;
 }
 
+.sns-property-header-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.sns-property-header-edit-button {
+  flex: 0 0 auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.64rem;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+.sns-property-header-edit-button:hover {
+  background: #eef2ff;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
 .sns-property-table th.sns-col-date,
 .sns-property-table td.sns-col-date {
   width: 132px;
@@ -4472,27 +4492,53 @@ button.manual-chip {
 
 .sns-dropdown-display {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   min-width: 0;
   height: 22px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--gray-900);
+  border: 1px solid #d6dbe7;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #334155;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 6px;
   text-align: left;
   font: inherit;
 }
 
 .sns-dropdown-display.is-open {
-  border-color: #7aa2ff;
+  border-color: #94a3b8;
   background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.16);
 }
 
 .sns-dropdown-text {
   display: block;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sns-dropdown-caret {
+  position: relative;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+}
+
+.sns-dropdown-caret::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
 }
 
 .sns-dropdown-menu {
@@ -4503,6 +4549,7 @@ button.manual-chip {
   max-height: 240px;
   overflow-y: auto;
   font-size: 0.75rem;
+  border-radius: 0 0 8px 8px;
 }
 
 .sns-dropdown-option {
@@ -4521,24 +4568,24 @@ button.manual-chip {
 }
 
 .sns-dropdown-option.is-active {
-  background: #c5e6cf;
+  background: #2563eb;
+  color: #fff;
 }
 
 .sns-dropdown-edit-button {
   width: 100%;
   border: none;
-  border-top: 1px solid #dbe4ef;
+  border-top: 1px solid #e2e8f0;
   background: #fff;
-  color: #64748b;
+  color: #334155;
   text-align: center;
   font: inherit;
-  padding: 6px 8px;
+  padding: 8px;
   cursor: pointer;
 }
 
 .sns-dropdown-edit-button:hover {
   background: #f8fafc;
-  color: #334155;
 }
 
 .sns-link-button {
