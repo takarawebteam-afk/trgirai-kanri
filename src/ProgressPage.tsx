@@ -69,7 +69,6 @@ const PROCESS_STATUSES: ProcessStatus[] = ['未着手', '進行中', '完了']
 const ASSIGNEE_OPTIONS = ['泉', '坂本', '吉田', '新居']
 const DEVICE_OPTIONS = ['未設定', 'iPhone', 'Android', 'カメラ', 'その他']
 const VIDEO_DURATION_OPTIONS = ['未設定', '15秒', '30秒', '45秒', '60秒', '編集中']
-const AUDIO_SOURCE_OPTIONS = ['未登録', '候補あり', '登録済']
 const REGISTER_OPTIONS = [
   { value: false, label: '未登録' },
   { value: true, label: '登録済' },
@@ -205,7 +204,7 @@ const PROGRESS_SHARED_COLUMN_WIDTHS = {
   nearestStation: 118,
   floorPlan: 83,
   managementCompany: 166,
-  audioSource: 120,
+  audioSource: 160,
 } as const
 
 const PROGRESS_INSTAGRAM_COLUMN_WIDTHS = {
@@ -217,7 +216,7 @@ const PROGRESS_INSTAGRAM_COLUMN_WIDTHS = {
   rent: 59,
   managementCompany: 166,
   memo: 296,
-  audioSource: 120,
+  audioSource: 160,
 } as const
 
 const FORM_TABS: { key: FormTabKey; label: string }[] = [
@@ -1083,7 +1082,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderProcessCell(record, 'floor_plan_order')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'device', 'device')}</td>
-              <td className="ptcell-group-3">{renderSelectCell(record, 'audio_source', 'audio')}</td>
+              <td className="ptcell-group-3">{renderTextCell(record, 'audio_source', '音源')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'material_processing')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'floor_plan_insert')}</td>
@@ -1178,7 +1177,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
-              <td className="ptcell-group-4">{renderSelectCell(record, 'audio_source', 'audio')}</td>
+              <td className="ptcell-group-4">{renderTextCell(record, 'audio_source', '音源')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
@@ -1456,9 +1455,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label className="form-label">
             音源
-            <select value={form.audio_source} onChange={(e) => setForm({ ...form, audio_source: e.target.value })}>
-              {AUDIO_SOURCE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
+            <input value={form.audio_source} onChange={(e) => setForm({ ...form, audio_source: e.target.value })} />
           </label>
           <label className="form-label">
             AOS
