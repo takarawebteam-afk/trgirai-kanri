@@ -49,7 +49,7 @@ type ProgressPageProps = {
 }
 
 type FormTabKey = 'basic' | 'production' | 'check' | 'finish'
-type SelectOptionGroup = 'process' | 'device' | 'duration' | 'audio' | 'register'
+type SelectOptionGroup = 'process' | 'device' | 'duration' | 'audio' | 'register' | 'register_wp' | 'register_aos' | 'register_youtube'
 type SelectMenuState = {
   id: string
   field: keyof ProductionRecord
@@ -81,15 +81,33 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   duration: ['未設定', '15秒', '30秒', '45秒', '60秒', '編集中'],
   audio: ['未登録', '候補あり', '登録済'],
   register: ['未登録', '登録済'],
+  register_wp: REGISTER_OPTIONS.map((option) => option.label),
+  register_aos: REGISTER_OPTIONS.map((option) => option.label),
+  register_youtube: REGISTER_OPTIONS.map((option) => option.label),
 }
 
 const SELECT_OPTION_STORAGE_PREFIX = 'progress_select_options:'
+/*
 const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
   process: '工程',
   device: '使用端末',
   duration: '動画尺',
   audio: '音源',
   register: '登録状況',
+  register_wp: 'WP逋ｻ骭ｲ',
+  register_aos: 'AOS逋ｻ骭ｲ',
+  register_youtube: 'YouTube莠育ｴ・,
+}
+*/
+const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
+  process: '進捗',
+  device: '使用端末',
+  duration: '動画尺',
+  audio: '音源',
+  register: '登録状況',
+  register_wp: 'WP登録',
+  register_aos: 'AOS登録',
+  register_youtube: 'YouTube予約',
 }
 const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
   floor_plan_order: '図面準備',
@@ -125,6 +143,12 @@ function getRegisterLabel(value: string, options: string[]) {
   return normalizedOptions[0] || ''
 }
 
+function getRegisterGroupByField(field: 'wp_registered' | 'aos_registered' | 'youtube_reserved') {
+  if (field === 'wp_registered') return 'register_wp' as const
+  if (field === 'aos_registered') return 'register_aos' as const
+  return 'register_youtube' as const
+}
+
 function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
   if (typeof window === 'undefined') {
     return INITIAL_SELECT_OPTIONS
@@ -139,7 +163,7 @@ function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
       const parsed = JSON.parse(raw)
       if (!Array.isArray(parsed)) return
 
-      const normalized = group === 'register'
+      const normalized = group.startsWith('register')
         ? normalizeRegisterOptions(parsed.filter((item): item is string => typeof item === 'string'))
         : normalizeSelectOptions(parsed.filter((item): item is string => typeof item === 'string'))
       if (normalized.length > 0) {
@@ -158,7 +182,7 @@ function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
 
   window.localStorage.setItem(
     `${SELECT_OPTION_STORAGE_PREFIX}${group}`,
-    JSON.stringify(group === 'register' ? normalizeRegisterOptions(options) : normalizeSelectOptions(options)),
+    JSON.stringify(group.startsWith('register') ? normalizeRegisterOptions(options) : normalizeSelectOptions(options)),
   )
 }
 
@@ -207,7 +231,7 @@ const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
   status: '撮影済',
   material_saved: '',
   scheduled_post_date: '',
-  aos_registered: INITIAL_SELECT_OPTIONS.register[0],
+  aos_registered: INITIAL_SELECT_OPTIONS.register_aos[0],
   media: 'Karilun｜TikTok',
   post_type: '',
   property_number: '',
@@ -223,8 +247,8 @@ const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
   assignee: '',
   device: '未設定',
   property_url: '',
-  wp_registered: INITIAL_SELECT_OPTIONS.register[0],
-  youtube_reserved: INITIAL_SELECT_OPTIONS.register[0],
+  wp_registered: INITIAL_SELECT_OPTIONS.register_wp[0],
+  youtube_reserved: INITIAL_SELECT_OPTIONS.register_youtube[0],
   post_completed: false,
   material_processing: '未着手',
   text_overlay: '未着手',
@@ -637,7 +661,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       && typeof value === 'string'
       && currentRecord
       && currentRecord.youtube_reserved !== value
-      && isCustomRegisterSelected(value, selectOptions.register)
+      && isCustomRegisterSelected(value, selectOptions.register_youtube)
     ) {
       await promoteToSnsPropertySafe(updatedRecord, field)
     }
@@ -733,7 +757,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   function saveSelectOptionItems() {
     if (!selectOptionEditor) return
 
-    const nextOptions = selectOptionEditor.group === 'register'
+    const nextOptions = selectOptionEditor.group.startsWith('register')
       ? normalizeRegisterOptions(selectOptionEditor.items)
       : normalizeSelectOptions(selectOptionEditor.items)
     if (nextOptions.length === 0) {
@@ -875,9 +899,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     extraClassName = '',
     style?: React.CSSProperties,
   ) {
-    const options = selectOptions[group]
+    const effectiveGroup = group === 'register'
+      ? getRegisterGroupByField(field as 'wp_registered' | 'aos_registered' | 'youtube_reserved')
+      : group
+    const options = selectOptions[effectiveGroup]
     const value =
-      group === 'register'
+      effectiveGroup.startsWith('register')
         ? getRegisterLabel(String(record[field] || ''), options)
         : String(record[field] || options[0] || '')
     const isOpen = selectMenu?.id === record.id && selectMenu.field === field
@@ -896,8 +923,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             event,
             record,
             field,
-            group,
-            title || SELECT_OPTION_FIELD_LABELS[field] || SELECT_OPTION_GROUP_LABELS[group],
+            effectiveGroup,
+            title || SELECT_OPTION_FIELD_LABELS[field] || SELECT_OPTION_GROUP_LABELS[effectiveGroup],
           )}
         >
           <span className="progress-editable-select-label">{value}</span>
@@ -1416,13 +1443,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <label className="form-label">
             WP登録
             <select value={form.wp_registered} onChange={(e) => setForm({ ...form, wp_registered: e.target.value })}>
-              {selectOptions.register.map((option) => <option key={option} value={option}>{option}</option>)}
+              {selectOptions.register_wp.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
           <label className="form-label">
             YouTube
             <select value={form.youtube_reserved} onChange={(e) => setForm({ ...form, youtube_reserved: e.target.value })}>
-              {selectOptions.register.map((option) => <option key={option} value={option}>{option}</option>)}
+              {selectOptions.register_youtube.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
         </div>
@@ -1436,7 +1463,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <label className="form-label">
             AOS
             <select value={form.aos_registered} onChange={(e) => setForm({ ...form, aos_registered: e.target.value })}>
-              {selectOptions.register.map((option) => <option key={option} value={option}>{option}</option>)}
+              {selectOptions.register_aos.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
         </div>
@@ -1511,10 +1538,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 key={option}
                 type="button"
                 className={`progress-editable-select-option${
-                  (selectMenu.group === 'register'
+                  (selectMenu.group.startsWith('register')
                     ? getRegisterLabel(
                         String(records.find((record) => record.id === selectMenu.id)?.[selectMenu.field] || ''),
-                        selectOptions.register,
+                        selectOptions[selectMenu.group],
                       )
                     : String(records.find((record) => record.id === selectMenu.id)?.[selectMenu.field] || '')) === option
                     ? ' is-active'
