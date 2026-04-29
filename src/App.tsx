@@ -409,6 +409,14 @@ type SnsPropertyOptionEditorState = {
   items: string[]
 }
 
+type SnsPropertySelectOptionRow = {
+  id: string
+  field: SnsPropertySelectField
+  label: string
+  sort_order: number | null
+  created_at?: string
+}
+
 const SNS_PROPERTY_OPTION_STORAGE_PREFIX = 'sns_property_select_options:'
 const DEFAULT_SNS_WP_OPTIONS = [
   '〇-新居',
@@ -437,6 +445,10 @@ const DEFAULT_SNS_AOS_OPTIONS = [
   '広告不可',
   '×',
 ] as const
+const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
+  wp_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
+  aos_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
+}
 const SNS_PROPERTY_PAGE_SIZE = 100
 
 function normalizeSnsPropertySearch(value: string) {
@@ -479,6 +491,13 @@ function saveStoredSnsPropertyOptions(field: SnsPropertySelectField, options: st
     `${SNS_PROPERTY_OPTION_STORAGE_PREFIX}${field}`,
     JSON.stringify(normalizeSnsPropertyOptions(options)),
   )
+}
+
+function isMissingSnsPropertyOptionTableError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const maybeCode = 'code' in error ? String(error.code || '') : ''
+  const maybeMessage = 'message' in error ? String(error.message || '') : ''
+  return maybeCode === '42P01' || maybeMessage.includes('sns_property_select_options')
 }
 
 function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | undefined) {
@@ -982,8 +1001,14 @@ function App() {
     youtube: 0,
   })
   const [snsPropertyOptions, setSnsPropertyOptions] = useState<Record<SnsPropertySelectField, string[]>>(() => ({
-    wp_registered: getStoredSnsPropertyOptions('wp_registered') || normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
-    aos_registered: getStoredSnsPropertyOptions('aos_registered') || normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
+    wp_registered: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.wp_registered,
+      ...(getStoredSnsPropertyOptions('wp_registered') || []),
+    ]),
+    aos_registered: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.aos_registered,
+      ...(getStoredSnsPropertyOptions('aos_registered') || []),
+    ]),
   }))
   const [snsPropertyOptionEditor, setSnsPropertyOptionEditor] = useState<SnsPropertyOptionEditorState | null>(null)
 
@@ -1181,6 +1206,7 @@ function App() {
       : tiktokProperties.map((item) => item.aos_registered)
 
     return normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS[field],
       ...snsPropertyOptions[field],
       ...recordValues,
     ])
@@ -1228,8 +1254,105 @@ function App() {
     )
   }
 
-  function openSnsPropertyOptionEditor(field: SnsPropertySelectField, title: string) {
-    const currentOptions = getSnsPropertySelectOptions(field)
+  async function fetchSavedSnsPropertyOptions(field: SnsPropertySelectField) {
+    const localOptions = getStoredSnsPropertyOptions(field) || []
+    const { data, error } = await supabase
+      .from('sns_property_select_options')
+      .select('id, field, label, sort_order, created_at')
+      .eq('field', field)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      if (isMissingSnsPropertyOptionTableError(error)) {
+        return normalizeSnsPropertyOptions(localOptions)
+      }
+      throw error
+    }
+
+    const dbOptions = ((data || []) as SnsPropertySelectOptionRow[]).map((item) => item.label)
+    return normalizeSnsPropertyOptions([
+      ...localOptions,
+      ...dbOptions,
+    ])
+  }
+
+  async function saveSnsPropertyOptionsToDatabase(field: SnsPropertySelectField, options: string[]) {
+    const normalizedOptions = normalizeSnsPropertyOptions(options)
+    const { error: deleteError } = await supabase
+      .from('sns_property_select_options')
+      .delete()
+      .eq('field', field)
+
+    if (deleteError) {
+      if (isMissingSnsPropertyOptionTableError(deleteError)) return false
+      throw deleteError
+    }
+
+    const rows = normalizedOptions.map((label, index) => ({
+      field,
+      label,
+      sort_order: index,
+    }))
+
+    const { error: insertError } = await supabase
+      .from('sns_property_select_options')
+      .insert(rows)
+
+    if (insertError) {
+      if (isMissingSnsPropertyOptionTableError(insertError)) return false
+      throw insertError
+    }
+
+    return true
+  }
+
+  async function fetchAllSnsPropertyOptionValues(field: SnsPropertySelectField) {
+    const tableTargets = field === 'wp_registered'
+      ? [
+          'sns_tiktok_properties',
+          'sns_instagram_properties',
+          'sns_youtube_properties',
+        ] as const
+      : ['sns_tiktok_properties'] as const
+
+    const results = await Promise.all(
+      tableTargets.map(async (tableName) => {
+        const { data, error } = await supabase.from(tableName).select(field)
+        if (error) throw error
+        return (data || []).map((item) => {
+          const value = field === 'wp_registered'
+            ? ('wp_registered' in item ? item.wp_registered : '')
+            : ('aos_registered' in item ? item.aos_registered : '')
+          return String(value || '')
+        })
+      }),
+    )
+
+    return normalizeSnsPropertyOptions(results.flat())
+  }
+
+  async function refreshSnsPropertyOptions(field: SnsPropertySelectField) {
+    const savedOptions = await fetchSavedSnsPropertyOptions(field)
+    const dbOptions = await fetchAllSnsPropertyOptionValues(field)
+    const nextOptions = normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS[field],
+      ...savedOptions,
+      ...dbOptions,
+    ])
+    saveStoredSnsPropertyOptions(field, nextOptions)
+    setSnsPropertyOptions((prev) => ({ ...prev, [field]: nextOptions }))
+    return nextOptions
+  }
+
+  async function openSnsPropertyOptionEditor(field: SnsPropertySelectField, title: string) {
+    let currentOptions = getSnsPropertySelectOptions(field)
+    try {
+      currentOptions = await refreshSnsPropertyOptions(field)
+    } catch (error) {
+      console.error(error)
+    }
+
     setSnsPropertyOptionEditor({
       field,
       title,
@@ -1274,12 +1397,20 @@ function App() {
     })
   }
 
-  function saveSnsPropertyOptionItems() {
+  async function saveSnsPropertyOptionItems() {
     if (!snsPropertyOptionEditor) return
 
     const nextOptions = normalizeSnsPropertyOptions(snsPropertyOptionEditor.items)
     if (nextOptions.length === 0) {
       alert('候補を1つ以上入れてください。')
+      return
+    }
+
+    try {
+      await saveSnsPropertyOptionsToDatabase(snsPropertyOptionEditor.field, nextOptions)
+    } catch (error) {
+      console.error(error)
+      alert('候補の保存に失敗しました。時間をおいてもう一度お試しください。')
       return
     }
 
@@ -1576,6 +1707,12 @@ function App() {
     fetchTiktokProperties,
     fetchYoutubeProperties,
   ])
+
+  useEffect(() => {
+    if (!currentUserEmail || activePage !== 'snsproperty') return
+    void refreshSnsPropertyOptions('wp_registered')
+    void refreshSnsPropertyOptions('aos_registered')
+  }, [activePage, currentUserEmail])
 
   const yearOptions = Array.from(
     new Set([
