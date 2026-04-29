@@ -644,12 +644,13 @@ function SnsCellDropdown({
               type="button"
               className="sns-dropdown-edit-button"
               title="候補を編集"
+              aria-label="候補を編集"
               onClick={() => {
                 setOpen(false)
                 onEdit()
               }}
             >
-              編集
+              ✎
             </button>
           )}
         </div>,

@@ -4497,12 +4497,12 @@ button.manual-chip {
   justify-content: space-between;
   min-width: 0;
   height: 22px;
-  border: 1px solid #d6dbe7;
-  border-radius: 4px;
-  background: #f8fafc;
-  color: #334155;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
-  padding: 0 6px;
+  padding: 0 2px 0 0;
   text-align: left;
   font: inherit;
 }
@@ -4580,7 +4580,7 @@ button.manual-chip {
   color: #334155;
   text-align: center;
   font: inherit;
-  padding: 8px;
+  min-height: 36px;
   cursor: pointer;
 }
 
