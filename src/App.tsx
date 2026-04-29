@@ -361,14 +361,14 @@ const defaultRecruitmentForm: Omit<RecruitmentRecord, 'id'> = {
 
 const defaultHankyoForm: Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'> = {
   inquiry_date: new Date().toISOString().split('T')[0],
-  account: 'Karilun',
-  trigger: '検索',
-  media: 'Karilun',
-  inquiry_type: '物件問合',
+  account: '',
+  trigger: '',
+  media: '',
+  inquiry_type: '',
   customer_name: '',
-  contact_method: 'LINE',
-  move_in_timing: '不明',
-  store: '対象外',
+  contact_method: '',
+  move_in_timing: '',
+  store: '',
   area: '',
   note: '',
 }
@@ -4342,21 +4342,25 @@ function App() {
                 </label>
                 <label className="form-label">アカウント
                   <select value={hankyoForm.account} onChange={(e) => setHankyoForm({ ...hankyoForm, account: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoAccounts.map((a) => <option key={a}>{a}</option>)}
                   </select>
                 </label>
                 <label className="form-label">きっかけ
                   <select value={hankyoForm.trigger} onChange={(e) => setHankyoForm({ ...hankyoForm, trigger: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoTriggers.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </label>
                 <label className="form-label">反響媒体
                   <select value={hankyoForm.media} onChange={(e) => setHankyoForm({ ...hankyoForm, media: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoMedias.map((m) => <option key={m}>{m}</option>)}
                   </select>
                 </label>
                 <label className="form-label">問合内容
                   <select value={hankyoForm.inquiry_type} onChange={(e) => setHankyoForm({ ...hankyoForm, inquiry_type: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </label>
@@ -4365,16 +4369,19 @@ function App() {
                 </label>
                 <label className="form-label">問合手段
                   <select value={hankyoForm.contact_method} onChange={(e) => setHankyoForm({ ...hankyoForm, contact_method: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="form-label">入居希望時期
                   <select value={hankyoForm.move_in_timing} onChange={(e) => setHankyoForm({ ...hankyoForm, move_in_timing: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </label>
                 <label className="form-label">送客先店舗
                   <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })}>
+                    <option value="">選択してください</option>
                     {hankyoStores.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </label>
