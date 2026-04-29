@@ -13,6 +13,7 @@ type OfficeNetworkGateProps = {
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1'])
+const IS_DEV_SERVER = import.meta.env.DEV
 
 function getBlockedMessage(reason: string) {
   if (reason === 'config_missing') {
@@ -31,7 +32,8 @@ export default function OfficeNetworkGate({ children }: OfficeNetworkGateProps) 
   const [message, setMessage] = useState('社内Wi-Fiかどうかを確認しています。')
 
   async function checkAccess() {
-    if (LOCAL_HOSTS.has(window.location.hostname)) {
+    // ローカル開発中は接続制限をかけず、いつでも画面を開けるようにする
+    if (IS_DEV_SERVER || LOCAL_HOSTS.has(window.location.hostname)) {
       setAccessState('allowed')
       return
     }

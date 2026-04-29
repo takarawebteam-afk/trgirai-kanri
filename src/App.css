@@ -3102,6 +3102,10 @@ button.manual-chip {
   width: max-content;
 }
 
+.progress-table-instagram {
+  min-width: 0;
+}
+
 .progress-table th {
   background: var(--blue-50);
   border: 1px solid var(--gray-200);
@@ -3388,14 +3392,25 @@ button.manual-chip {
   text-align: center;
 }
 
-.progress-table-tiktok th:nth-child(3),
-.progress-table-tiktok td:nth-child(3) {
+.progress-table-tiktok th:nth-child(5),
+.progress-table-tiktok td:nth-child(5) {
   text-align: center;
 }
 
 .progress-table-simple th:nth-child(3),
 .progress-table-simple td:nth-child(3) {
   text-align: center;
+}
+
+.progress-col-memo-wide {
+  min-width: 296px;
+  width: 296px;
+}
+
+.progress-table-instagram th:nth-child(15),
+.progress-table-instagram td:nth-child(15) {
+  min-width: 296px;
+  width: 296px;
 }
 
 .progress-copy-button:hover {

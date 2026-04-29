@@ -5,6 +5,9 @@ type AccessResult = {
   reason: string
 }
 
+// 社内Wi-Fiの許可IP。環境変数が未反映でも最低限ここで通せるようにする。
+const FALLBACK_ALLOWED_IPS = ['218.42.153.89', '61.195.153.136']
+
 function normalizeList(value: string | undefined) {
   return String(value ?? '')
     .split(',')
@@ -34,7 +37,7 @@ function isAllowedIp(clientIp: string, exactIps: string[], prefixes: string[]) {
 
 function buildResult(req: VercelRequest): AccessResult {
   const clientIp = extractClientIp(req)
-  const exactIps = normalizeList(process.env.OFFICE_ALLOWED_IPS)
+  const exactIps = [...new Set([...FALLBACK_ALLOWED_IPS, ...normalizeList(process.env.OFFICE_ALLOWED_IPS)])]
   const prefixes = normalizeList(process.env.OFFICE_ALLOWED_IP_PREFIXES)
 
   if (!exactIps.length && !prefixes.length) {

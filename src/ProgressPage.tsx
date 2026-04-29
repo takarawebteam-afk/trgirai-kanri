@@ -98,7 +98,7 @@ const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
   register: '登録状況',
 }
 const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
-  floor_plan_order: '図面発注',
+  floor_plan_order: '図面準備',
   material_processing: '素材加工',
   floor_plan_insert: '図面挿入',
   afureko: 'アフレコ',
@@ -162,6 +162,28 @@ const MEDIA_OPTIONS = [
 ]
 
 const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾']
+
+const PROGRESS_SHARED_COLUMN_WIDTHS = {
+  propertyName: 155,
+  address: 146,
+  area: 83,
+  nearestStation: 118,
+  floorPlan: 83,
+  managementCompany: 166,
+  audioSource: 120,
+} as const
+
+const PROGRESS_INSTAGRAM_COLUMN_WIDTHS = {
+  propertyName: 155,
+  address: 146,
+  area: 83,
+  nearestStation: 118,
+  floorPlan: 83,
+  rent: 59,
+  managementCompany: 166,
+  memo: 296,
+  audioSource: 120,
+} as const
 
 const FORM_TABS: { key: FormTabKey; label: string }[] = [
   { key: 'basic', label: '① 基本情報' },
@@ -922,28 +944,30 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 115 }} />
           <col style={{ width: 115 }} />
           <col style={{ width: 40 }} />
-          <col style={{ width: 157 }} />
-          <col style={{ width: 72 }} />
-          <col style={{ width: 232 }} />
-          <col style={{ width: 98 }} />
-          <col style={{ width: 146 }} />
-          <col style={{ width: 83 }} />
-          <col style={{ width: 118 }} />
-          <col style={{ width: 166 }} />
+          <col style={{ width: 88 }} />
+          <col style={{ width: 40 }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.propertyName }} />
+          <col style={{ width: 49 }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.address }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.nearestStation }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.floorPlan }} />
           <col style={{ width: 152 }} />
-          <col style={{ width: 88 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.managementCompany }} />
+          <col style={{ width: 101 }} />
           <col style={{ width: 96 }} />
+          <col style={{ width: 296 }} />
+          <col style={{ width: 98 }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.audioSource }} />
           <col style={{ width: 88 }} />
           <col style={{ width: 88 }} />
           <col style={{ width: 88 }} />
           <col style={{ width: 88 }} />
           <col style={{ width: 88 }} />
-          <col style={{ width: 88 }} />
-          <col style={{ width: 148 }} />
+          <col style={{ width: 120 }} />
           <col style={{ width: 180 }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 98 }} />
-          <col style={{ width: 120 }} />
           <col style={{ width: 56 }} />
           <col style={{ width: 72 }} />
         </colgroup>
@@ -951,6 +975,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <tr>
             <th className="ptcol-group-1">素材保存</th>
             <th className="ptcol-group-1">投稿予定日</th>
+            <th className="ptcol-group-2">WP登録</th>
+            <th className="ptcol-group-2">AOS登録</th>
             <th className="ptcol-group-2">資料</th>
             <th className="ptcol-group-2">物件名</th>
             <th className="ptcol-group-2">号室</th>
@@ -961,21 +987,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">家賃</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
-            <th className="ptcol-group-2">図面発注</th>
+            <th className="ptcol-group-2">図面準備</th>
+            <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
             <th className="ptcol-group-3">編集機器</th>
+            <th className="ptcol-group-3">音源</th>
             <th className="ptcol-group-3">動画尺</th>
             <th className="ptcol-group-3">素材加工</th>
             <th className="ptcol-group-3">図面挿入</th>
             <th className="ptcol-group-3">アフレコ</th>
             <th className="ptcol-group-3">文字入れ</th>
             <th className="ptcol-group-3">図面確認</th>
-            <th className="ptcol-group-4">メモ</th>
             <th className="ptcol-group-4">投稿文</th>
-            <th className="ptcol-group-4">WP登録</th>
-            <th className="ptcol-group-4">AOS登録</th>
             <th className="ptcol-group-4">YouTube</th>
             <th className="ptcol-group-4">完成品保存</th>
-            <th className="ptcol-group-4">音源</th>
             <th className="ptcol-group-5">完了</th>
             <th className="ptcol-group-5">削除</th>
           </tr>
@@ -985,6 +1009,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <tr key={record.id} className="row-hoverable" onClick={() => openEdit(record)}>
               <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
+              <td className="ptcell-group-2">{renderRegisterCell(record, 'wp_registered')}</td>
+              <td className="ptcell-group-2">{renderRegisterCell(record, 'aos_registered')}</td>
               <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
@@ -996,20 +1022,18 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-2">{renderProcessCell(record, 'floor_plan_order')}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'device', 'device')}</td>
+              <td className="ptcell-group-3">{renderSelectCell(record, 'audio_source', 'audio')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'material_processing')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'floor_plan_insert')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'afureko')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'text_overlay')}</td>
               <td className="ptcell-group-3">{renderProcessCell(record, 'floor_plan_check')}</td>
-              <td className="ptcell-group-4">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
-              <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
-              <td className="ptcell-group-4">{renderRegisterCell(record, 'aos_registered')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'youtube_reserved')}</td>
               <td className="ptcell-group-4">{renderProcessCell(record, 'final_save')}</td>
-              <td className="ptcell-group-4">{renderSelectCell(record, 'audio_source', 'audio')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
@@ -1028,20 +1052,20 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 121 }} />
           <col style={{ width: 64 }} />
           <col style={{ width: 40 }} />
-          <col style={{ width: 157 }} />
-          <col style={{ width: 72 }} />
-          <col style={{ width: 232 }} />
-          <col style={{ width: 98 }} />
-          <col style={{ width: 146 }} />
-          <col style={{ width: 83 }} />
-          <col style={{ width: 118 }} />
-          <col style={{ width: 166 }} />
-          <col style={{ width: 152 }} />
-          <col style={{ width: 148 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.propertyName }} />
+          <col style={{ width: 36 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.address }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.area }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.nearestStation }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.floorPlan }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.rent }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.managementCompany }} />
+          <col style={{ width: 101 }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.memo }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 180 }} />
           <col style={{ width: 98 }} />
-          <col style={{ width: 120 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.audioSource }} />
           <col style={{ width: 56 }} />
           <col style={{ width: 72 }} />
         </colgroup>
@@ -1061,7 +1085,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">家賃</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
-            <th className="ptcol-group-4">メモ</th>
+            <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
             <th className="ptcol-group-4">編集完了</th>
             <th className="ptcol-group-4">投稿文</th>
             <th className="ptcol-group-4">WP登録</th>
@@ -1091,7 +1115,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
-              <td className="ptcell-group-4">{renderTextCell(record, 'memo', 'メモ')}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-4">{renderProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
@@ -1112,16 +1136,16 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 115 }} />
           <col style={{ width: 115 }} />
           <col style={{ width: 40 }} />
-          <col style={{ width: 157 }} />
-          <col style={{ width: 72 }} />
+          <col style={{ width: 40 }} />
+          <col style={{ width: 49 }} />
           <col style={{ width: 232 }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 146 }} />
           <col style={{ width: 83 }} />
           <col style={{ width: 118 }} />
           <col style={{ width: 166 }} />
-          <col style={{ width: 152 }} />
-          <col style={{ width: 148 }} />
+          <col style={{ width: 101 }} />
+          <col style={{ width: 296 }} />
           <col style={{ width: 56 }} />
           <col style={{ width: 72 }} />
         </colgroup>
@@ -1139,7 +1163,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">家賃</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
-            <th className="ptcol-group-4">メモ</th>
+            <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
             <th className="ptcol-group-5">完了</th>
             <th className="ptcol-group-5">削除</th>
           </tr>
@@ -1159,7 +1183,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
-              <td className="ptcell-group-4">{renderTextCell(record, 'memo', 'メモ')}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
@@ -1262,7 +1286,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label className="form-label">
-              図面発注
+              図面準備
               <select value={form.floor_plan_order} onChange={(e) => setForm({ ...form, floor_plan_order: e.target.value as ProcessStatus })}>
                 {PROCESS_STATUSES.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
