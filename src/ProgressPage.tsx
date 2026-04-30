@@ -49,7 +49,30 @@ type ProgressPageProps = {
 }
 
 type FormTabKey = 'basic' | 'production' | 'check' | 'finish'
-type SelectOptionGroup = 'process' | 'device' | 'duration' | 'audio' | 'register' | 'register_wp' | 'register_aos' | 'register_youtube'
+type ProcessField =
+  | 'floor_plan_order'
+  | 'material_processing'
+  | 'floor_plan_insert'
+  | 'afureko'
+  | 'text_overlay'
+  | 'floor_plan_check'
+  | 'final_save'
+type SelectOptionGroup =
+  | 'process'
+  | 'process_floor_plan_order'
+  | 'process_material_processing'
+  | 'process_floor_plan_insert'
+  | 'process_afureko'
+  | 'process_text_overlay'
+  | 'process_floor_plan_check'
+  | 'process_final_save'
+  | 'device'
+  | 'duration'
+  | 'audio'
+  | 'register'
+  | 'register_wp'
+  | 'register_aos'
+  | 'register_youtube'
 type SelectMenuState = {
   id: string
   field: keyof ProductionRecord
@@ -74,12 +97,30 @@ const REGISTER_OPTIONS = [
   { value: true, label: '登録済' },
 ]
 
+const DEFAULT_PROCESS_OPTIONS: string[] = [...PROCESS_STATUSES]
+const PROCESS_FIELD_GROUPS: Record<ProcessField, SelectOptionGroup> = {
+  floor_plan_order: 'process_floor_plan_order',
+  material_processing: 'process_material_processing',
+  floor_plan_insert: 'process_floor_plan_insert',
+  afureko: 'process_afureko',
+  text_overlay: 'process_text_overlay',
+  floor_plan_check: 'process_floor_plan_check',
+  final_save: 'process_final_save',
+}
+
 const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   process: ['未着手', '進行中', '完了'],
   device: ['未設定', 'iPhone', 'Android', 'カメラ', 'その他'],
   duration: ['未設定', '15秒', '30秒', '45秒', '60秒', '編集中'],
   audio: ['未登録', '候補あり', '登録済'],
   register: ['未登録', '登録済'],
+  process_floor_plan_order: [...DEFAULT_PROCESS_OPTIONS],
+  process_material_processing: [...DEFAULT_PROCESS_OPTIONS],
+  process_floor_plan_insert: [...DEFAULT_PROCESS_OPTIONS],
+  process_afureko: [...DEFAULT_PROCESS_OPTIONS],
+  process_text_overlay: [...DEFAULT_PROCESS_OPTIONS],
+  process_floor_plan_check: [...DEFAULT_PROCESS_OPTIONS],
+  process_final_save: [...DEFAULT_PROCESS_OPTIONS],
   register_wp: REGISTER_OPTIONS.map((option) => option.label),
   register_aos: REGISTER_OPTIONS.map((option) => option.label),
   register_youtube: REGISTER_OPTIONS.map((option) => option.label),
@@ -87,7 +128,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
 
 const SELECT_OPTION_STORAGE_PREFIX = 'progress_select_options:'
 /*
-const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
+const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   process: '工程',
   device: '使用端末',
   duration: '動画尺',
@@ -98,7 +139,7 @@ const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
   register_youtube: 'YouTube莠育ｴ・,
 }
 */
-const SELECT_OPTION_GROUP_LABELS: Record<SelectOptionGroup, string> = {
+const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   process: '進捗',
   device: '使用端末',
   duration: '動画尺',
@@ -148,6 +189,10 @@ function getRegisterGroupByField(field: 'wp_registered' | 'aos_registered' | 'yo
   return 'register_youtube' as const
 }
 
+function getProcessGroupByField(field: ProcessField) {
+  return PROCESS_FIELD_GROUPS[field]
+}
+
 function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
   if (typeof window === 'undefined') {
     return INITIAL_SELECT_OPTIONS
@@ -157,7 +202,10 @@ function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
 
   ;(Object.keys(INITIAL_SELECT_OPTIONS) as SelectOptionGroup[]).forEach((group) => {
     try {
-      const raw = window.localStorage.getItem(`${SELECT_OPTION_STORAGE_PREFIX}${group}`)
+      let raw = window.localStorage.getItem(`${SELECT_OPTION_STORAGE_PREFIX}${group}`)
+      if (!raw && group.startsWith('process_')) {
+        raw = window.localStorage.getItem(`${SELECT_OPTION_STORAGE_PREFIX}process`)
+      }
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (!Array.isArray(parsed)) return
@@ -708,7 +756,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   function openSelectOptionEditor(group: SelectOptionGroup) {
-    const title = selectMenu?.title || SELECT_OPTION_GROUP_LABELS[group]
+    const title = selectMenu?.title || SELECT_OPTION_GROUP_LABELS[group] || ''
 
     setSelectOptionEditor({
       group,
@@ -924,7 +972,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             record,
             field,
             effectiveGroup,
-            title || SELECT_OPTION_FIELD_LABELS[field] || SELECT_OPTION_GROUP_LABELS[effectiveGroup],
+            title || SELECT_OPTION_FIELD_LABELS[field] || SELECT_OPTION_GROUP_LABELS[effectiveGroup] || '',
           )}
         >
           <span className="progress-editable-select-label">{value}</span>
@@ -936,6 +984,17 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderProcessCell(record: ProductionRecord, field: keyof ProductionRecord) {
     return renderSelectCell(record, field, 'process', SELECT_OPTION_FIELD_LABELS[field] || '工程')
+  }
+
+  void renderProcessCell
+
+  function renderIndependentProcessCell(record: ProductionRecord, field: ProcessField) {
+    return renderSelectCell(
+      record,
+      field,
+      getProcessGroupByField(field),
+      SELECT_OPTION_FIELD_LABELS[field] || '工程',
+    )
   }
 
   function renderRegisterCell(record: ProductionRecord, field: 'wp_registered' | 'aos_registered' | 'youtube_reserved') {
@@ -1080,19 +1139,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
-              <td className="ptcell-group-2">{renderProcessCell(record, 'floor_plan_order')}</td>
+              <td className="ptcell-group-2">{renderIndependentProcessCell(record, 'floor_plan_order')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'device', 'device')}</td>
               <td className="ptcell-group-3">{renderTextCell(record, 'audio_source', '音源')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
-              <td className="ptcell-group-3">{renderProcessCell(record, 'material_processing')}</td>
-              <td className="ptcell-group-3">{renderProcessCell(record, 'floor_plan_insert')}</td>
-              <td className="ptcell-group-3">{renderProcessCell(record, 'afureko')}</td>
-              <td className="ptcell-group-3">{renderProcessCell(record, 'text_overlay')}</td>
-              <td className="ptcell-group-3">{renderProcessCell(record, 'floor_plan_check')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'material_processing')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'floor_plan_insert')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'afureko')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'floor_plan_check')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'youtube_reserved')}</td>
-              <td className="ptcell-group-4">{renderProcessCell(record, 'final_save')}</td>
+              <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
@@ -1175,7 +1234,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
-              <td className="ptcell-group-4">{renderProcessCell(record, 'final_save')}</td>
+              <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'audio_source', '音源')}</td>
