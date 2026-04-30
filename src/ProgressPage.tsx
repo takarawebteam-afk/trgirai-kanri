@@ -69,6 +69,7 @@ type SelectOptionGroup =
   | 'device'
   | 'duration'
   | 'audio'
+  | 'instagram_post_type'
   | 'register'
   | 'register_wp'
   | 'register_aos'
@@ -81,6 +82,7 @@ type SelectMenuState = {
   top: number
   left: number
   width: number
+  showEditButton: boolean
 } | null
 type SelectOptionEditorState = {
   group: SelectOptionGroup
@@ -97,6 +99,7 @@ const REGISTER_OPTIONS = [
   { value: true, label: '登録済' },
 ]
 
+const INSTAGRAM_POST_TYPE_OPTIONS = ['動画', '画像'] as const
 const DEFAULT_PROCESS_OPTIONS: string[] = [...PROCESS_STATUSES]
 const PROCESS_FIELD_GROUPS: Record<ProcessField, SelectOptionGroup> = {
   floor_plan_order: 'process_floor_plan_order',
@@ -114,6 +117,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   duration: ['未設定', '15秒', '30秒', '45秒', '60秒', '編集中'],
   audio: ['未登録', '候補あり', '登録済'],
   register: ['未登録', '登録済'],
+  instagram_post_type: [...INSTAGRAM_POST_TYPE_OPTIONS],
   process_floor_plan_order: [...DEFAULT_PROCESS_OPTIONS],
   process_material_processing: [...DEFAULT_PROCESS_OPTIONS],
   process_floor_plan_insert: [...DEFAULT_PROCESS_OPTIONS],
@@ -134,6 +138,7 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   duration: '動画尺',
   audio: '音源',
   register: '登録状況',
+  instagram_post_type: '遞ｮ蛻･',
   register_wp: 'WP逋ｻ骭ｲ',
   register_aos: 'AOS逋ｻ骭ｲ',
   register_youtube: 'YouTube莠育ｴ・,
@@ -176,11 +181,15 @@ function normalizeRegisterOptions(options: string[]) {
   return normalized
 }
 
+function getDefaultRegisterLabel() {
+  return REGISTER_OPTIONS[0]?.label || ''
+}
+
 function getRegisterLabel(value: string, options: string[]) {
-  const normalizedOptions = normalizeRegisterOptions(options)
+  void options
   const normalizedValue = String(value || '').trim()
   if (normalizedValue) return normalizedValue
-  return normalizedOptions[0] || ''
+  return getDefaultRegisterLabel()
 }
 
 function getRegisterGroupByField(field: 'wp_registered' | 'aos_registered' | 'youtube_reserved') {
@@ -354,10 +363,10 @@ function sanitizeRegisterText(value: unknown, options = INITIAL_SELECT_OPTIONS.r
 }
 
 function isCustomRegisterSelected(value: string, options: string[]) {
-  const normalizedOptions = normalizeRegisterOptions(options)
+  void options
   const normalizedValue = String(value || '').trim()
   if (!normalizedValue) return false
-  return normalizedValue !== (normalizedOptions[0] || '')
+  return normalizedValue !== getDefaultRegisterLabel()
 }
 
 function LinkIcon() {
@@ -721,6 +730,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     field: keyof ProductionRecord,
     group: SelectOptionGroup,
     title: string,
+    showEditButton = true,
   ) {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
@@ -732,6 +742,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       top: rect.bottom + 4,
       left: rect.left,
       width: Math.max(rect.width, 108),
+      showEditButton,
     })
   }
 
@@ -872,6 +883,14 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     setShowModal(true)
   }
 
+  function handleMediaChange(media: string) {
+    setForm((prev) => ({
+      ...prev,
+      media,
+      post_type: isInstagramMedia(media) ? prev.post_type : '',
+    }))
+  }
+
   async function applyTikTokCopy(targetId: string, source: ProductionRecord) {
     const patch = {
       property_url: source.property_url || '',
@@ -939,6 +958,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
+  function renderPostTypeCell(record: ProductionRecord) {
+    return renderSelectCell(record, 'post_type', 'instagram_post_type', '種別', '', undefined, false, false)
+  }
+
   function renderSelectCell(
     record: ProductionRecord,
     field: keyof ProductionRecord,
@@ -946,6 +969,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     title?: string,
     extraClassName = '',
     style?: React.CSSProperties,
+    showEditButton = true,
+    useFirstOptionAsFallback = true,
   ) {
     const effectiveGroup = group === 'register'
       ? getRegisterGroupByField(field as 'wp_registered' | 'aos_registered' | 'youtube_reserved')
@@ -954,7 +979,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     const value =
       effectiveGroup.startsWith('register')
         ? getRegisterLabel(String(record[field] || ''), options)
-        : String(record[field] || options[0] || '')
+        : useFirstOptionAsFallback
+          ? String(record[field] || options[0] || '')
+          : String(record[field] || '')
     const isOpen = selectMenu?.id === record.id && selectMenu.field === field
 
     return (
@@ -973,6 +1000,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             field,
             effectiveGroup,
             title || SELECT_OPTION_FIELD_LABELS[field] || SELECT_OPTION_GROUP_LABELS[effectiveGroup] || '',
+            showEditButton,
           )}
         >
           <span className="progress-editable-select-label">{value}</span>
@@ -1216,7 +1244,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           {mediaRecords.map((record) => (
             <tr key={record.id} className="row-hoverable" onClick={() => openEdit(record)}>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
-              <td className="ptcell-group-1">{renderTextCell(record, 'post_type', '種別')}</td>
+              <td className="ptcell-group-1">{renderPostTypeCell(record)}</td>
               <td className="ptcell-group-1">{renderTextCell(record, 'property_number', '物件番号')}</td>
               <td className="ptcell-group-1" onClick={(e) => e.stopPropagation()}>
                 <button className="progress-copy-button" type="button" onClick={() => setCopyTargetId(record.id)}>
@@ -1319,7 +1347,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <>
           <label className="form-label">
             媒体
-            <select value={form.media} onChange={(e) => setForm({ ...form, media: e.target.value })}>
+            <select value={form.media} onChange={(e) => handleMediaChange(e.target.value)}>
               {MEDIA_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -1381,16 +1409,28 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <input value={form.contact_info} onChange={(e) => setForm({ ...form, contact_info: e.target.value })} />
             </label>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <label className="form-label">
-              種別
-              <input value={form.post_type} onChange={(e) => setForm({ ...form, post_type: e.target.value })} />
-            </label>
+          {isInstagramMedia(form.media) ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <label className="form-label">
+                種別
+                <select value={form.post_type} onChange={(e) => setForm({ ...form, post_type: e.target.value })}>
+                  <option value="">選んでください</option>
+                  {INSTAGRAM_POST_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-label">
+                物件番号
+                <input value={form.property_number} onChange={(e) => setForm({ ...form, property_number: e.target.value })} />
+              </label>
+            </div>
+          ) : (
             <label className="form-label">
               物件番号
               <input value={form.property_number} onChange={(e) => setForm({ ...form, property_number: e.target.value })} />
             </label>
-          </div>
+          )}
           <label className="form-label">
             資料URL
             <input value={form.property_url} onChange={(e) => setForm({ ...form, property_url: e.target.value })} />
@@ -1754,9 +1794,24 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--gray-500)', lineHeight: 1.8 }}>最初は3つだけ入れて保存できます。残りは下の一覧でそのまま入力できます。</p>
                 <label className="form-label">
                   媒体
-                  <select value={form.media} onChange={(e) => setForm({ ...form, media: e.target.value })}>
+                  <select value={form.media} onChange={(e) => handleMediaChange(e.target.value)}>
                     {MEDIA_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
+                </label>
+                {isInstagramMedia(form.media) && (
+                  <label className="form-label">
+                    種別
+                    <select value={form.post_type} onChange={(e) => setForm({ ...form, post_type: e.target.value })}>
+                      <option value="">選んでください</option>
+                      {INSTAGRAM_POST_TYPE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label className="form-label">
+                  素材保存日
+                  <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
                 </label>
                 <label className="form-label">
                   物件名
