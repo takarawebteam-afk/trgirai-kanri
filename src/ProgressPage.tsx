@@ -203,6 +203,7 @@ const PROGRESS_SHARED_COLUMN_WIDTHS = {
   area: 83,
   nearestStation: 118,
   floorPlan: 83,
+  rent: 101,
   managementCompany: 166,
   audioSource: 160,
 } as const
@@ -213,7 +214,7 @@ const PROGRESS_INSTAGRAM_COLUMN_WIDTHS = {
   area: 83,
   nearestStation: 118,
   floorPlan: 83,
-  rent: 59,
+  rent: PROGRESS_SHARED_COLUMN_WIDTHS.rent,
   managementCompany: 166,
   memo: 296,
   audioSource: 160,
@@ -1010,7 +1011,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.nearestStation }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.floorPlan }} />
-          <col style={{ width: 152 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.rent }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.managementCompany }} />
           <col style={{ width: 101 }} />
           <col style={{ width: 96 }} />
@@ -1200,7 +1201,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 98 }} />
           <col style={{ width: 146 }} />
           <col style={{ width: 83 }} />
-          <col style={{ width: 118 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.rent }} />
           <col style={{ width: 166 }} />
           <col style={{ width: 101 }} />
           <col style={{ width: 296 }} />
