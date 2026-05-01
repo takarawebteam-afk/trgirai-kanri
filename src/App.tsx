@@ -95,8 +95,26 @@ type DMRecord = {
   created_at?: string
 }
 
-type SnsPropertyPlatform = 'tiktok' | 'instagram' | 'youtube'
-type SnsPropertyTableName = 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties'
+type SnsPropertyPlatform =
+  | 'tiktok'
+  | 'instagram'
+  | 'youtube'
+  | 'keihan-karilun'
+  | 'nishinomiya-karilun'
+  | 'nagase'
+  | 'nishikita'
+  | 'yao'
+  | 'recruitment'
+type StoreSnsPropertyPlatform = 'keihan-karilun' | 'nishinomiya-karilun' | 'nagase' | 'nishikita' | 'yao'
+type SnsPropertyTableName =
+  | 'sns_tiktok_properties'
+  | 'sns_instagram_properties'
+  | 'sns_youtube_properties'
+  | 'sns_keihan_karilun_properties'
+  | 'sns_nishinomiya_karilun_properties'
+  | 'sns_nagase_properties'
+  | 'sns_nishikita_properties'
+  | 'sns_yao_properties'
 
 type SnsMemoEditorState = {
   tableName: SnsPropertyTableName
@@ -157,6 +175,33 @@ type YoutubePropertyRecord = {
   address: string
   management_company: string
   contact: string
+}
+
+type StoreSnsPropertyRecord = {
+  id: string
+  created_at?: string
+  memo: string
+  post_date: string
+  category: string
+  property_name: string
+  room_number: string
+  property_number: string
+  document_url: string
+  tiktok_reserved: string
+  tiktok_wp: string
+  instagram_reserved: string
+  instagram_wp: string
+  youtube_reserved: string
+  youtube_wp: string
+  threads_post_date: string
+  post_text: string
+}
+
+type SnsPropertyTab = {
+  key: SnsPropertyPlatform
+  label: string
+  title: string
+  status: 'ready' | 'placeholder'
 }
 
 type TaskItem = {
@@ -424,6 +469,52 @@ const defaultYoutubePropertyForm: Omit<YoutubePropertyRecord, 'id' | 'created_at
   memo: '', wp_registered: '', post_date: '', property_number: '',
   document_url: '', property_name: '', room_number: '', address: '',
   management_company: '', contact: ''
+}
+
+const defaultStoreSnsPropertyForm: Omit<StoreSnsPropertyRecord, 'id' | 'created_at'> = {
+  memo: '',
+  post_date: '',
+  category: '',
+  property_name: '',
+  room_number: '',
+  property_number: '',
+  document_url: '',
+  tiktok_reserved: '',
+  tiktok_wp: '',
+  instagram_reserved: '',
+  instagram_wp: '',
+  youtube_reserved: '',
+  youtube_wp: '',
+  threads_post_date: '',
+  post_text: '',
+}
+
+const snsPropertyTabs: SnsPropertyTab[] = [
+  { key: 'tiktok', label: 'Karilun｜TikTok', title: 'Karilun｜TikTok 物件管理', status: 'ready' },
+  { key: 'instagram', label: 'Karilun｜Instagram', title: 'Karilun｜Instagram 物件管理', status: 'ready' },
+  { key: 'youtube', label: 'Karilun｜YouTube', title: 'Karilun｜YouTube 物件管理', status: 'ready' },
+  { key: 'keihan-karilun', label: '京阪かりるん', title: '京阪かりるん 物件管理', status: 'ready' },
+  { key: 'nishinomiya-karilun', label: '西宮かりるん', title: '西宮かりるん 物件管理', status: 'ready' },
+  { key: 'nagase', label: '長瀬店', title: '長瀬店 物件管理', status: 'ready' },
+  { key: 'nishikita', label: '西北店', title: '西北店 物件管理', status: 'ready' },
+  { key: 'yao', label: '八尾店', title: '八尾店 物件管理', status: 'ready' },
+  { key: 'recruitment', label: '採用', title: '採用 物件管理', status: 'placeholder' },
+]
+
+const storeSnsPropertyPlatforms: StoreSnsPropertyPlatform[] = [
+  'keihan-karilun',
+  'nishinomiya-karilun',
+  'nagase',
+  'nishikita',
+  'yao',
+]
+
+const storeSnsPropertyTableMap: Record<StoreSnsPropertyPlatform, SnsPropertyTableName> = {
+  'keihan-karilun': 'sns_keihan_karilun_properties',
+  'nishinomiya-karilun': 'sns_nishinomiya_karilun_properties',
+  nagase: 'sns_nagase_properties',
+  nishikita: 'sns_nishikita_properties',
+  yao: 'sns_yao_properties',
 }
 
 type SnsPropertySelectField = 'wp_registered' | 'aos_registered'
@@ -1020,20 +1111,45 @@ function App() {
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
   const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
   const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
+  const [storeSnsProperties, setStoreSnsProperties] = useState<Record<StoreSnsPropertyPlatform, StoreSnsPropertyRecord[]>>({
+    'keihan-karilun': [],
+    'nishinomiya-karilun': [],
+    nagase: [],
+    nishikita: [],
+    yao: [],
+  })
   const [snsPropertySearch, setSnsPropertySearch] = useState<Record<SnsPropertyPlatform, string>>({
     tiktok: '',
     instagram: '',
     youtube: '',
+    'keihan-karilun': '',
+    'nishinomiya-karilun': '',
+    nagase: '',
+    nishikita: '',
+    yao: '',
+    recruitment: '',
   })
   const [snsPropertyPage, setSnsPropertyPage] = useState<Record<SnsPropertyPlatform, number>>({
     tiktok: 1,
     instagram: 1,
     youtube: 1,
+    'keihan-karilun': 1,
+    'nishinomiya-karilun': 1,
+    nagase: 1,
+    nishikita: 1,
+    yao: 1,
+    recruitment: 1,
   })
   const [snsPropertyTotalCount, setSnsPropertyTotalCount] = useState<Record<SnsPropertyPlatform, number>>({
     tiktok: 0,
     instagram: 0,
     youtube: 0,
+    'keihan-karilun': 0,
+    'nishinomiya-karilun': 0,
+    nagase: 0,
+    nishikita: 0,
+    yao: 0,
+    recruitment: 0,
   })
   const [snsPropertyOptions, setSnsPropertyOptions] = useState<Record<SnsPropertySelectField, string[]>>(() => ({
     wp_registered: normalizeSnsPropertyOptions([
@@ -1124,7 +1240,7 @@ function App() {
   }
 
   async function fetchSnsPropertyPage<T extends { property_number: string; created_at?: string }>(
-    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    tableName: SnsPropertyTableName,
     platform: SnsPropertyPlatform,
     page: number,
     search: string,
@@ -1173,6 +1289,18 @@ function App() {
     await fetchSnsPropertyPage('sns_youtube_properties', 'youtube', snsPropertyPage.youtube, snsPropertySearch.youtube, setYoutubeProperties)
   }, [snsPropertyPage.youtube, snsPropertySearch.youtube])
 
+  const fetchStoreSnsProperties = useCallback(async (platform: StoreSnsPropertyPlatform) => {
+    await fetchSnsPropertyPage(
+      storeSnsPropertyTableMap[platform],
+      platform,
+      snsPropertyPage[platform],
+      snsPropertySearch[platform],
+      (rows) => {
+        setStoreSnsProperties((prev) => ({ ...prev, [platform]: rows as StoreSnsPropertyRecord[] }))
+      },
+    )
+  }, [snsPropertyPage, snsPropertySearch])
+
   const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube') => {
     if (target === 'tiktok') {
       fetchTiktokProperties()
@@ -1184,6 +1312,10 @@ function App() {
     }
     fetchYoutubeProperties()
   }, [fetchInstagramProperties, fetchTiktokProperties, fetchYoutubeProperties])
+
+  const isStoreSnsPropertyPlatform = useCallback((platform: SnsPropertyPlatform): platform is StoreSnsPropertyPlatform => {
+    return storeSnsPropertyPlatforms.includes(platform as StoreSnsPropertyPlatform)
+  }, [])
 
   async function fetchStock() {
     const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
@@ -1287,6 +1419,113 @@ function App() {
           {activeSnsPropertyPageInfo.currentPage} / {activeSnsPropertyPageInfo.totalPages}ページ
         </span>
       </div>
+    )
+  }
+
+  async function updateStoreSnsPropertyRow(
+    platform: StoreSnsPropertyPlatform,
+    id: string,
+    field: keyof Omit<StoreSnsPropertyRecord, 'id' | 'created_at'>,
+    value: string,
+  ) {
+    const tableName = storeSnsPropertyTableMap[platform]
+    const payload = field === 'post_date' || field === 'threads_post_date'
+      ? { [field]: value || null }
+      : { [field]: value }
+    const { error } = await supabase.from(tableName).update(payload).eq('id', id)
+
+    if (error) {
+      alert(`保存に失敗しました。\n\n${error.message}`)
+      return
+    }
+
+    setStoreSnsProperties((prev) => ({
+      ...prev,
+      [platform]: prev[platform].map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    }))
+  }
+
+  function renderStoreSnsPropertySection(platform: StoreSnsPropertyPlatform) {
+    const rows = storeSnsProperties[platform]
+    const title = snsPropertyTabs.find((tab) => tab.key === platform)?.title || 'SNS物件管理'
+    const tableName = storeSnsPropertyTableMap[platform]
+
+    return (
+      <section className="panel table-panel">
+        <div className="panel-heading">
+          <div><h2>{title}</h2></div>
+          <div className="sns-property-toolbar">
+            <input
+              className="sns-property-search-input"
+              value={snsPropertySearch[platform]}
+              onChange={(e) => updateSnsPropertySearch(platform, e.target.value)}
+              placeholder="番号で検索"
+            />
+            {snsPropertySearch[platform] && (
+              <button type="button" className="secondary" onClick={() => updateSnsPropertySearch(platform, '')}>×</button>
+            )}
+            <button className="primary" onClick={() => addStoreSnsProperty(platform)}>＋ 行を追加</button>
+          </div>
+        </div>
+        <div className="table-wrap sns-property-table-wrap">
+          <table className="compact-list-table sns-property-table">
+            <thead>
+              <tr>
+                <th className="sns-col-memo">メモ</th>
+                <th className="sns-col-date">投稿日</th>
+                <th className="sns-col-plan">種別</th>
+                <th className="sns-col-property-name">物件名</th>
+                <th className="sns-col-room">号室</th>
+                <th className="sns-col-code">番号</th>
+                <th className="sns-col-link">資料</th>
+                <th className="sns-col-check">Tiktok予約</th>
+                <th className="sns-col-check">TiktokWP</th>
+                <th className="sns-col-check">INSTA予約</th>
+                <th className="sns-col-check">INSTA WP</th>
+                <th className="sns-col-check">YouTube予約</th>
+                <th className="sns-col-check">YouTube WP</th>
+                <th className="sns-col-date">threads投稿日</th>
+                <th className="sns-col-post-text">投稿文</th>
+                <th className="sns-col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+              )}
+              {rows.map((r) => (
+                <tr key={r.id} className="row-hoverable">
+                  <td className="sns-col-memo">{renderSnsMemoCell(tableName, r.id, r.memo)}</td>
+                  <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_date', value), { type: 'date' })}</td>
+                  <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))}</td>
+                  <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateStoreSnsPropertyRow(platform, r.id, 'property_name', value))}</td>
+                  <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'room_number', value))}</td>
+                  <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'property_number', value))}</td>
+                  <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editStoreSnsPropertyUrl(platform, r.id, r.document_url)}>
+                      🔗
+                    </button>
+                  </td>
+                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:tiktok_reserved`, r.tiktok_reserved, (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_reserved', value))}</td>
+                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:tiktok_wp`, r.tiktok_wp, (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value))}</td>
+                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:instagram_reserved`, r.instagram_reserved, (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_reserved', value))}</td>
+                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:instagram_wp`, r.instagram_wp, (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_wp', value))}</td>
+                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:youtube_reserved`, r.youtube_reserved, (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value))}</td>
+                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:youtube_wp`, r.youtube_wp, (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
+                  <td className="sns-col-date">{renderSnsTextInput(`${r.id}:threads_post_date`, normalizeSnsPropertyPostDate(r.threads_post_date, r.property_number), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value), { type: 'date' })}</td>
+                  <td className="sns-col-post-text">{renderSnsTextInput(`${r.id}:post_text`, r.post_text, (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
+                  <td className="sns-col-actions">
+                    <div className="row-actions">
+                      <button className="danger" onClick={() => confirmAndDeleteRecord(tableName, r.id, () => fetchStoreSnsProperties(platform), 'このレコードを削除しますか？')}>削除</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {renderSnsPropertyPagination()}
+      </section>
     )
   }
 
@@ -1538,8 +1777,28 @@ function App() {
       await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setTiktokProperties)
     } else if (snsMemoEditor.tableName === 'sns_instagram_properties') {
       await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setInstagramProperties)
-    } else {
+    } else if (snsMemoEditor.tableName === 'sns_youtube_properties') {
       await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setYoutubeProperties)
+    } else {
+      const platform = (Object.keys(storeSnsPropertyTableMap) as StoreSnsPropertyPlatform[])
+        .find((key) => storeSnsPropertyTableMap[key] === snsMemoEditor.tableName)
+
+      if (platform) {
+        const { error } = await supabase
+          .from(snsMemoEditor.tableName)
+          .update({ memo: nextValue })
+          .eq('id', snsMemoEditor.id)
+
+        if (error) {
+          alert(`保存に失敗しました。\n\n${error.message}`)
+          return
+        }
+
+        setStoreSnsProperties((prev) => ({
+          ...prev,
+          [platform]: prev[platform].map((item) => (item.id === snsMemoEditor.id ? { ...item, memo: nextValue } : item)),
+        }))
+      }
     }
 
     setSnsMemoEditor(null)
@@ -1547,7 +1806,7 @@ function App() {
   }
 
   async function editSnsPropertyUrl(
-    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    tableName: SnsPropertyTableName,
     id: string,
     currentValue: string,
     setter: React.Dispatch<React.SetStateAction<any[]>>,
@@ -1555,6 +1814,29 @@ function App() {
     const nextValue = window.prompt('資料URLを入力してください', currentValue || '')
     if (nextValue === null) return
     await updateSnsPropertyRow(tableName, id, 'document_url', nextValue.trim(), setter)
+  }
+
+  async function editStoreSnsPropertyUrl(
+    platform: StoreSnsPropertyPlatform,
+    id: string,
+    currentValue: string,
+  ) {
+    const nextValue = window.prompt('資料URLを入力してください', currentValue || '')
+    if (nextValue === null) return
+
+    const tableName = storeSnsPropertyTableMap[platform]
+    const value = nextValue.trim()
+    const { error } = await supabase.from(tableName).update({ document_url: value }).eq('id', id)
+
+    if (error) {
+      alert(`保存に失敗しました。\n\n${error.message}`)
+      return
+    }
+
+    setStoreSnsProperties((prev) => ({
+      ...prev,
+      [platform]: prev[platform].map((item) => (item.id === id ? { ...item, document_url: value } : item)),
+    }))
   }
 
   async function fetchGoogleUserEmail(token: string) {
@@ -1740,14 +2022,22 @@ function App() {
       void fetchInstagramProperties()
       return
     }
-    void fetchYoutubeProperties()
+    if (activeSnsPropertyPlatform === 'youtube') {
+      void fetchYoutubeProperties()
+      return
+    }
+    if (isStoreSnsPropertyPlatform(activeSnsPropertyPlatform)) {
+      void fetchStoreSnsProperties(activeSnsPropertyPlatform)
+    }
   }, [
     activePage,
     activeSnsPropertyPlatform,
     currentUserEmail,
+    fetchStoreSnsProperties,
     fetchInstagramProperties,
     fetchTiktokProperties,
     fetchYoutubeProperties,
+    isStoreSnsPropertyPlatform,
   ])
 
   useEffect(() => {
@@ -2173,6 +2463,11 @@ function App() {
   const addYoutubeProperty = async () => {
     await supabase.from('sns_youtube_properties').insert([defaultYoutubePropertyForm])
     fetchYoutubeProperties()
+  }
+
+  const addStoreSnsProperty = async (platform: StoreSnsPropertyPlatform) => {
+    await supabase.from(storeSnsPropertyTableMap[platform]).insert([defaultStoreSnsPropertyForm])
+    void fetchStoreSnsProperties(platform)
   }
 
   // ===== ストック管理ハンドラー =====
@@ -3128,18 +3423,13 @@ function App() {
         {activePage === 'snsproperty' && (
           <>
             <div className="sns-property-subtabs">
-              <button
-                className={activeSnsPropertyPlatform === 'tiktok' ? 'active' : ''}
-                onClick={() => { setActiveSnsPropertyPlatform('tiktok') }}
-              >Karilun｜TikTok</button>
-              <button
-                className={activeSnsPropertyPlatform === 'instagram' ? 'active' : ''}
-                onClick={() => { setActiveSnsPropertyPlatform('instagram') }}
-              >Karilun｜Instagram</button>
-              <button
-                className={activeSnsPropertyPlatform === 'youtube' ? 'active' : ''}
-                onClick={() => { setActiveSnsPropertyPlatform('youtube') }}
-              >Karilun｜YouTube</button>
+              {snsPropertyTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  className={activeSnsPropertyPlatform === tab.key ? 'active' : ''}
+                  onClick={() => { setActiveSnsPropertyPlatform(tab.key) }}
+                >{tab.label}</button>
+              ))}
             </div>
 
             {activeSnsPropertyPlatform === 'tiktok' && (
@@ -3344,6 +3634,21 @@ function App() {
                   </table>
                 </div>
                 {renderSnsPropertyPagination()}
+              </section>
+            )}
+
+            {isStoreSnsPropertyPlatform(activeSnsPropertyPlatform) && renderStoreSnsPropertySection(activeSnsPropertyPlatform)}
+
+            {activeSnsPropertyPlatform === 'recruitment' && (
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>採用 物件管理</h2>
+                  </div>
+                </div>
+                <div className="empty-state">
+                  <p>採用タブはまだ一覧をつないでいません。</p>
+                </div>
               </section>
             )}
           </>
@@ -4363,7 +4668,7 @@ function App() {
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && (
         <button
           className="fab"
           onClick={() => {
@@ -4382,7 +4687,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && (
         <div className="modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) {
             if (activePage === 'busho') {

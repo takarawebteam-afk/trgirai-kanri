@@ -4565,11 +4565,13 @@ button.manual-chip {
 /* SNS物件管理 サブタブ */
 .sns-property-subtabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px 0 16px;
 }
 
 .sns-property-subtabs button {
+  min-width: 118px;
   padding: 8px 20px;
   border-radius: 6px;
   border: 2px solid var(--gray-400);
@@ -4591,6 +4593,20 @@ button.manual-chip {
   color: var(--white);
   border-color: var(--blue-600);
   font-weight: 700;
+}
+
+.empty-state {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--gray-500);
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.empty-state p + p {
+  margin-top: 8px;
 }
 
 /* SNS物件管理 テーブル */
@@ -4755,6 +4771,13 @@ button.manual-chip {
   width: 160px;
   min-width: 160px;
   max-width: 160px;
+}
+
+.sns-property-table th.sns-col-post-text,
+.sns-property-table td.sns-col-post-text {
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
 }
 
 .sns-cell-input {
