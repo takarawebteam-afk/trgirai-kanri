@@ -48,6 +48,13 @@ type ProgressPageProps = {
   onSnsPropertyPromoted?: (target: PromoteTarget) => void
 }
 
+type ProgressTextCellInputProps = {
+  value: string
+  placeholder?: string
+  className?: string
+  onSave: (value: string) => void | Promise<void>
+}
+
 type FormTabKey = 'basic' | 'production' | 'check' | 'finish'
 type ProcessField =
   | 'floor_plan_order'
@@ -239,6 +246,87 @@ function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
   window.localStorage.setItem(
     `${SELECT_OPTION_STORAGE_PREFIX}${group}`,
     JSON.stringify(group.startsWith('register') ? normalizeRegisterOptions(options) : normalizeSelectOptions(options)),
+  )
+}
+
+function ProgressTextCellInput({
+  value,
+  placeholder = '',
+  className = 'progress-cell-input',
+  onSave,
+}: ProgressTextCellInputProps) {
+  const [draft, setDraft] = useState(value)
+  const [isComposing, setIsComposing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
+  const shouldCommitAfterCompositionRef = useRef(false)
+
+  useEffect(() => {
+    if (!isComposing && !isSaving && !isFocused) {
+      setDraft(value)
+    }
+  }, [isComposing, isFocused, isSaving, value])
+
+  async function commit(nextValue = draft) {
+    if (isSaving || nextValue === value) return
+    setIsSaving(true)
+    try {
+      await onSave(nextValue)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <input
+        className={className}
+        value={draft}
+        placeholder={placeholder}
+        onFocus={() => setIsFocused(true)}
+        onChange={(e) => setDraft(e.target.value)}
+        onCompositionStart={() => {
+          shouldCommitAfterCompositionRef.current = false
+          setIsComposing(true)
+        }}
+        onCompositionEnd={(e) => {
+          setIsComposing(false)
+          const nextValue = e.currentTarget.value
+          setDraft(nextValue)
+          if (shouldCommitAfterCompositionRef.current) {
+            shouldCommitAfterCompositionRef.current = false
+            window.setTimeout(() => {
+              void commit(nextValue)
+              e.currentTarget.blur()
+            }, 0)
+          }
+        }}
+        onBlur={(e) => {
+          setIsFocused(false)
+          const nextValue = e.currentTarget.value
+          setDraft(nextValue)
+          void commit(nextValue)
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            if (isComposing || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+              shouldCommitAfterCompositionRef.current = true
+              return
+            }
+            const input = e.currentTarget
+            const nextValue = input.value
+            setDraft(nextValue)
+            window.setTimeout(() => {
+              void commit(nextValue)
+              input.blur()
+            }, 0)
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
   )
 }
 
@@ -474,12 +562,14 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   const delayedCount = records.filter(isDelayed).length
 
   const groupedRecords = useMemo(() => {
-    return MEDIA_OPTIONS.map((media) => ({
-      media,
-      records: records
-        .filter((record) => getMediaDisplayName(record.media) === media)
-        .sort((a, b) => (a.scheduled_post_date || '').localeCompare(b.scheduled_post_date || '')),
-    }))
+    return MEDIA_OPTIONS
+      .map((media) => ({
+        media,
+        records: records
+          .filter((record) => getMediaDisplayName(record.media) === media)
+          .sort((a, b) => (a.scheduled_post_date || '').localeCompare(b.scheduled_post_date || '')),
+      }))
+      .filter(({ records: mediaRecords }) => mediaRecords.length > 0)
   }, [records])
 
   const tikTokSourceRecords = useMemo(
@@ -946,15 +1036,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     className = 'progress-cell-input',
   ) {
     return (
-      <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-        <input
-          className={className}
-          value={String(record[field] || '')}
-          placeholder={placeholder}
-          onChange={(e) => updateField(record.id, field, e.target.value)}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </div>
+      <ProgressTextCellInput
+        className={className}
+        value={String(record[field] || '')}
+        placeholder={placeholder}
+        onSave={(value) => updateField(record.id, field, value)}
+      />
     )
   }
 
@@ -1083,6 +1170,22 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
+  function renderEditCell(record: ProductionRecord) {
+    return (
+      <button
+        className="secondary"
+        style={{ fontSize: '0.75rem', padding: '3px 10px' }}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          openEdit(record)
+        }}
+      >
+        編集
+      </button>
+    )
+  }
+
   function renderTikTokTable(mediaRecords: ProductionRecord[]) {
     return (
       <table className="progress-table progress-table-tiktok">
@@ -1152,7 +1255,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         </thead>
         <tbody>
           {mediaRecords.map((record) => (
-            <tr key={record.id} className="row-hoverable" onClick={() => openEdit(record)}>
+            <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
               <td className="ptcell-group-2">{renderRegisterCell(record, 'wp_registered')}</td>
@@ -1181,6 +1284,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderRegisterCell(record, 'youtube_reserved')}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
+              <td className="ptcell-group-5">{renderEditCell(record)}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
@@ -1242,7 +1346,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         </thead>
         <tbody>
           {mediaRecords.map((record) => (
-            <tr key={record.id} className="row-hoverable" onClick={() => openEdit(record)}>
+            <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
               <td className="ptcell-group-1">{renderPostTypeCell(record)}</td>
               <td className="ptcell-group-1">{renderTextCell(record, 'property_number', '物件番号')}</td>
@@ -1267,6 +1371,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'audio_source', '音源')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
+              <td className="ptcell-group-5">{renderEditCell(record)}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
@@ -1316,7 +1421,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         </thead>
         <tbody>
           {mediaRecords.map((record) => (
-            <tr key={record.id} className="row-hoverable" onClick={() => openEdit(record)}>
+            <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
               <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
@@ -1331,6 +1436,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
+              <td className="ptcell-group-5">{renderEditCell(record)}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
@@ -1595,6 +1701,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         </div>
 
         {loading && <p style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>読み込み中...</p>}
+
+        {!loading && groupedRecords.length === 0 && (
+          <p style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>まだ進捗データがありません</p>
+        )}
 
         {!loading && groupedRecords.map(({ media, records: mediaRecords }) => (
           <div key={media} className="progress-media-section">
