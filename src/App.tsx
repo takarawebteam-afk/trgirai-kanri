@@ -250,6 +250,24 @@ const DEFAULT_TASK_REPORT_CATEGORIES = [
 
 const TASK_REPORT_CHART_COLORS = ['#005AFF', '#03AF7A', '#F6AA00', '#4DC4FF', '#FF4B00', '#FFF100', '#990099', '#84919E', '#000000'] as const
 
+const TAB_ITEMS: { key: PageKey; label: string }[] = [
+  { key: 'dashboard', label: 'ダッシュボード' },
+  { key: 'busho', label: '部署予定' },
+  { key: 'tasks', label: '案件管理' },
+  { key: 'taskmanagement', label: 'タスク管理' },
+  { key: 'recruitment', label: '採用管理' },
+  { key: 'hankyo', label: '反響管理' },
+  { key: 'dm', label: 'DM管理' },
+  { key: 'jishashukyaku', label: '自社集客売上' },
+  { key: 'members', label: '当日業務管理' },
+  { key: 'taskreport', label: '業務棚卸し' },
+  { key: 'snsproperty', label: 'SNS物件管理' },
+  { key: 'progress', label: '進捗管理' },
+  { key: 'stock', label: 'ストック管理' },
+  { key: 'sns', label: 'SNS投稿管理' },
+  { key: 'manuals', label: 'Note' },
+] as const
+
 type CalendarEvent = { id: string; summary: string; start: string }
 
 type TaskReportRow = {
@@ -916,11 +934,19 @@ function notifyTaskEvent(payload: {
 
 function App() {
   const [activePage, setActivePage] = useState<PageKey>('dashboard')
+  const closeBushoModal = useCallback((selectedDate?: string) => {
+    setShowModal(false)
+    setEditingBushoId(null)
+    setTaskError(null)
+    setBushoForm({ ...defaultBushoForm, date: selectedDate || new Date().toISOString().slice(0, 10) })
+  }, [])
+
   const [tasks, setTasks] = useState<Task[]>([])
   const [posts, setPosts] = useState<SnsPost[]>([])
   const [recruitment, setRecruitment] = useState<RecruitmentRecord[]>([])
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
 
   // 新規追加フォーム
   const [taskForm, setTaskForm] = useState(defaultTaskForm)
@@ -1024,6 +1050,7 @@ function App() {
   const [weatherMap, setWeatherMap] = useState<Record<string, number>>({})
   const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
   const [bushoForm, setBushoForm] = useState(defaultBushoForm)
+  const [editingBushoId, setEditingBushoId] = useState<string | null>(null)
   const [bushoCalendarMonth, setBushoCalendarMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -2147,18 +2174,36 @@ function App() {
     setTaskError(null)
     const payload = {
       ...bushoForm,
-      id: crypto.randomUUID(),
       start_time: bushoForm.start_time || null,
     }
-    const { error } = await supabase.from('busho_schedules').insert(payload)
+    const { error } = editingBushoId
+      ? await supabase.from('busho_schedules').update(payload).eq('id', editingBushoId)
+      : await supabase.from('busho_schedules').insert({ ...payload, id: crypto.randomUUID() })
     if (error) {
-      setTaskError(`部署予定の追加失敗: ${error.message}`)
+      setTaskError(`部署予定の${editingBushoId ? '更新' : '追加'}失敗: ${error.message}`)
       return
     }
     setBushoForm(defaultBushoForm)
+    setEditingBushoId(null)
     setShowModal(false)
     fetchBusho()
   }
+
+  const startBushoEdit = (schedule: BushoSchedule) => {
+    setTaskError(null)
+    setEditingBushoId(schedule.id)
+    setBushoSelectedDate(schedule.date)
+    setBushoForm({
+      date: schedule.date,
+      start_time: schedule.start_time || '',
+      title: schedule.title,
+      department: schedule.department,
+      note: schedule.note || '',
+    })
+    setShowModal(true)
+  }
+
+  const resetBushoModal = () => closeBushoModal(bushoSelectedDate || new Date().toISOString().slice(0, 10))
 
   const startStockInline = (r: StockRecord) => {
     setStockInlineId(r.id)
@@ -2504,22 +2549,35 @@ function App() {
         </div>
       </header>
 
-      <nav className="tab-nav" aria-label="主要メニュー">
-        <button className={activePage === 'dashboard' ? 'active' : ''} onClick={() => { setActivePage('dashboard'); setShowModal(false) }}>ダッシュボード</button>
-        <button className={activePage === 'busho' ? 'active' : ''} onClick={() => { setActivePage('busho'); setShowModal(false) }}>部署予定</button>
-        <button className={activePage === 'tasks' ? 'active' : ''} onClick={() => { setActivePage('tasks'); setShowModal(false) }}>案件管理</button>
-        <button className={activePage === 'taskmanagement' ? 'active' : ''} onClick={() => { setActivePage('taskmanagement'); setShowModal(false) }}>タスク管理</button>
-        <button className={activePage === 'recruitment' ? 'active' : ''} onClick={() => { setActivePage('recruitment'); setShowModal(false) }}>採用管理</button>
-        <button className={activePage === 'hankyo' ? 'active' : ''} onClick={() => { setActivePage('hankyo'); setShowModal(false) }}>反響管理</button>
-        <button className={activePage === 'dm' ? 'active' : ''} onClick={() => { setActivePage('dm'); setShowModal(false) }}>DM管理</button>
-        <button className={activePage === 'jishashukyaku' ? 'active' : ''} onClick={() => { setActivePage('jishashukyaku'); setShowModal(false) }}>自社集客売上</button>
-        <button className={activePage === 'members' ? 'active' : ''} onClick={() => { setActivePage('members'); setShowModal(false) }}>当日業務管理</button>
-        <button className={activePage === 'taskreport' ? 'active' : ''} onClick={() => { setActivePage('taskreport'); setShowModal(false) }}>業務棚卸し</button>
-        <button className={activePage === 'snsproperty' ? 'active' : ''} onClick={() => { setActivePage('snsproperty'); setShowModal(false) }}>SNS物件管理</button>
-        <button className={activePage === 'progress' ? 'active' : ''} onClick={() => { setActivePage('progress'); setShowModal(false) }}>進捗管理</button>
-        <button className={activePage === 'stock' ? 'active' : ''} onClick={() => { setActivePage('stock'); setShowModal(false) }}>ストック管理</button>
-        <button className={activePage === 'sns' ? 'active' : ''} onClick={() => { setActivePage('sns'); setShowModal(false) }}>SNS投稿管理</button>
-        <button className={activePage === 'manuals' ? 'active' : ''} onClick={() => { setActivePage('manuals'); setShowModal(false) }}>Note</button>
+      <button
+        type="button"
+        className="mobile-nav-toggle"
+        aria-expanded={isMobileNavOpen}
+        aria-controls="primary-nav"
+        onClick={() => setIsMobileNavOpen((current) => !current)}
+      >
+        <span>メニュー</span>
+        <strong>{TAB_ITEMS.find((item) => item.key === activePage)?.label ?? 'ページ'}</strong>
+      </button>
+
+      <nav
+        id="primary-nav"
+        className={`tab-nav${isMobileNavOpen ? ' mobile-open' : ''}`}
+        aria-label="主要メニュー"
+      >
+        {TAB_ITEMS.map((item) => (
+          <button
+            key={item.key}
+            className={activePage === item.key ? 'active' : ''}
+            onClick={() => {
+              setActivePage(item.key)
+              setShowModal(false)
+              setIsMobileNavOpen(false)
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
       </nav>
 
       <main className="page-content">
@@ -3750,31 +3808,33 @@ function App() {
                     <button className="secondary" onClick={() => moveStockMonth(1)}>▶</button>
                   </div>
                 </div>
-                <div className="stock-calendar-grid">
-                  {['日','月','火','水','木','金','土'].map(w => (
-                    <div key={w} className="cal-weekday" style={{ color: w === '日' ? '#ef4444' : w === '土' ? '#3b82f6' : undefined }}>{w}</div>
-                  ))}
-                  {cells.map((cell, i) => (
-                    <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
-                        {!cell.isOtherMonth && cell.date && weatherMap[cell.date] !== undefined && (
-                          <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天気: ${getWeatherEmoji(weatherMap[cell.date])}`}>
-                            {getWeatherEmoji(weatherMap[cell.date])}
-                          </span>
-                        )}
+                <div className="stock-calendar-scroll">
+                  <div className="stock-calendar-grid">
+                    {['日','月','火','水','木','金','土'].map(w => (
+                      <div key={w} className="cal-weekday" style={{ color: w === '日' ? '#ef4444' : w === '土' ? '#3b82f6' : undefined }}>{w}</div>
+                    ))}
+                    {cells.map((cell, i) => (
+                      <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
+                          {!cell.isOtherMonth && cell.date && weatherMap[cell.date] !== undefined && (
+                            <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天気: ${getWeatherEmoji(weatherMap[cell.date])}`}>
+                              {getWeatherEmoji(weatherMap[cell.date])}
+                            </span>
+                          )}
+                        </div>
+                        {cell.stocks.map(s => {
+                          const done = s.achieved_count >= s.required_count
+                          return (
+                            <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
+                              <span className="stock-badge-label">{s.label}</span>
+                              <span className="stock-badge-count">{s.achieved_count}/{s.required_count}件</span>
+                            </div>
+                          )
+                        })}
                       </div>
-                      {cell.stocks.map(s => {
-                        const done = s.achieved_count >= s.required_count
-                        return (
-                          <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
-                            <span className="stock-badge-label">{s.label}</span>
-                            <span className="stock-badge-count">{s.achieved_count}/{s.required_count}件</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </section>
 
@@ -3844,6 +3904,7 @@ function App() {
             : bushoSchedules.filter((r) => r.date === selectedBushoDate && r.department === bushoFilterDept)
           const selectBushoDate = (date: string) => {
             setBushoSelectedDate(date)
+            setEditingBushoId(null)
             setBushoForm({ ...defaultBushoForm, date })
           }
           type BushoCalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; dayOfWeek: number; isHoliday: boolean; schedules: BushoSchedule[] }
@@ -3904,41 +3965,42 @@ function App() {
                     }}>▶</button>
                   </div>
                 </div>
-                <div className="stock-calendar-grid">
-                  {['日', '月', '火', '水', '木', '金', '土'].map((d, idx) => (
-                    <div key={d} className={`cal-header-cell${idx === 0 ? ' cal-header-sunday' : ''}${idx === 6 ? ' cal-header-saturday' : ''}`}>{d}</div>
-                  ))}
-                  {cells.map((cell, i) => (
-                    <div
-                      key={i}
-                      className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}${cell.date === selectedBushoDate ? ' busho-selected-day' : ''}${!cell.isOtherMonth && (cell.dayOfWeek === 0 || cell.isHoliday) ? ' holiday-cell' : ''}${!cell.isOtherMonth && cell.dayOfWeek === 6 && !cell.isHoliday ? ' saturday-cell' : ''}`}
-                      onClick={() => {
-                        if (!cell.isOtherMonth && cell.date) {
-                          selectBushoDate(cell.date)
-                          setShowModal(true)
-                        }
-                      }}
-                    >
-                      <span className="cal-day-num">{cell.isOtherMonth ? '' : cell.day}</span>
-                      {cell.schedules.map((s) => (
-                        <div
-                          key={s.id}
-                          className="busho-badge"
-                          style={{ backgroundColor: DEPT_COLORS[s.department] || '#95a5a6' }}
-                          title={s.note}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            selectBushoDate(s.date)
-                          }}
-                        >
-                          <span className="busho-badge-dept">{s.department}</span>
-                          <span className="busho-badge-title">
-                            {s.start_time ? `${s.start_time.slice(0, 5)} ${s.title}` : s.title}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+                <div className="stock-calendar-scroll">
+                  <div className="stock-calendar-grid">
+                    {['日', '月', '火', '水', '木', '金', '土'].map((d, idx) => (
+                      <div key={d} className={`cal-header-cell${idx === 0 ? ' cal-header-sunday' : ''}${idx === 6 ? ' cal-header-saturday' : ''}`}>{d}</div>
+                    ))}
+                    {cells.map((cell, i) => (
+                      <div
+                        key={i}
+                        className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}${cell.date === selectedBushoDate ? ' busho-selected-day' : ''}${!cell.isOtherMonth && (cell.dayOfWeek === 0 || cell.isHoliday) ? ' holiday-cell' : ''}${!cell.isOtherMonth && cell.dayOfWeek === 6 && !cell.isHoliday ? ' saturday-cell' : ''}`}
+                        onClick={() => {
+                          if (!cell.isOtherMonth && cell.date) {
+                            selectBushoDate(cell.date)
+                          }
+                        }}
+                      >
+                        <span className="cal-day-num">{cell.isOtherMonth ? '' : cell.day}</span>
+                        {cell.schedules.map((s) => (
+                          <div
+                            key={s.id}
+                            className="busho-badge"
+                            style={{ backgroundColor: DEPT_COLORS[s.department] || '#95a5a6' }}
+                            title={s.note}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              selectBushoDate(s.date)
+                            }}
+                          >
+                            <span className="busho-badge-dept">{s.department}</span>
+                            <span className="busho-badge-title">
+                              {s.start_time ? `${s.start_time.slice(0, 5)} ${s.title}` : s.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
               <section className="panel">
@@ -3975,6 +4037,8 @@ function App() {
                           <td>{r.title}</td>
                           <td>{r.note}</td>
                           <td>
+                            <button className="secondary" onClick={() => startBushoEdit(r)}>編集</button>
+                            {' '}
                             <button className="danger" onClick={() => confirmAndDeleteRecord('busho_schedules', r.id, fetchBusho, 'この部署予定を本当に削除しますか？')}>削除</button>
                           </td>
                         </tr>
@@ -4262,7 +4326,14 @@ function App() {
       {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && (
         <button
           className="fab"
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            if (activePage === 'busho') {
+              setEditingBushoId(null)
+              setTaskError(null)
+              setBushoForm({ ...defaultBushoForm, date: bushoSelectedDate || new Date().toISOString().slice(0, 10) })
+            }
+            setShowModal(true)
+          }}
           aria-label="新規追加"
           title="新規追加"
         >
@@ -4272,7 +4343,15 @@ function App() {
 
       {/* ===== 追加フォームモーダル ===== */}
       {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false) }}>
+        <div className="modal-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            if (activePage === 'busho') {
+              resetBushoModal()
+              return
+            }
+            setShowModal(false)
+          }
+        }}>
           <div className="modal-content">
             <div className="modal-header">
               <h2 className="modal-title">
@@ -4283,9 +4362,9 @@ function App() {
                 {activePage === 'hankyo' && '反響を追加'}
                 {activePage === 'dm' && 'DMを追加'}
                 {activePage === 'stock' && 'ストックを追加'}
-                {activePage === 'busho' && '予定を追加'}
+                {activePage === 'busho' && (editingBushoId ? '予定を編集' : '予定を追加')}
               </h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => activePage === 'busho' ? resetBushoModal() : setShowModal(false)}>✕</button>
             </div>
 
             {/* 案件管理フォーム */}
@@ -4639,7 +4718,10 @@ function App() {
                       placeholder="備考など"
                     />
                   </label>
-                  <button type="submit" className="primary">追加</button>
+                  <div className="form-actions">
+                    <button type="submit" className="primary">{editingBushoId ? '保存' : '追加'}</button>
+                    <button type="button" className="secondary" onClick={resetBushoModal}>キャンセル</button>
+                  </div>
                 </form>
               </>
             )}
