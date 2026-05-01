@@ -96,6 +96,13 @@ type DMRecord = {
 }
 
 type SnsPropertyPlatform = 'tiktok' | 'instagram' | 'youtube'
+type SnsPropertyTableName = 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties'
+
+type SnsMemoEditorState = {
+  tableName: SnsPropertyTableName
+  id: string
+  value: string
+}
 
 type TiktokPropertyRecord = {
   id: string
@@ -976,6 +983,8 @@ function App() {
   const [expandedParentTaskIds, setExpandedParentTaskIds] = useState<string[]>([])
   const [taskError, setTaskError] = useState<string | null>(null)
   const [memoToView, setMemoToView] = useState<string | null>(null)
+  const [snsMemoEditor, setSnsMemoEditor] = useState<SnsMemoEditorState | null>(null)
+  const [snsMemoDraft, setSnsMemoDraft] = useState('')
   const [memberEditId, setMemberEditId] = useState<string | null>(null)
   const [memberEditSlack, setMemberEditSlack] = useState('')
   const [memberSettingOpen, setMemberSettingOpen] = useState(false)
@@ -1447,7 +1456,7 @@ function App() {
   }
 
   async function updateSnsPropertyRow<T extends { id: string }>(
-    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    tableName: SnsPropertyTableName,
     id: string,
     field: string,
     value: string,
@@ -1501,34 +1510,40 @@ function App() {
   }
 
   function renderSnsMemoCell(
-    tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
+    tableName: SnsPropertyTableName,
     id: string,
     memo: string,
-    setter: React.Dispatch<React.SetStateAction<any[]>>,
   ) {
     return (
       <button
         type="button"
         className="memo-icon-button"
-        title={memo ? 'クリックでメモ表示' : 'クリックでメモ追加'}
+        title={memo ? 'クリックでメモ表示・編集' : 'クリックでメモ追加'}
         onClick={() => {
-          if (memo) {
-            setMemoToView(memo)
-            return
-          }
-          const nextValue = window.prompt('メモを入力してください', '')
-          if (nextValue === null) return
-          updateSnsPropertyRow(tableName, id, 'memo', nextValue, setter)
-        }}
-        onDoubleClick={() => {
-          const nextValue = window.prompt('メモを編集してください', memo || '')
-          if (nextValue === null) return
-          updateSnsPropertyRow(tableName, id, 'memo', nextValue, setter)
+          setSnsMemoEditor({ tableName, id, value: memo || '' })
+          setSnsMemoDraft(memo || '')
         }}
       >
         {memo ? '📝' : '＋'}
       </button>
     )
+  }
+
+  async function saveSnsMemo() {
+    if (!snsMemoEditor) return
+
+    const nextValue = snsMemoDraft
+
+    if (snsMemoEditor.tableName === 'sns_tiktok_properties') {
+      await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setTiktokProperties)
+    } else if (snsMemoEditor.tableName === 'sns_instagram_properties') {
+      await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setInstagramProperties)
+    } else {
+      await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setYoutubeProperties)
+    }
+
+    setSnsMemoEditor(null)
+    setSnsMemoDraft('')
   }
 
   async function editSnsPropertyUrl(
@@ -3050,20 +3065,6 @@ function App() {
               )}
             </section>
 
-            {/* メモ表示ポップアップ */}
-            {memoToView !== null && (
-              <div className="memo-popup-overlay" onClick={() => setMemoToView(null)}>
-                <div className="memo-popup-content" onClick={e => e.stopPropagation()}>
-                  <div className="memo-popup-header">
-                    <h3>メモ詳細</h3>
-                    <button onClick={() => setMemoToView(null)}>✕</button>
-                  </div>
-                  <div className="memo-popup-body">
-                    {memoToView}
-                  </div>
-                </div>
-              </div>
-            )}
           </section>
         )}
 
@@ -3182,7 +3183,7 @@ function App() {
                       {tiktokProperties.map((r) => {
                         return (
                           <tr key={r.id} className="row-hoverable">
-                            <td className="sns-col-memo">{renderSnsMemoCell('sns_tiktok_properties', r.id, r.memo, setTiktokProperties)}</td>
+                            <td className="sns-col-memo">{renderSnsMemoCell('sns_tiktok_properties', r.id, r.memo)}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'wp_registered', value, setTiktokProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.aos_registered, getSnsPropertySelectOptions('aos_registered'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'aos_registered', value, setTiktokProperties), () => openSnsPropertyOptionEditor('aos_registered', 'AOS登録'))}</td>
                             <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'post_date', value, setTiktokProperties), { type: 'date' })}</td>
@@ -3250,7 +3251,7 @@ function App() {
                       {instagramProperties.map((r) => {
                         return (
                           <tr key={r.id} className="row-hoverable">
-                            <td className="sns-col-memo">{renderSnsMemoCell('sns_instagram_properties', r.id, r.memo, setInstagramProperties)}</td>
+                            <td className="sns-col-memo">{renderSnsMemoCell('sns_instagram_properties', r.id, r.memo)}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'wp_registered', value, setInstagramProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
                             <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'category', value, setInstagramProperties))}</td>
                             <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'post_date', value, setInstagramProperties), { type: 'date' })}</td>
@@ -3317,7 +3318,7 @@ function App() {
                       {youtubeProperties.map((r) => {
                         return (
                           <tr key={r.id} className="row-hoverable">
-                            <td className="sns-col-memo">{renderSnsMemoCell('sns_youtube_properties', r.id, r.memo, setYoutubeProperties)}</td>
+                            <td className="sns-col-memo">{renderSnsMemoCell('sns_youtube_properties', r.id, r.memo)}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'wp_registered', value, setYoutubeProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
                             <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'post_date', value, setYoutubeProperties), { type: 'date' })}</td>
                             <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_number', value, setYoutubeProperties))}</td>
@@ -3403,6 +3404,45 @@ function App() {
               </div>
             </section>
           </>
+        )}
+
+        {/* SNS物件管理メモポップアップ */}
+        {snsMemoEditor !== null && (
+          <div className="memo-popup-overlay" onClick={() => setSnsMemoEditor(null)}>
+            <div className="memo-popup-content" onClick={e => e.stopPropagation()}>
+              <div className="memo-popup-header">
+                <h3>メモ編集</h3>
+                <button onClick={() => setSnsMemoEditor(null)}>✕</button>
+              </div>
+              <div className="memo-popup-body memo-popup-body-edit">
+                <textarea
+                  className="memo-popup-textarea"
+                  value={snsMemoDraft}
+                  onChange={(e) => setSnsMemoDraft(e.target.value)}
+                  placeholder="ここにメモを書いてください"
+                />
+                <div className="memo-popup-actions">
+                  <button className="secondary" onClick={() => setSnsMemoEditor(null)}>閉じる</button>
+                  <button className="primary" onClick={() => void saveSnsMemo()}>保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* メモ表示ポップアップ */}
+        {memoToView !== null && (
+          <div className="memo-popup-overlay" onClick={() => setMemoToView(null)}>
+            <div className="memo-popup-content" onClick={e => e.stopPropagation()}>
+              <div className="memo-popup-header">
+                <h3>メモ詳細</h3>
+                <button onClick={() => setMemoToView(null)}>✕</button>
+              </div>
+              <div className="memo-popup-body">
+                {memoToView}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ===== 反響管理 ===== */}
