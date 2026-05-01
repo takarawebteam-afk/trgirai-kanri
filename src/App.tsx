@@ -4898,7 +4898,7 @@ function classifyTaskReportName(taskName: string, categories: TaskReportCategory
   const rules = buildTaskReportCategoryRules(categories)
 
   for (const rule of rules) {
-    if (rule.keywords.some((keyword) => normalized.includes(normalizeTaskReportText(keyword)))) {
+    if (rule.keywords.every((keyword) => normalized.includes(normalizeTaskReportText(keyword)))) {
       return { category: rule.category }
     }
   }
@@ -5233,6 +5233,16 @@ function TaskReportPanel() {
     .sort((a, b) => b.localeCompare(a, 'ja'))
 
   const filteredRows = rows.filter((row) => row.event_date === listDate)
+  const filteredRowMemberSummaries = TEAM_MEMBER_OPTIONS.map((member) => {
+    const totalMinutes = filteredRows
+      .filter((row) => row.member_name === member.name)
+      .reduce((sum, row) => sum + row.minutes, 0)
+
+    return {
+      name: member.name,
+      minutes: totalMinutes,
+    }
+  })
 
   const getLastDateOfMonth = (month: string) => {
     const [year, monthNumber] = month.split('-').map(Number)
@@ -5574,9 +5584,19 @@ function TaskReportPanel() {
 
       <section className="panel table-panel">
         <div className="panel-heading">
-          <div>
+          <div className="task-report-list-heading">
+            <div className="task-report-list-copy">
             <h2>元のタスク一覧</h2>
             <p>ここでカテゴリを手で直すと、上の集計表にも反映されます。</p>
+            </div>
+            <div className="task-report-day-summary">
+              {filteredRowMemberSummaries.map((member, index) => (
+                <div key={member.name} className={`task-report-day-summary-card member-${index}`}>
+                  <span>{member.name}</span>
+                  <strong>{formatTaskReportTime(member.minutes)}</strong>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="task-report-list-controls">
             <label>
@@ -5738,6 +5758,7 @@ function TodayTasksPanel() {
     member_calendar_id: string
     task_name: string
     minutes: number | null
+    category?: string | null
     checked: boolean
     created_at?: string
   }
@@ -5755,16 +5776,19 @@ function TodayTasksPanel() {
     manualTaskId?: string
   } | null>(null)
   const [minuteInput, setMinuteInput] = useState('')
+  const [minuteCategory, setMinuteCategory] = useState('')
   const [openAddFormMemberId, setOpenAddFormMemberId] = useState<string | null>(null)
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskMinutes, setNewTaskMinutes] = useState('')
   const [manualTaskSaving, setManualTaskSaving] = useState(false)
   const [calendarLoading, setCalendarLoading] = useState(false)
+  const [categoryMasters, setCategoryMasters] = useState<TaskReportCategoryMaster[]>([...DEFAULT_TASK_REPORT_CATEGORIES])
   const today = new Date().toISOString().slice(0, 10)
   const [selectedViewDate, setSelectedViewDate] = useState(today)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const silentLoginFnRef = useRef<(() => void) | null>(null)
   const pendingCheckKeysRef = useRef<Set<string>>(new Set())
+  const categoryOptions = getTaskReportCategoryOptions(categoryMasters)
 
   const normalizeNumberText = (value: string) => value.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
   const formatSelectedDateLabel = (dateText: string) => new Date(`${dateText}T00:00:00`).toLocaleDateString('ja-JP', {
@@ -5780,17 +5804,48 @@ function TodayTasksPanel() {
     setSelectedViewDate(nextDate)
   }
 
+  const resolveTaskCategory = useCallback((taskName: string, currentCategory?: string | null) => {
+    if (currentCategory?.trim()) return currentCategory
+    return classifyTaskReportName(taskName, categoryMasters).category
+  }, [categoryMasters])
+
+  const closeMinutePopup = useCallback(() => {
+    setMinutePopup(null)
+    setMinuteInput('')
+    setMinuteCategory('')
+  }, [])
+
+  useEffect(() => {
+    const loadCategoryMasters = async () => {
+      const { data, error } = await supabase
+        .from('task_report_categories')
+        .select('id, name, keywords, sort_order, created_at')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+
+      if (error) {
+        setCategoryMasters([...DEFAULT_TASK_REPORT_CATEGORIES])
+        return
+      }
+
+      const nextCategories = (data && data.length > 0 ? data : [...DEFAULT_TASK_REPORT_CATEGORIES]) as TaskReportCategoryMaster[]
+      setCategoryMasters(sortTaskReportCategories(nextCategories))
+    }
+
+    loadCategoryMasters()
+  }, [])
+
   // Supabaseから選択中の日付のチェック状態と手動追加業務を読み込む（3秒ごとにポーリングして他PCと同期）
   useEffect(() => {
     const fetchSelectedDateState = async () => {
       const [checkedResult, manualResult] = await Promise.all([
         supabase
           .from('checked_events')
-          .select('event_key, minutes')
+          .select('event_key, minutes, category')
           .eq('event_date', selectedViewDate),
         supabase
           .from('manual_tasks')
-          .select('id, event_date, member_calendar_id, task_name, minutes, checked, created_at')
+          .select('id, event_date, member_calendar_id, task_name, minutes, checked, category, created_at')
           .eq('event_date', selectedViewDate)
           .order('created_at', { ascending: true }),
       ])
@@ -5839,10 +5894,10 @@ function TodayTasksPanel() {
 
   useEffect(() => {
     setOpenAddFormMemberId(null)
-    setMinutePopup(null)
+    closeMinutePopup()
     setNewTaskName('')
     setNewTaskMinutes('')
-  }, [selectedViewDate])
+  }, [closeMinutePopup, selectedViewDate])
 
   // タイマークリーンアップ
   useEffect(() => {
@@ -5877,6 +5932,7 @@ function TodayTasksPanel() {
 
     setMinutePopup({ mode: 'calendar', key, summary, memberCalendarId })
     setMinuteInput('')
+    setMinuteCategory(resolveTaskCategory(summary))
   }
 
   const confirmMinutes = async () => {
@@ -5893,14 +5949,14 @@ function TodayTasksPanel() {
       setManualTasks(prev => ({
         ...prev,
         [memberCalendarId]: (prev[memberCalendarId] || []).map((item) =>
-          item.id === manualTaskId ? { ...item, checked: true, minutes } : item
+          item.id === manualTaskId ? { ...item, checked: true, minutes, category: minuteCategory } : item
         ),
       }))
-      setMinutePopup(null)
+      closeMinutePopup()
 
       const { error } = await supabase
         .from('manual_tasks')
-        .update({ checked: true, minutes })
+        .update({ checked: true, minutes, category: minuteCategory })
         .eq('id', manualTaskId)
 
       if (error) {
@@ -5917,7 +5973,7 @@ function TodayTasksPanel() {
     pendingCheckKeysRef.current.add(key)
     setCheckedEvents(prev => ({ ...prev, [key]: true }))
     setMinutesMap(prev => ({ ...prev, [key]: minsValue }))
-    setMinutePopup(null)
+    closeMinutePopup()
 
     const { error } = await supabase.from('checked_events').upsert({
       event_key: key,
@@ -5926,6 +5982,7 @@ function TodayTasksPanel() {
       task_name: summary,
       member_calendar_id: memberCalendarId,
       member_name: memberName,
+      category: minuteCategory,
     })
 
     pendingCheckKeysRef.current.delete(key)
@@ -5948,6 +6005,7 @@ function TodayTasksPanel() {
         manualTaskId: task.id,
       })
       setMinuteInput(task.minutes != null ? String(task.minutes) : '')
+      setMinuteCategory(resolveTaskCategory(task.task_name, task.category))
       return
     }
 
@@ -5987,9 +6045,10 @@ function TodayTasksPanel() {
         member_calendar_id: memberCalendarId,
         task_name: taskName,
         minutes,
+        category: resolveTaskCategory(taskName),
         checked: false,
       })
-      .select('id, event_date, member_calendar_id, task_name, minutes, checked, created_at')
+      .select('id, event_date, member_calendar_id, task_name, minutes, checked, category, created_at')
       .single()
 
     setManualTaskSaving(false)
@@ -6116,7 +6175,7 @@ function TodayTasksPanel() {
   return (
     <div className="panel">
       {minutePopup && (
-        <div className="minute-popup-overlay" onClick={() => setMinutePopup(null)}>
+        <div className="minute-popup-overlay" onClick={closeMinutePopup}>
           <div className="minute-popup" onClick={e => e.stopPropagation()}>
             <p>所要時間を入力</p>
             <div className="minute-input-row">
@@ -6132,9 +6191,21 @@ function TodayTasksPanel() {
               />
               <span className="minute-unit">分</span>
             </div>
+            <label className="minute-category-field">
+              <span>カテゴリ</span>
+              <select
+                className="minute-category-select"
+                value={minuteCategory}
+                onChange={(e) => setMinuteCategory(e.target.value)}
+              >
+                {categoryOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
             <div className="minute-popup-buttons">
               <button className="primary" onClick={confirmMinutes}>確定</button>
-              <button className="secondary" onClick={() => setMinutePopup(null)}>キャンセル</button>
+              <button className="secondary" onClick={closeMinutePopup}>キャンセル</button>
             </div>
           </div>
         </div>
