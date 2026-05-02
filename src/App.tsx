@@ -2,6 +2,7 @@
 import { createPortal } from 'react-dom'
 import { useGoogleLogin } from '@react-oauth/google'
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
+import * as XLSX from 'xlsx'
 import './App.css'
 import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
@@ -53,6 +54,86 @@ type JishaShukyakuRecord = {
   keiyaku_count: number
   koken_uriaage: number
   created_at?: string
+}
+
+type JishaMetricField = keyof Pick<
+  JishaShukyakuRecord,
+  'hankyo_count' | 'hankyo_raikyo' | 'shinki_count' | 'keiyaku_count' | 'koken_uriaage'
+>
+
+type JishaImportRow = {
+  month: number
+  rowType: Extract<JishaShukyakuRowType, '実績' | '前年'>
+  values: Record<JishaMetricField, number>
+}
+
+const JISHA_METRIC_FIELDS: JishaMetricField[] = [
+  'hankyo_count',
+  'hankyo_raikyo',
+  'shinki_count',
+  'keiyaku_count',
+  'koken_uriaage',
+]
+
+const JISHA_EXCEL_CELL_MAP: Record<JishaMetricField, { 実績: string; 前年: string }> = {
+  hankyo_count: { 実績: 'H117', 前年: 'H118' },
+  hankyo_raikyo: { 実績: 'N117', 前年: 'N118' },
+  shinki_count: { 実績: 'W117', 前年: 'W118' },
+  keiyaku_count: { 実績: 'AB117', 前年: 'AB118' },
+  koken_uriaage: { 実績: 'AG117', 前年: 'AG118' },
+}
+
+function getJishaMediaFromFileName(fileName: string): JishaShukyakuMedia | null {
+  const normalized = fileName.toLowerCase()
+
+  if (normalized.includes('karilun')) return 'Karilun'
+  if (normalized.includes('学生サイト')) return '学生サイト'
+  if (normalized.includes('sns')) return 'SNS'
+  if (normalized.includes('地域サイト')) return '地域サイト'
+  if (normalized.includes('口コミ')) return '口コミ'
+
+  return null
+}
+
+function readJishaExcelNumber(sheet: XLSX.WorkSheet, address: string) {
+  const cell = sheet[address]
+  if (!cell) return 0
+
+  if (typeof cell.v === 'number' && Number.isFinite(cell.v)) {
+    return cell.v
+  }
+
+  const raw = typeof cell.w === 'string' && cell.w.trim() !== '' ? cell.w : String(cell.v ?? '')
+  const normalized = raw.replace(/,/g, '').trim()
+  const value = Number(normalized)
+
+  return Number.isFinite(value) ? value : 0
+}
+
+function extractJishaRowsFromWorkbook(workbook: XLSX.WorkBook) {
+  const rows: JishaImportRow[] = []
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const match = sheetName.match(/^(\d{1,2})月$/)
+    if (!match) return
+
+    const month = Number(match[1])
+    if (!Number.isInteger(month) || month < 1 || month > 12) return
+
+    const sheet = workbook.Sheets[sheetName]
+    if (!sheet) return
+
+    ;(['実績', '前年'] as const).forEach((rowType) => {
+      const values = JISHA_METRIC_FIELDS.reduce((acc, field) => {
+        acc[field] = readJishaExcelNumber(sheet, JISHA_EXCEL_CELL_MAP[field][rowType])
+        return acc
+      }, {} as Record<JishaMetricField, number>)
+
+      rows.push({ month, rowType, values })
+    })
+  })
+
+  return rows.sort((a, b) => a.month - b.month)
 }
 
 const defaultBushoForm = { date: '', start_time: '', title: '', department: '人事', note: '' }
@@ -1189,6 +1270,11 @@ function App() {
   const [jishaCellEditing, setJishaCellEditing] = useState<string | null>(null)
   const [jishaCellValue, setJishaCellValue] = useState('')
   const [jishaSavingCell, setJishaSavingCell] = useState<string | null>(null)
+  const [jishaImporting, setJishaImporting] = useState(false)
+  const [jishaImportDragActive, setJishaImportDragActive] = useState(false)
+  const [jishaImportMessage, setJishaImportMessage] = useState('')
+  const [jishaImportMessageType, setJishaImportMessageType] = useState<'success' | 'error'>('success')
+  const jishaFileInputRef = useRef<HTMLInputElement | null>(null)
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
@@ -1334,6 +1420,87 @@ function App() {
   async function fetchJishaShukyaku() {
     const { data } = await supabase.from('jisha_shukyaku').select('*')
     if (data) setJishaShukyakuRecords(data as JishaShukyakuRecord[])
+  }
+
+  async function importJishaExcelFiles(files: File[]) {
+    if (files.length === 0) return
+
+    setJishaImporting(true)
+    setJishaImportMessage('')
+    setJishaImportMessageType('success')
+    setJishaImportDragActive(false)
+
+    try {
+      const nextRecords = [...jishaShukyakuRecords]
+
+      for (const file of files) {
+        const media = getJishaMediaFromFileName(file.name)
+        if (!media) {
+          throw new Error(`ファイル名「${file.name}」から媒体名を判断できませんでした。`)
+        }
+
+        const buffer = await file.arrayBuffer()
+        const workbook = XLSX.read(buffer, { type: 'array' })
+        const rows = extractJishaRowsFromWorkbook(workbook)
+
+        if (rows.length === 0) {
+          throw new Error(`ファイル「${file.name}」に「1月」「2月」のような月タブが見つかりませんでした。`)
+        }
+
+        for (const row of rows) {
+          const existingIndex = nextRecords.findIndex((record) =>
+            record.year === jishaYear &&
+            record.month === row.month &&
+            record.media === media &&
+            record.row_type === row.rowType,
+          )
+
+          if (existingIndex >= 0) {
+            const existing = nextRecords[existingIndex]
+            const hasChanged = JISHA_METRIC_FIELDS.some((field) => existing[field] !== row.values[field])
+            if (!hasChanged) continue
+
+            const { data, error } = await supabase
+              .from('jisha_shukyaku')
+              .update(row.values)
+              .eq('id', existing.id)
+              .select()
+              .single()
+
+            if (error) throw error
+            if (data) nextRecords[existingIndex] = data as JishaShukyakuRecord
+            continue
+          }
+
+          const insertPayload = {
+            year: jishaYear,
+            month: row.month,
+            media,
+            row_type: row.rowType,
+            hankyo_count: row.values.hankyo_count,
+            hankyo_raikyo: row.values.hankyo_raikyo,
+            shinki_count: row.values.shinki_count,
+            keiyaku_count: row.values.keiyaku_count,
+            koken_uriaage: row.values.koken_uriaage,
+          }
+
+          const { data, error } = await supabase.from('jisha_shukyaku').insert(insertPayload).select().single()
+          if (error) throw error
+          if (data) nextRecords.push(data as JishaShukyakuRecord)
+        }
+      }
+
+      setJishaShukyakuRecords(nextRecords)
+      setJishaImportMessageType('success')
+      setJishaImportMessage(`最終更新: ${new Date().toLocaleString('ja-JP')}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Excelの取込に失敗しました。'
+      setJishaImportMessageType('error')
+      setJishaImportMessage(`取込に失敗しました: ${message}`)
+    } finally {
+      setJishaImporting(false)
+      if (jishaFileInputRef.current) jishaFileInputRef.current.value = ''
+    }
   }
 
   // Open-Meteo から大阪の天気取得（APIキー不要）
@@ -4617,6 +4784,9 @@ function App() {
                   <p>メディア別集客・成約データ（セルをクリックして編集）</p>
                 </div>
                 <div className="jisha-controls">
+                  <div className={`jisha-update-badge${jishaImportMessageType === 'error' ? ' is-error' : ''}`}>
+                    {jishaImportMessage || '最終更新: -'}
+                  </div>
                   <div className="jisha-toggle">
                     <button className={jishaViewMode === '単月' ? 'active' : ''} onClick={() => setJishaViewMode('単月')}>単月</button>
                     <button className={jishaViewMode === '累計' ? 'active' : ''} onClick={() => setJishaViewMode('累計')}>累計</button>
@@ -4628,6 +4798,41 @@ function App() {
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
                   </select>
                   <button className="secondary" style={{ fontSize: '0.82rem', padding: '5px 10px' }} onClick={() => window.print()}>🖨 印刷</button>
+                </div>
+                <div className="jisha-import-block">
+                  <input
+                    ref={jishaFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".xls,.xlsx,.xlsm,.xlsb"
+                    className="jisha-file-input"
+                    onChange={(e) => void importJishaExcelFiles(Array.from(e.target.files || []))}
+                  />
+                  <div
+                    className={`jisha-drop-zone${jishaImportDragActive ? ' is-dragging' : ''}${jishaImporting ? ' is-busy' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      if (!jishaImporting) setJishaImportDragActive(true)
+                    }}
+                    onDragLeave={() => setJishaImportDragActive(false)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (jishaImporting) return
+                      void importJishaExcelFiles(Array.from(e.dataTransfer.files || []))
+                    }}
+                  >
+                    <div className="jisha-drop-copy">
+                      <strong>Excelをここに落としてください</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary jisha-file-button"
+                      onClick={() => jishaFileInputRef.current?.click()}
+                      disabled={jishaImporting}
+                    >
+                      {jishaImporting ? '取込中...' : 'ファイルを選ぶ'}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="jisha-table-wrap">

@@ -2823,6 +2823,69 @@ button.manual-chip {
   font-size: 0.85rem;
 }
 
+.jisha-update-badge {
+  min-width: 250px;
+  padding: 7px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--gray-600);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.jisha-update-badge.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.jisha-import-block {
+  width: 100%;
+}
+
+.jisha-file-input {
+  display: none;
+}
+
+.jisha-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 2px dashed #93c5fd;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
+}
+
+.jisha-drop-zone.is-dragging {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+}
+
+.jisha-drop-zone.is-busy {
+  opacity: 0.7;
+}
+
+.jisha-drop-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--gray-700);
+  font-size: 0.82rem;
+}
+
+.jisha-drop-copy strong {
+  color: var(--gray-900);
+  font-size: 0.92rem;
+}
+
+.jisha-file-button {
+  flex-shrink: 0;
+}
+
 .jisha-toggle {
   display: flex;
   border: 1px solid var(--gray-200);
