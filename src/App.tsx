@@ -598,7 +598,17 @@ const storeSnsPropertyTableMap: Record<StoreSnsPropertyPlatform, SnsPropertyTabl
   yao: 'sns_yao_properties',
 }
 
-type SnsPropertySelectField = 'wp_registered' | 'aos_registered'
+type SnsPropertySelectField =
+  | 'wp_registered'
+  | 'aos_registered'
+  | 'tiktok_reserved'
+  | 'tiktok_wp'
+  | 'instagram_reserved'
+  | 'instagram_wp'
+  | 'youtube_reserved'
+  | 'youtube_wp'
+  | 'threads_post_date'
+  | 'post_text'
 
 type SnsPropertyOptionEditorState = {
   field: SnsPropertySelectField
@@ -642,9 +652,34 @@ const DEFAULT_SNS_AOS_OPTIONS = [
   '広告不可',
   '×',
 ] as const
+const DEFAULT_STORE_SNS_STATUS_OPTIONS = [
+  '〇-新',
+  '〇-泉',
+  '〇-米',
+  '〇-坂',
+  '〇-吉',
+  '新居',
+  '吉田',
+  '✖(画像投稿)',
+  '写真無',
+  '〇',
+] as const
+const DEFAULT_STORE_SNS_POST_TEXT_OPTIONS = [
+  '2重ﾁｪｯｸOK泉',
+  '2重ﾁｪｯｸOK坂',
+  '2重ﾁｪｯｸOK吉',
+] as const
 const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
   wp_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
   aos_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
+  tiktok_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  tiktok_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  instagram_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  instagram_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  youtube_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  youtube_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  threads_post_date: [],
+  post_text: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_POST_TEXT_OPTIONS]),
 }
 const SNS_PROPERTY_PAGE_SIZE = 100
 
@@ -714,6 +749,14 @@ function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | un
     const code = Number(instagramMatch[1])
     if (code >= 597) return 2026
     return 2025
+  }
+
+  const storeMatch = normalizedPropertyNumber.match(/^(\d{3})$/)
+  if (storeMatch) {
+    const code = Number(storeMatch[1])
+    if (code >= 360) return 2026
+    if (code >= 35) return 2025
+    if (code >= 1) return 2024
   }
 
   const youtubeMatch = normalizedPropertyNumber.match(/^Y(\d{3})$/)
@@ -1241,6 +1284,38 @@ function App() {
       ...SNS_PROPERTY_DEFAULT_OPTIONS.aos_registered,
       ...(getStoredSnsPropertyOptions('aos_registered') || []),
     ]),
+    tiktok_reserved: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.tiktok_reserved,
+      ...(getStoredSnsPropertyOptions('tiktok_reserved') || []),
+    ]),
+    tiktok_wp: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.tiktok_wp,
+      ...(getStoredSnsPropertyOptions('tiktok_wp') || []),
+    ]),
+    instagram_reserved: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.instagram_reserved,
+      ...(getStoredSnsPropertyOptions('instagram_reserved') || []),
+    ]),
+    instagram_wp: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.instagram_wp,
+      ...(getStoredSnsPropertyOptions('instagram_wp') || []),
+    ]),
+    youtube_reserved: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.youtube_reserved,
+      ...(getStoredSnsPropertyOptions('youtube_reserved') || []),
+    ]),
+    youtube_wp: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.youtube_wp,
+      ...(getStoredSnsPropertyOptions('youtube_wp') || []),
+    ]),
+    threads_post_date: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.threads_post_date,
+      ...(getStoredSnsPropertyOptions('threads_post_date') || []),
+    ]),
+    post_text: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.post_text,
+      ...(getStoredSnsPropertyOptions('post_text') || []),
+    ]),
   }))
   const [snsPropertyOptionEditor, setSnsPropertyOptionEditor] = useState<SnsPropertyOptionEditorState | null>(null)
 
@@ -1543,20 +1618,27 @@ function App() {
   }
 
   const getSnsPropertySelectOptions = useCallback((field: SnsPropertySelectField) => {
+    const storeValues = Object.values(storeSnsProperties).flatMap((rows) => rows.map((item) => {
+      const value = item[field as keyof StoreSnsPropertyRecord]
+      return typeof value === 'string' ? value : ''
+    }))
+
     const recordValues = field === 'wp_registered'
       ? [
           ...tiktokProperties.map((item) => item.wp_registered),
           ...instagramProperties.map((item) => item.wp_registered),
           ...youtubeProperties.map((item) => item.wp_registered),
         ]
-      : tiktokProperties.map((item) => item.aos_registered)
+      : field === 'aos_registered'
+        ? tiktokProperties.map((item) => item.aos_registered)
+        : storeValues
 
     return normalizeSnsPropertyOptions([
       ...SNS_PROPERTY_DEFAULT_OPTIONS[field],
       ...snsPropertyOptions[field],
       ...recordValues,
     ])
-  }, [instagramProperties, snsPropertyOptions, tiktokProperties, youtubeProperties])
+  }, [instagramProperties, snsPropertyOptions, storeSnsProperties, tiktokProperties, youtubeProperties])
 
   const activeSnsPropertyTotalCount = snsPropertyTotalCount[activeSnsPropertyPlatform]
   const activeSnsPropertyCurrentPage = snsPropertyPage[activeSnsPropertyPlatform]
@@ -1607,7 +1689,7 @@ function App() {
     value: string,
   ) {
     const tableName = storeSnsPropertyTableMap[platform]
-    const payload = field === 'post_date' || field === 'threads_post_date'
+    const payload = field === 'post_date'
       ? { [field]: value || null }
       : { [field]: value }
     const { error } = await supabase.from(tableName).update(payload).eq('id', id)
@@ -1684,14 +1766,14 @@ function App() {
                       🔗
                     </button>
                   </td>
-                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:tiktok_reserved`, r.tiktok_reserved, (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_reserved', value))}</td>
-                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:tiktok_wp`, r.tiktok_wp, (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value))}</td>
-                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:instagram_reserved`, r.instagram_reserved, (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_reserved', value))}</td>
-                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:instagram_wp`, r.instagram_wp, (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_wp', value))}</td>
-                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:youtube_reserved`, r.youtube_reserved, (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value))}</td>
-                  <td className="sns-col-check">{renderSnsTextInput(`${r.id}:youtube_wp`, r.youtube_wp, (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
-                  <td className="sns-col-date">{renderSnsTextInput(`${r.id}:threads_post_date`, normalizeSnsPropertyPostDate(r.threads_post_date, r.property_number), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value), { type: 'date' })}</td>
-                  <td className="sns-col-post-text">{renderSnsTextInput(`${r.id}:post_text`, r.post_text, (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_reserved', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.tiktok_wp, getSnsPropertySelectOptions('tiktok_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_reserved', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.instagram_wp, getSnsPropertySelectOptions('instagram_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_wp', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
+                  <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value))}</td>
+                  <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
                   <td className="sns-col-actions">
                     <div className="row-actions">
                       <button className="danger" onClick={() => confirmAndDeleteRecord(tableName, r.id, () => fetchStoreSnsProperties(platform), 'このレコードを削除しますか？')}>削除</button>

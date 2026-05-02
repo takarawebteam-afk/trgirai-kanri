@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "import:youtube-sheet": "node ./scripts/import-youtube-sheet.mjs"
+    "import:youtube-sheet": "node ./scripts/import-youtube-sheet.mjs",
+    "import:yao-sheet": "node ./scripts/import-yao-sheet.mjs"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
