@@ -16,6 +16,8 @@ type SnsPlatform = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube'
 type RecruitDepartment = '仲介' | '管理' | '売買' | 'ビバ' | '経理' | '総務' | 'その他'
 type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
+type TaskItemRecurrence = 'none' | 'monthly'
+type RecurringDateRule = 'same_day' | 'month_end'
 type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
 
 type StockRecord = {
@@ -298,6 +300,15 @@ type TaskItem = {
   creator: string
   status: TaskItemStatus
   parent_task_id?: string | null
+  recurring_type?: TaskItemRecurrence
+  recurring_template_id?: string | null
+  recurring_parent_template_id?: string | null
+  recurring_generation_month?: string | null
+  recurring_due_day?: number | null
+  recurring_due_rule?: RecurringDateRule | null
+  recurring_work_day?: number | null
+  recurring_work_rule?: RecurringDateRule | null
+  recurring_instance_key?: string | null
   slack_notified?: boolean
   completed_notified?: boolean
 }
@@ -474,6 +485,15 @@ const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   creator: '',
   status: '未着手',
   parent_task_id: null,
+  recurring_type: 'none',
+  recurring_template_id: null,
+  recurring_parent_template_id: null,
+  recurring_generation_month: null,
+  recurring_due_day: null,
+  recurring_due_rule: null,
+  recurring_work_day: null,
+  recurring_work_rule: null,
+  recurring_instance_key: null,
 }
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
@@ -1122,15 +1142,154 @@ function getUniqueTaskItemAssignees(assignees: string[]) {
   return Array.from(new Set(assignees.filter(Boolean)))
 }
 
+function getJstDateParts(baseDate = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(baseDate)
+  const year = Number(parts.find((part) => part.type === 'year')?.value || '0')
+  const month = Number(parts.find((part) => part.type === 'month')?.value || '0')
+  const day = Number(parts.find((part) => part.type === 'day')?.value || '0')
+
+  return { year, month, day }
+}
+
+function buildMonthKey(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+function getLastDayOfMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate()
+}
+
+function parseDateValue(value?: string | null) {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return { year, month, day }
+}
+
+function buildRecurringDateInfo(value?: string | null) {
+  const parsed = parseDateValue(value)
+  if (!parsed) return { day: null, rule: null }
+
+  const lastDay = getLastDayOfMonth(parsed.year, parsed.month)
+  return {
+    day: parsed.day,
+    rule: (parsed.day === lastDay ? 'month_end' : 'same_day') as RecurringDateRule,
+  }
+}
+
+function resolveRecurringDate(year: number, month: number, day?: number | null, rule?: RecurringDateRule | null) {
+  if (!day || !rule) return ''
+
+  const lastDay = getLastDayOfMonth(year, month)
+  const resolvedDay = rule === 'month_end' ? lastDay : Math.min(day, lastDay)
+  return `${year}-${String(month).padStart(2, '0')}-${String(resolvedDay).padStart(2, '0')}`
+}
+
+function normalizeTaskItemRecurringFields(
+  form: Omit<TaskItem, 'id' | 'created_at'>,
+  templateId?: string | null,
+  generationMonth?: string | null,
+  parentTemplateId?: string | null,
+) {
+  if (form.recurring_type !== 'monthly') {
+    return {
+      recurring_type: 'none' as TaskItemRecurrence,
+      recurring_template_id: null,
+      recurring_parent_template_id: null,
+      recurring_generation_month: null,
+      recurring_due_day: null,
+      recurring_due_rule: null,
+      recurring_work_day: null,
+      recurring_work_rule: null,
+      recurring_instance_key: null,
+    }
+  }
+
+  const dueInfo = buildRecurringDateInfo(form.due_date)
+  const workInfo = buildRecurringDateInfo(form.work_date)
+
+  return {
+    recurring_type: 'monthly' as TaskItemRecurrence,
+    recurring_template_id: templateId || form.recurring_template_id || crypto.randomUUID(),
+    recurring_parent_template_id: parentTemplateId || form.recurring_parent_template_id || null,
+    recurring_generation_month: generationMonth || form.recurring_generation_month || buildMonthKey(getJstDateParts().year, getJstDateParts().month),
+    recurring_due_day: dueInfo.day,
+    recurring_due_rule: dueInfo.rule,
+    recurring_work_day: workInfo.day,
+    recurring_work_rule: workInfo.rule,
+    recurring_instance_key: null,
+  }
+}
+
 function buildTaskItemRows(form: Omit<TaskItem, 'id' | 'created_at'>) {
   const uniqueAssignees = getUniqueTaskItemAssignees(form.assignees)
   const assigneeRows = uniqueAssignees.length > 0 ? uniqueAssignees : ['']
+  const now = getJstDateParts()
+  const generationMonth = form.recurring_type === 'monthly'
+    ? (form.recurring_generation_month || buildMonthKey(now.year, now.month))
+    : null
 
-  return assigneeRows.map((assignee) => ({
+  return assigneeRows.map((assignee) => {
+    const rowTemplateId = form.recurring_type === 'monthly'
+      ? (
+          assigneeRows.length === 1 && form.recurring_template_id
+            ? form.recurring_template_id
+            : crypto.randomUUID()
+        )
+      : null
+    const recurringFields = normalizeTaskItemRecurringFields(
+      form,
+      rowTemplateId,
+      generationMonth,
+      form.recurring_parent_template_id || null,
+    )
+
+    return {
+      ...form,
+      id: crypto.randomUUID(),
+      assignees: assignee ? [assignee] : [],
+      ...recurringFields,
+      recurring_instance_key: recurringFields.recurring_type === 'monthly' && recurringFields.recurring_template_id && recurringFields.recurring_generation_month
+        ? `${recurringFields.recurring_template_id}:${recurringFields.recurring_generation_month}`
+        : null,
+    }
+  })
+}
+
+function buildTaskItemRecurringForm(form: Omit<TaskItem, 'id' | 'created_at'>, parentItem?: TaskItem | null) {
+  if (!parentItem) {
+    return {
+      ...form,
+      recurring_parent_template_id: null,
+    }
+  }
+
+  if (parentItem.recurring_type === 'monthly' && parentItem.recurring_template_id) {
+    return {
+      ...form,
+      recurring_type: 'monthly' as TaskItemRecurrence,
+      recurring_parent_template_id: parentItem.recurring_template_id,
+    }
+  }
+
+  return {
     ...form,
-    id: crypto.randomUUID(),
-    assignees: assignee ? [assignee] : [],
-  }))
+    recurring_type: 'none' as TaskItemRecurrence,
+    recurring_parent_template_id: null,
+    recurring_template_id: null,
+    recurring_generation_month: null,
+    recurring_due_day: null,
+    recurring_due_rule: null,
+    recurring_work_day: null,
+    recurring_work_rule: null,
+    recurring_instance_key: null,
+  }
 }
 
 function notifyTaskEvent(payload: {
@@ -1376,9 +1535,116 @@ function App() {
     if (data) setRecruitment(data as RecruitmentRecord[])
   }
 
-  async function fetchTaskItems() {
+  async function syncMonthlyRecurringTaskItems(items: TaskItem[]) {
+    const { year, month } = getJstDateParts()
+    const currentMonth = buildMonthKey(year, month)
+    const recurringItems = items.filter((item) => item.recurring_type === 'monthly' && item.recurring_template_id)
+    if (recurringItems.length === 0) return false
+
+    const itemsByTemplate = recurringItems.reduce((acc, item) => {
+      const key = item.recurring_template_id as string
+      if (!acc[key]) acc[key] = []
+      acc[key].push(item)
+      return acc
+    }, {} as Record<string, TaskItem[]>)
+
+    const latestItemByTemplate = Object.values(itemsByTemplate).reduce((acc, templateItems) => {
+      const latestItem = [...templateItems].sort((a, b) => {
+        const monthCompare = (b.recurring_generation_month || '').localeCompare(a.recurring_generation_month || '')
+        if (monthCompare !== 0) return monthCompare
+        return (b.created_at || '').localeCompare(a.created_at || '')
+      })[0]
+
+      if (latestItem?.recurring_template_id) {
+        acc[latestItem.recurring_template_id] = latestItem
+      }
+      return acc
+    }, {} as Record<string, TaskItem>)
+
+    const currentMonthItemsByTemplate = recurringItems.reduce((acc, item) => {
+      if (item.recurring_generation_month !== currentMonth || !item.recurring_template_id) return acc
+      const key = item.recurring_template_id
+      if (!acc[key]) acc[key] = []
+      acc[key].push(item)
+      return acc
+    }, {} as Record<string, TaskItem[]>)
+
+    const sourceRows = Object.values(latestItemByTemplate)
+      .filter((item) => !currentMonthItemsByTemplate[item.recurring_template_id as string])
+      .sort((a, b) => {
+        if (!!a.parent_task_id === !!b.parent_task_id) return 0
+        return a.parent_task_id ? 1 : -1
+      })
+
+    const newRowIdBySourceId = new Map<string, string>()
+    const rowsToInsert: TaskItem[] = []
+
+    sourceRows.forEach((item) => {
+      const nextId = crypto.randomUUID()
+      let nextParentId = item.parent_task_id || null
+
+      if (item.parent_task_id) {
+        const clonedParentId = newRowIdBySourceId.get(item.parent_task_id)
+        if (clonedParentId) {
+          nextParentId = clonedParentId
+        } else if (item.recurring_parent_template_id) {
+          const currentParents = currentMonthItemsByTemplate[item.recurring_parent_template_id] || []
+          const sourceParent = items.find((candidate) => candidate.id === item.parent_task_id)
+          const sourceParentAssignee = sourceParent?.assignees?.[0] || ''
+          const matchedParent = currentParents.find((candidate) => (candidate.assignees?.[0] || '') === sourceParentAssignee) || currentParents[0]
+          nextParentId = matchedParent?.id || null
+        } else {
+          nextParentId = null
+        }
+      }
+
+      rowsToInsert.push({
+        ...item,
+        id: nextId,
+        date: `${year}-${String(month).padStart(2, '0')}-01`,
+        due_date: resolveRecurringDate(year, month, item.recurring_due_day, item.recurring_due_rule),
+        work_date: resolveRecurringDate(year, month, item.recurring_work_day, item.recurring_work_rule),
+        status: '未着手',
+        completed_notified: false,
+        slack_notified: false,
+        parent_task_id: nextParentId,
+        recurring_type: 'monthly',
+        recurring_generation_month: currentMonth,
+        recurring_instance_key: `${item.recurring_template_id}:${currentMonth}`,
+      })
+
+      newRowIdBySourceId.set(item.id, nextId)
+    })
+
+    if (rowsToInsert.length === 0) return false
+
+    const { error } = await supabase.from('task_items').upsert(rowsToInsert, {
+      onConflict: 'recurring_instance_key',
+      ignoreDuplicates: true,
+    })
+
+    if (error) {
+      console.error('Monthly recurring task sync error:', error)
+      return false
+    }
+
+    return true
+  }
+
+  async function fetchTaskItems(skipSync = false) {
     const { data } = await supabase.from('task_items').select('*').order('created_at', { ascending: false })
-    if (data) setTaskItems(data as TaskItem[])
+    if (!data) return
+
+    const items = data as TaskItem[]
+    if (!skipSync) {
+      const inserted = await syncMonthlyRecurringTaskItems(items)
+      if (inserted) {
+        await fetchTaskItems(true)
+        return
+      }
+    }
+
+    setTaskItems(items)
   }
 
   async function fetchMembers() {
@@ -2266,6 +2532,7 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posts' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, () => { void fetchTaskItems() })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -2485,7 +2752,11 @@ function App() {
   const handleTaskItemSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setTaskError(null)
-    const rows = buildTaskItemRows(taskItemForm)
+    const parentItem = taskItemForm.parent_task_id
+      ? taskItems.find((item) => item.id === taskItemForm.parent_task_id) || null
+      : null
+    const normalizedForm = buildTaskItemRecurringForm(taskItemForm, parentItem)
+    const rows = buildTaskItemRows(normalizedForm)
     const { error } = await supabase.from('task_items').insert(rows)
     if (error) { 
       setTaskError(`追加失敗: ${error.message} (データベース構成を確認してください)`)
@@ -2545,9 +2816,30 @@ function App() {
       ? currentAssignee
       : (selectedAssignees[0] || '')
     const additionalAssignees = selectedAssignees.filter((assignee) => assignee !== nextPrimaryAssignee)
+    const parentItem = taskItemInlineForm.parent_task_id
+      ? taskItems.find((item) => item.id === taskItemInlineForm.parent_task_id) || null
+      : null
+    const recurringForm = buildTaskItemRecurringForm({
+      ...taskItemInlineForm,
+      assignees: selectedAssignees,
+      parent_task_id: taskItemInlineForm.parent_task_id || null,
+      recurring_type: taskItemInlineForm.recurring_type || 'none',
+    }, parentItem)
+    const normalizedRecurringFields = normalizeTaskItemRecurringFields(
+      recurringForm,
+      currentItem?.recurring_template_id || taskItemInlineForm.recurring_template_id || null,
+      currentItem?.recurring_generation_month || taskItemInlineForm.recurring_generation_month || null,
+      recurringForm.recurring_parent_template_id || null,
+    )
     const updatePayload = {
       ...taskItemInlineForm,
       assignees: nextPrimaryAssignee ? [nextPrimaryAssignee] : [],
+      ...normalizedRecurringFields,
+      recurring_instance_key: normalizedRecurringFields.recurring_type === 'monthly'
+        && normalizedRecurringFields.recurring_template_id
+        && normalizedRecurringFields.recurring_generation_month
+        ? `${normalizedRecurringFields.recurring_template_id}:${normalizedRecurringFields.recurring_generation_month}`
+        : null,
     }
     const { error } = await supabase.from('task_items').update(updatePayload).eq('id', taskItemInlineId)
     if (error) {
@@ -2555,12 +2847,90 @@ function App() {
       console.error('Task Item Update Error:', error)
       return
     }
+
+    if (currentItem && !currentItem.parent_task_id) {
+      const childItems = taskItems.filter((item) => item.parent_task_id === currentItem.id)
+      for (const childItem of childItems) {
+        const childForm = buildTaskItemRecurringForm({
+          date: childItem.date || '',
+          name: childItem.name,
+          priority: childItem.priority || '中',
+          due_date: childItem.due_date || '',
+          work_date: childItem.work_date || '',
+          memo: childItem.memo || '',
+          assignees: getUniqueTaskItemAssignees(childItem.assignees),
+          creator: childItem.creator || '',
+          status: childItem.status,
+          parent_task_id: childItem.parent_task_id || null,
+          recurring_type: normalizedRecurringFields.recurring_type,
+          recurring_template_id: childItem.recurring_template_id || null,
+          recurring_parent_template_id: normalizedRecurringFields.recurring_type === 'monthly'
+            ? (normalizedRecurringFields.recurring_template_id || null)
+            : null,
+          recurring_generation_month: childItem.recurring_generation_month || normalizedRecurringFields.recurring_generation_month || null,
+          recurring_due_day: childItem.recurring_due_day ?? null,
+          recurring_due_rule: childItem.recurring_due_rule ?? null,
+          recurring_work_day: childItem.recurring_work_day ?? null,
+          recurring_work_rule: childItem.recurring_work_rule ?? null,
+          recurring_instance_key: childItem.recurring_instance_key || null,
+        }, {
+          ...currentItem,
+          recurring_type: normalizedRecurringFields.recurring_type,
+          recurring_template_id: normalizedRecurringFields.recurring_template_id || null,
+        })
+
+        const childRecurringFields = normalizeTaskItemRecurringFields(
+          childForm,
+          childItem.recurring_template_id || (normalizedRecurringFields.recurring_type === 'monthly' ? crypto.randomUUID() : null),
+          childItem.recurring_generation_month || normalizedRecurringFields.recurring_generation_month || null,
+          normalizedRecurringFields.recurring_type === 'monthly' ? (normalizedRecurringFields.recurring_template_id || null) : null,
+        )
+
+        const childUpdatePayload = {
+          recurring_type: childRecurringFields.recurring_type,
+          recurring_template_id: childRecurringFields.recurring_template_id,
+          recurring_parent_template_id: childRecurringFields.recurring_parent_template_id,
+          recurring_generation_month: childRecurringFields.recurring_generation_month,
+          recurring_due_day: childRecurringFields.recurring_due_day,
+          recurring_due_rule: childRecurringFields.recurring_due_rule,
+          recurring_work_day: childRecurringFields.recurring_work_day,
+          recurring_work_rule: childRecurringFields.recurring_work_rule,
+          recurring_instance_key: childRecurringFields.recurring_type === 'monthly'
+            && childRecurringFields.recurring_template_id
+            && childRecurringFields.recurring_generation_month
+            ? `${childRecurringFields.recurring_template_id}:${childRecurringFields.recurring_generation_month}`
+            : null,
+        }
+
+        const { error: childUpdateError } = await supabase.from('task_items').update(childUpdatePayload).eq('id', childItem.id)
+        if (childUpdateError) {
+          setTaskError(`子タスク更新失敗: ${childUpdateError.message}`)
+          console.error('Task Item Child Update Error:', childUpdateError)
+          return
+        }
+      }
+    }
     if (additionalAssignees.length > 0) {
-      const insertRows = additionalAssignees.map((assignee) => ({
-        ...taskItemInlineForm,
-        id: crypto.randomUUID(),
-        assignees: [assignee],
-      }))
+      const insertRows = additionalAssignees.map((assignee) => {
+        const recurringFields = normalizeTaskItemRecurringFields(
+          recurringForm,
+          recurringForm.recurring_type === 'monthly' ? crypto.randomUUID() : null,
+          currentItem?.recurring_generation_month || taskItemInlineForm.recurring_generation_month || null,
+          recurringForm.recurring_parent_template_id || null,
+        )
+
+        return {
+          ...taskItemInlineForm,
+          id: crypto.randomUUID(),
+          assignees: [assignee],
+          ...recurringFields,
+          recurring_instance_key: recurringFields.recurring_type === 'monthly'
+            && recurringFields.recurring_template_id
+            && recurringFields.recurring_generation_month
+            ? `${recurringFields.recurring_template_id}:${recurringFields.recurring_generation_month}`
+            : null,
+        }
+      })
       const { error: insertError } = await supabase.from('task_items').insert(insertRows)
       if (insertError) {
         setTaskError(`担当者追加の保存に失敗しました: ${insertError.message}`)
@@ -2615,6 +2985,15 @@ function App() {
       creator: item.creator || '',
       status: item.status,
       parent_task_id: item.parent_task_id || null,
+      recurring_type: item.recurring_type || 'none',
+      recurring_template_id: item.recurring_template_id || null,
+      recurring_parent_template_id: item.recurring_parent_template_id || null,
+      recurring_generation_month: item.recurring_generation_month || null,
+      recurring_due_day: item.recurring_due_day ?? null,
+      recurring_due_rule: item.recurring_due_rule ?? null,
+      recurring_work_day: item.recurring_work_day ?? null,
+      recurring_work_rule: item.recurring_work_rule ?? null,
+      recurring_instance_key: item.recurring_instance_key || null,
     })
   }
 
@@ -3370,6 +3749,7 @@ function App() {
                     <col className="tm-col-pri" />
                     <col className="tm-col-work" />
                     <col className="tm-col-due" />
+                    <col className="tm-col-repeat" />
                     <col className="tm-col-assign" />
                     <col className="tm-col-creator" />
                     <col className="tm-col-status" />
@@ -3377,13 +3757,13 @@ function App() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>日付</th><th>メモ</th><th>タスク名</th><th>優先度</th><th>作業日</th><th>期日</th>
+                      <th>日付</th><th>メモ</th><th>タスク名</th><th>優先度</th><th>作業日</th><th>期日</th><th>繰返</th>
                       <th>担当者</th><th>設定者</th><th>ステータス</th><th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredTaskItems.length === 0 && (
-                      <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
+                      <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px' }}>タスクがありません</td></tr>
                     )}
                     {taskItemsToRender.map((item) => {
                       const isEditing = taskItemInlineId === item.id
@@ -3439,6 +3819,21 @@ function App() {
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing ? <input className="inline-input" type="date" value={f.due_date} onChange={(e) => setTaskItemInlineForm({ ...f, due_date: e.target.value })} /> : item.due_date}
+                          </td>
+                          <td onClick={(e) => isEditing && e.stopPropagation()}>
+                            {isEditing ? (
+                              <select
+                                className="inline-select"
+                                value={f.parent_task_id ? 'none' : (f.recurring_type || 'none')}
+                                disabled={!!f.parent_task_id}
+                                onChange={(e) => setTaskItemInlineForm({ ...f, recurring_type: e.target.value as TaskItemRecurrence })}
+                              >
+                                <option value="none">なし</option>
+                                <option value="monthly">毎月</option>
+                              </select>
+                            ) : (
+                              item.recurring_type === 'monthly' ? '毎月' : '-'
+                            )}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
@@ -3527,6 +3922,14 @@ function App() {
                               </td>
                               <td onClick={(e) => childEditing && e.stopPropagation()}>
                                 {childEditing ? <input className="inline-input" type="date" value={childForm.due_date} onChange={(e) => setTaskItemInlineForm({ ...childForm, due_date: e.target.value })} /> : child.due_date}
+                              </td>
+                              <td onClick={(e) => childEditing && e.stopPropagation()}>
+                                {childEditing ? (
+                                  <select className="inline-select" value={childForm.recurring_type || 'none'} disabled>
+                                    <option value="none">なし</option>
+                                    <option value="monthly">毎月</option>
+                                  </select>
+                                ) : (child.recurring_type === 'monthly' ? '毎月' : '-')}
                               </td>
                               <td onClick={(e) => childEditing && e.stopPropagation()}>
                                 {childEditing
@@ -5080,7 +5483,7 @@ function App() {
                     <input placeholder="タスク名" value={taskItemForm.name} onChange={(e) => setTaskItemForm({ ...taskItemForm, name: e.target.value })} required />
                   </label>
                   <label className="form-label">親タスク
-                    <select value={taskItemForm.parent_task_id || ''} onChange={(e) => setTaskItemForm({ ...taskItemForm, parent_task_id: e.target.value || null })}>
+                    <select value={taskItemForm.parent_task_id || ''} onChange={(e) => setTaskItemForm({ ...taskItemForm, parent_task_id: e.target.value || null, recurring_type: e.target.value ? 'none' : taskItemForm.recurring_type })}>
                       <option value="">なし</option>
                       {taskItems.filter((item) => !item.parent_task_id).map((item) => (
                         <option key={item.id} value={item.id}>
@@ -5103,6 +5506,25 @@ function App() {
                   <label className="form-label">期日
                     <input type="date" value={taskItemForm.due_date} onChange={(e) => setTaskItemForm({ ...taskItemForm, due_date: e.target.value })} />
                   </label>
+                  <label className="form-label">毎月くり返し
+                    <select
+                      value={taskItemForm.parent_task_id ? 'none' : (taskItemForm.recurring_type || 'none')}
+                      disabled={!!taskItemForm.parent_task_id}
+                      onChange={(e) => setTaskItemForm({ ...taskItemForm, recurring_type: e.target.value as TaskItemRecurrence })}
+                    >
+                      <option value="none">しない</option>
+                      <option value="monthly">する</option>
+                    </select>
+                  </label>
+                  {taskItemForm.parent_task_id && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--gray-400)', margin: '0' }}>
+                      ※ 子タスクは親タスクの設定に合わせます。
+                      {(taskItems.find((item) => item.id === taskItemForm.parent_task_id)?.recurring_type === 'monthly') ? ' この子タスクも毎月自動で作られます。' : ''}
+                    </p>
+                  )}
+                  {taskItemForm.recurring_type === 'monthly' && !taskItemForm.parent_task_id && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--gray-400)', margin: '0' }}>※ 月が変わると同じタスクを自動で1件作ります。4月末なら次は5月末になります。</p>
+                  )}
                   <label className="form-label">担当者
                     <div className="checkbox-group">
                       {members.map((m) => (

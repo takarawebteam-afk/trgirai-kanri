@@ -1473,6 +1473,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 .tm-col-pri     { width: 45px; }
 .tm-col-work    { width: 70px; }
 .tm-col-due     { width: 70px; }
+.tm-col-repeat  { width: 55px; }
 .tm-col-assign  { width: 90px; }
 .tm-col-creator { width: 80px; }
 .tm-col-status  { width: 65px; }

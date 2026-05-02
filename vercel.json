@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/monthly-task-items",
+      "schedule": "15 15 * * *"
+    },
+    {
       "path": "/api/cron/remind",
       "schedule": "0 0 * * *"
     }
