@@ -1432,6 +1432,7 @@ function App() {
 
     try {
       const nextRecords = [...jishaShukyakuRecords]
+      let latestImportedMonth = 0
 
       for (const file of files) {
         const media = getJishaMediaFromFileName(file.name)
@@ -1446,6 +1447,11 @@ function App() {
         if (rows.length === 0) {
           throw new Error(`ファイル「${file.name}」に「1月」「2月」のような月タブが見つかりませんでした。`)
         }
+
+        latestImportedMonth = Math.max(
+          latestImportedMonth,
+          ...rows.map((row) => row.month),
+        )
 
         for (const row of rows) {
           const existingIndex = nextRecords.findIndex((record) =>
@@ -1491,6 +1497,11 @@ function App() {
       }
 
       setJishaShukyakuRecords(nextRecords)
+      if (latestImportedMonth > 0) {
+        setJishaMonth(latestImportedMonth)
+        setJishaViewMode('単月')
+      }
+      await fetchJishaShukyaku()
       setJishaImportMessageType('success')
       setJishaImportMessage(`最終更新: ${new Date().toLocaleString('ja-JP')}`)
     } catch (error) {
