@@ -135,7 +135,25 @@ function extractJishaRowsFromWorkbook(workbook: XLSX.WorkBook) {
     })
   })
 
-  return rows.sort((a, b) => a.month - b.month)
+  const rowsByMonth = rows.reduce((acc, row) => {
+    if (!acc[row.month]) acc[row.month] = []
+    acc[row.month].push(row)
+    return acc
+  }, {} as Record<number, JishaImportRow[]>)
+
+  return Object.entries(rowsByMonth)
+    .flatMap(([monthText, monthRows]) => {
+      const month = Number(monthText)
+      const actualRow = monthRows.find((row) => row.rowType === '実績')
+      const hasActualValue = actualRow
+        ? JISHA_METRIC_FIELDS.some((field) => actualRow.values[field] !== 0)
+        : false
+
+      if (!hasActualValue) return []
+
+      return monthRows.map((row) => ({ ...row, month }))
+    })
+    .sort((a, b) => a.month - b.month)
 }
 
 const defaultBushoForm = { date: '', start_time: '', title: '', department: '人事', note: '' }
@@ -5090,6 +5108,251 @@ function App() {
 
           function pct(v: number) { return v === 0 ? '0.0%' : `${v.toFixed(1)}%` }
 
+          function formatJishaRatio(num: number, den: number) {
+            if (den === 0) return '-'
+            return `${(num / den * 100).toFixed(1)}%`
+          }
+
+          function buildJishaExportRows() {
+            const rows: (string | number)[][] = [
+              [jishaTableTitle],
+              ['表示', viewLabel],
+              [],
+              ['媒体', '区分', '反響数', '反響来店', '反来率', '新規数', '契約数', '契約率', '反響成約率', '貢献売上', '契約単価'],
+            ]
+
+            function pushMetricRow(mediaLabel: string, rowLabel: string, data: { hankyo_count: number; hankyo_raikyo: number; shinki_count: number; keiyaku_count: number; koken_uriaage: number }) {
+              const rates = calcRates(data)
+              rows.push([
+                mediaLabel,
+                rowLabel,
+                data.hankyo_count,
+                data.hankyo_raikyo,
+                pct(rates.raikyo_rate),
+                data.shinki_count,
+                data.keiyaku_count,
+                pct(rates.keiyaku_rate),
+                pct(rates.seiyaku_rate),
+                data.koken_uriaage,
+                rates.keiyaku_tanka,
+              ])
+            }
+
+            function pushRatioRow(
+              mediaLabel: string,
+              rowLabel: string,
+              numeratorData: { hankyo_count: number; hankyo_raikyo: number; shinki_count: number; keiyaku_count: number; koken_uriaage: number },
+              denominatorData: { hankyo_count: number; hankyo_raikyo: number; shinki_count: number; keiyaku_count: number; koken_uriaage: number },
+            ) {
+              const numeratorRates = calcRates(numeratorData)
+              const denominatorRates = calcRates(denominatorData)
+
+              rows.push([
+                mediaLabel,
+                rowLabel,
+                formatJishaRatio(numeratorData.hankyo_count, denominatorData.hankyo_count),
+                formatJishaRatio(numeratorData.hankyo_raikyo, denominatorData.hankyo_raikyo),
+                formatJishaRatio(numeratorRates.raikyo_rate, denominatorRates.raikyo_rate),
+                formatJishaRatio(numeratorData.shinki_count, denominatorData.shinki_count),
+                formatJishaRatio(numeratorData.keiyaku_count, denominatorData.keiyaku_count),
+                formatJishaRatio(numeratorRates.keiyaku_rate, denominatorRates.keiyaku_rate),
+                formatJishaRatio(numeratorRates.seiyaku_rate, denominatorRates.seiyaku_rate),
+                formatJishaRatio(numeratorData.koken_uriaage, denominatorData.koken_uriaage),
+                formatJishaRatio(numeratorRates.keiyaku_tanka, denominatorRates.keiyaku_tanka),
+              ])
+            }
+
+            JISHA_MEDIAS.forEach((media) => {
+              pushMetricRow(media, '予算', getJishaData(media, '予算'))
+              pushMetricRow(media, '実績', getJishaData(media, '実績'))
+              pushMetricRow(media, '前年', getJishaData(media, '前年'))
+              pushRatioRow(media, '予算比', getJishaData(media, '実績'), getJishaData(media, '予算'))
+              pushRatioRow(media, '前年比', getJishaData(media, '実績'), getJishaData(media, '前年'))
+            })
+
+            pushMetricRow('自社集客合計', '予算', getTotalData('予算'))
+            pushMetricRow('自社集客合計', '実績', getTotalData('実績'))
+            pushMetricRow('自社集客合計', '前年', getTotalData('前年'))
+            pushRatioRow('自社集客合計', '予算比', getTotalData('実績'), getTotalData('予算'))
+            pushRatioRow('自社集客合計', '前年比', getTotalData('実績'), getTotalData('前年'))
+            rows.push([])
+            rows.push(['メモ', 'このファイルは画面の表示内容を書き出したものです。'])
+
+            return rows
+          }
+
+          async function exportJishaExcel() {
+            const ExcelJS = await import('exceljs')
+            const workbook = new ExcelJS.Workbook()
+            const worksheet = workbook.addWorksheet('自社集客実績', {
+              views: [{ state: 'frozen', ySplit: 4 }],
+            })
+            const sheetRows = buildJishaExportRows()
+
+            sheetRows.forEach((row) => {
+              worksheet.addRow(row)
+            })
+
+            worksheet.columns = [
+              { width: 11 },
+              { width: 10 },
+              { width: 11 },
+              { width: 11 },
+              { width: 11 },
+              { width: 11 },
+              { width: 11 },
+              { width: 11 },
+              { width: 13 },
+              { width: 14 },
+              { width: 11 },
+            ]
+
+            worksheet.mergeCells('A1:K1')
+            worksheet.mergeCells('B2:K2')
+
+            const thinBorder = {
+              top: { style: 'thin' as const, color: { argb: 'FFD7E1F0' } },
+              left: { style: 'thin' as const, color: { argb: 'FFD7E1F0' } },
+              bottom: { style: 'thin' as const, color: { argb: 'FFD7E1F0' } },
+              right: { style: 'thin' as const, color: { argb: 'FFD7E1F0' } },
+            }
+
+            const headerFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF1F4E8C' } }
+            const budgetRatioFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFEAF2FF' } }
+            const yearRatioFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8F6EC' } }
+            const totalFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF9F1E6' } }
+
+            const mediaColors: Record<string, string> = {
+              Karilun: 'FF235AA6',
+              学生サイト: 'FF2A61D8',
+              SNS: 'FF7B35D9',
+              地域サイト: 'FF15A4C7',
+              口コミ: 'FF0F9D69',
+              自社集客合計: 'FFE53935',
+            }
+
+            worksheet.getRow(1).height = 28
+            worksheet.getRow(2).height = 24
+            worksheet.getRow(4).height = 24
+
+            worksheet.getCell('A1').font = { size: 15, bold: true }
+            worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' }
+            worksheet.getCell('A2').font = { bold: true }
+            worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' }
+            worksheet.getCell('B2').alignment = { vertical: 'middle', horizontal: 'left' }
+
+            for (let col = 1; col <= 11; col += 1) {
+              const cell = worksheet.getRow(4).getCell(col)
+              cell.fill = headerFill
+              cell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
+              cell.alignment = { vertical: 'middle', horizontal: 'center' }
+              cell.border = thinBorder
+            }
+
+            const mediaOrder: Array<{ label: string; key: JishaShukyakuMedia | 'total' }> = [
+              { label: 'Karilun', key: 'Karilun' },
+              { label: '学生サイト', key: '学生サイト' },
+              { label: 'SNS', key: 'SNS' },
+              { label: '地域サイト', key: '地域サイト' },
+              { label: '口コミ', key: '口コミ' },
+              { label: '自社集客合計', key: 'total' },
+            ]
+
+            mediaOrder.forEach((media, index) => {
+              const startRow = 5 + index * 5
+              const endRow = startRow + 4
+              worksheet.mergeCells(startRow, 1, endRow, 1)
+              const mediaCell = worksheet.getCell(startRow, 1)
+              mediaCell.value = media.label
+              mediaCell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: mediaColors[media.label] || 'FF1F4E8C' },
+              }
+              mediaCell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
+              mediaCell.alignment = { vertical: 'middle', horizontal: 'center', textRotation: 90 }
+              mediaCell.border = thinBorder
+
+              for (let rowNumber = startRow; rowNumber <= endRow; rowNumber += 1) {
+                const row = worksheet.getRow(rowNumber)
+                row.height = 22
+
+                for (let col = 1; col <= 11; col += 1) {
+                  const cell = row.getCell(col)
+                  cell.border = thinBorder
+
+                  if (col >= 3) {
+                    cell.alignment = { vertical: 'middle', horizontal: 'right' }
+                  } else {
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' }
+                  }
+                }
+
+                const rowTypeCell = row.getCell(2)
+                rowTypeCell.font = { bold: rowNumber === startRow || rowNumber === startRow + 3 || rowNumber === startRow + 4 }
+
+                if (rowNumber === startRow + 3) {
+                  row.eachCell((cell) => {
+                    cell.fill = budgetRatioFill
+                    cell.font = { ...(cell.font || {}), color: { argb: 'FF1F5BFF' }, bold: true }
+                  })
+                  mediaCell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: mediaColors[media.label] || 'FF1F4E8C' },
+                  }
+                  mediaCell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
+                }
+
+                if (rowNumber === startRow + 4) {
+                  row.eachCell((cell) => {
+                    cell.fill = yearRatioFill
+                    cell.font = { ...(cell.font || {}), color: { argb: 'FF0A8A3D' }, bold: true }
+                  })
+                  mediaCell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: mediaColors[media.label] || 'FF1F4E8C' },
+                  }
+                  mediaCell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
+                }
+
+                if (index === mediaOrder.length - 1 && rowNumber <= endRow) {
+                  row.eachCell((cell) => {
+                    if (rowNumber === startRow + 3) {
+                      cell.fill = budgetRatioFill
+                    } else if (rowNumber === startRow + 4) {
+                      cell.fill = yearRatioFill
+                    } else {
+                      cell.fill = totalFill
+                    }
+                    cell.font = { ...(cell.font || {}), bold: true }
+                  })
+                  mediaCell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: mediaColors[media.label] },
+                  }
+                  mediaCell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
+                }
+              }
+            })
+
+            worksheet.getCell('A36').font = { bold: true }
+            worksheet.getCell('B36').alignment = { vertical: 'middle', horizontal: 'left' }
+
+            const buffer = await workbook.xlsx.writeBuffer()
+            const blob = new Blob([buffer], {
+              type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `${jishaTableTitle}.xlsx`
+            link.click()
+            URL.revokeObjectURL(url)
+          }
+
           async function handleCellSave(media: JishaShukyakuMedia, rowType: JishaShukyakuRowType, field: string, rawValue: string) {
             const cellKey = `${media}-${rowType}-${field}`
             if (jishaSavingCell === cellKey) return
@@ -5271,6 +5534,20 @@ function App() {
           const jishaTableTitle = jishaViewMode === '累計'
             ? `${jishaYear}年累計 自社集客実績`
             : `${jishaYear}年${jishaMonth}月 自社集客実績`
+          const jishaDropStatusLabel = jishaImporting
+            ? '取り込み中...'
+            : jishaImportMessageType === 'error' && jishaImportMessage
+              ? '取込失敗'
+              : jishaImportMessage
+                ? '取込完了'
+                : '待機中'
+          const jishaDropStatusClass = jishaImporting
+            ? 'is-importing'
+            : jishaImportMessageType === 'error' && jishaImportMessage
+              ? 'is-error'
+              : jishaImportMessage
+                ? 'is-success'
+                : 'is-idle'
 
           return (
             <section className="panel jisha-panel" id="jisha-print-area">
@@ -5280,8 +5557,8 @@ function App() {
                   <p>メディア別集客・成約データ（セルをクリックして編集）</p>
                 </div>
                 <div className="jisha-controls">
-                  <div className={`jisha-update-badge${jishaImportMessageType === 'error' ? ' is-error' : ''}`}>
-                    {jishaImportMessage || '最終更新: -'}
+                  <div className={`jisha-update-badge${jishaImportMessageType === 'error' && !jishaImporting ? ' is-error' : ''}`}>
+                    {jishaImporting ? '取り込み中...' : (jishaImportMessage || '最終更新: -')}
                   </div>
                   <div className="jisha-toggle">
                     <button className={jishaViewMode === '単月' ? 'active' : ''} onClick={() => setJishaViewMode('単月')}>単月</button>
@@ -5293,6 +5570,13 @@ function App() {
                   <select value={jishaMonth} onChange={e => setJishaMonth(Number(e.target.value))}>
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
                   </select>
+                  <button
+                    className="secondary"
+                    style={{ fontSize: '0.82rem', padding: '5px 10px' }}
+                    onClick={() => void exportJishaExcel()}
+                  >
+                    Excel出力
+                  </button>
                   <button className="secondary" style={{ fontSize: '0.82rem', padding: '5px 10px' }} onClick={() => window.print()}>🖨 印刷</button>
                 </div>
                 <div className="jisha-import-block">
@@ -5318,7 +5602,11 @@ function App() {
                     }}
                   >
                     <div className="jisha-drop-copy">
-                      <strong>Excelをここに落としてください</strong>
+                      <strong>{jishaImporting ? '取り込み中です...' : 'Excelをここに落としてください'}</strong>
+                      {jishaImporting && <span>数字を読み込んでいます。少し待ってください。</span>}
+                    </div>
+                    <div className={`jisha-drop-status ${jishaDropStatusClass}`}>
+                      {jishaDropStatusLabel}
                     </div>
                     <button
                       type="button"

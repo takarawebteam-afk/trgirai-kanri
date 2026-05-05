@@ -2867,7 +2867,9 @@ button.manual-chip {
 }
 
 .jisha-drop-zone.is-busy {
-  opacity: 0.7;
+  opacity: 1;
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
 }
 
 .jisha-drop-copy {
@@ -2883,8 +2885,41 @@ button.manual-chip {
   font-size: 0.92rem;
 }
 
+.jisha-drop-status {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.jisha-drop-status.is-idle {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.jisha-drop-status.is-importing {
+  background: #2563eb;
+  color: #fff;
+}
+
+.jisha-drop-status.is-success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.jisha-drop-status.is-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .jisha-file-button {
   flex-shrink: 0;
+}
+
+.jisha-drop-zone.is-busy .jisha-file-button {
+  opacity: 0.75;
 }
 
 .jisha-toggle {
