@@ -2824,6 +2824,29 @@ button.manual-chip {
   font-size: 0.85rem;
 }
 
+.jisha-period-selects {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.jisha-period-selects label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gray-600);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.jisha-period-separator {
+  color: var(--gray-500);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .jisha-update-badge {
   min-width: 250px;
   padding: 7px 12px;

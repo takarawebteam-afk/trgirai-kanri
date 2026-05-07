@@ -1518,6 +1518,7 @@ function App() {
   const [jishaShukyakuRecords, setJishaShukyakuRecords] = useState<JishaShukyakuRecord[]>([])
   const [jishaViewMode, setJishaViewMode] = useState<'単月' | '累計'>('累計')
   const [jishaYear, setJishaYear] = useState(new Date().getFullYear())
+  const [jishaStartMonth, setJishaStartMonth] = useState(1)
   const [jishaMonth, setJishaMonth] = useState(new Date().getMonth() + 1)
   const [jishaCellEditing, setJishaCellEditing] = useState<string | null>(null)
   const [jishaCellValue, setJishaCellValue] = useState('')
@@ -5086,7 +5087,13 @@ function App() {
             if (jishaViewMode === '単月') {
               records = jishaShukyakuRecords.filter(r => r.year === jishaYear && r.month === jishaMonth && r.media === media && r.row_type === rowType)
             } else {
-              records = jishaShukyakuRecords.filter(r => r.year === jishaYear && r.month <= jishaMonth && r.media === media && r.row_type === rowType)
+              records = jishaShukyakuRecords.filter(r =>
+                r.year === jishaYear &&
+                r.month >= jishaStartMonth &&
+                r.month <= jishaMonth &&
+                r.media === media &&
+                r.row_type === rowType,
+              )
             }
             return {
               hankyo_count: records.reduce((s, r) => s + r.hankyo_count, 0),
@@ -5530,9 +5537,9 @@ function App() {
 
           const totalYosanBiRow = renderRatioRow('予算比', '実績', '予算', 'total', 'jisha-yosan-hi-row jisha-total-row')
           const totalNenBiRow = renderRatioRow('前年比', '実績', '前年', 'total', 'jisha-nen-hi-row jisha-total-row')
-          const viewLabel = jishaViewMode === '累計' ? `${jishaYear}年 1〜${jishaMonth}月 累計` : `${jishaYear}年${jishaMonth}月`
+          const viewLabel = jishaViewMode === '累計' ? `${jishaYear}年 ${jishaStartMonth}〜${jishaMonth}月 累計` : `${jishaYear}年${jishaMonth}月`
           const jishaTableTitle = jishaViewMode === '累計'
-            ? `${jishaYear}年累計 自社集客実績`
+            ? `${jishaYear}年${jishaStartMonth}〜${jishaMonth}月累計 自社集客実績`
             : `${jishaYear}年${jishaMonth}月 自社集客実績`
           const jishaDropStatusLabel = jishaImporting
             ? '取り込み中...'
@@ -5567,9 +5574,41 @@ function App() {
                   <select value={jishaYear} onChange={e => setJishaYear(Number(e.target.value))}>
                     {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}年</option>)}
                   </select>
-                  <select value={jishaMonth} onChange={e => setJishaMonth(Number(e.target.value))}>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
-                  </select>
+                  {jishaViewMode === '累計' ? (
+                    <div className="jisha-period-selects">
+                      <label>
+                        <span>開始</span>
+                        <select
+                          value={jishaStartMonth}
+                          onChange={e => {
+                            const month = Number(e.target.value)
+                            setJishaStartMonth(month)
+                            if (month > jishaMonth) setJishaMonth(month)
+                          }}
+                        >
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
+                        </select>
+                      </label>
+                      <span className="jisha-period-separator">〜</span>
+                      <label>
+                        <span>終了</span>
+                        <select
+                          value={jishaMonth}
+                          onChange={e => {
+                            const month = Number(e.target.value)
+                            setJishaMonth(month)
+                            if (month < jishaStartMonth) setJishaStartMonth(month)
+                          }}
+                        >
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  ) : (
+                    <select value={jishaMonth} onChange={e => setJishaMonth(Number(e.target.value))}>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
+                    </select>
+                  )}
                   <button
                     className="secondary"
                     style={{ fontSize: '0.82rem', padding: '5px 10px' }}
