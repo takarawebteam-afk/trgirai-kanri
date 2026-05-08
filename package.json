@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "import:youtube-sheet": "node ./scripts/import-youtube-sheet.mjs",
+    "import:keihan-sheet": "node ./scripts/import-keihan-sheet.mjs",
     "import:yao-sheet": "node ./scripts/import-yao-sheet.mjs",
     "import:nagase-sheet": "node ./scripts/import-nagase-sheet.mjs"
   },

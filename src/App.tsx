@@ -1994,6 +1994,8 @@ function App() {
     const rows = storeSnsProperties[platform]
     const title = snsPropertyTabs.find((tab) => tab.key === platform)?.title || 'SNS物件管理'
     const tableName = storeSnsPropertyTableMap[platform]
+    const isKeihanKarilun = platform === 'keihan-karilun'
+    const emptyColSpan = isKeihanKarilun ? 14 : 16
 
     return (
       <section className="panel table-panel">
@@ -2018,7 +2020,7 @@ function App() {
               <tr>
                 <th className="sns-col-memo">メモ</th>
                 <th className="sns-col-date">投稿日</th>
-                <th className="sns-col-plan">種別</th>
+                <th className="sns-col-plan">{isKeihanKarilun ? '場所' : '種別'}</th>
                 <th className="sns-col-property-name">物件名</th>
                 <th className="sns-col-room">号室</th>
                 <th className="sns-col-code">番号</th>
@@ -2027,8 +2029,12 @@ function App() {
                 <th className="sns-col-check">TiktokWP</th>
                 <th className="sns-col-check">INSTA予約</th>
                 <th className="sns-col-check">INSTA WP</th>
-                <th className="sns-col-check">YouTube予約</th>
-                <th className="sns-col-check">YouTube WP</th>
+                {!isKeihanKarilun && (
+                  <>
+                    <th className="sns-col-check">YouTube予約</th>
+                    <th className="sns-col-check">YouTube WP</th>
+                  </>
+                )}
                 <th className="sns-col-date">threads投稿日</th>
                 <th className="sns-col-post-text">投稿文</th>
                 <th className="sns-col-actions">操作</th>
@@ -2036,7 +2042,7 @@ function App() {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                <tr><td colSpan={emptyColSpan} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
               )}
               {rows.map((r) => (
                 <tr key={r.id} className="row-hoverable">
@@ -2055,8 +2061,12 @@ function App() {
                   <td className="sns-col-check">{renderSnsSelect(r.tiktok_wp, getSnsPropertySelectOptions('tiktok_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value))}</td>
                   <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_reserved', value))}</td>
                   <td className="sns-col-check">{renderSnsSelect(r.instagram_wp, getSnsPropertySelectOptions('instagram_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_wp', value))}</td>
-                  <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value))}</td>
-                  <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
+                  {!isKeihanKarilun && (
+                    <>
+                      <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value))}</td>
+                      <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
+                    </>
+                  )}
                   <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value))}</td>
                   <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
                   <td className="sns-col-actions">
