@@ -1747,7 +1747,7 @@ function App() {
     )
   }, [snsPropertyPage, snsPropertySearch])
 
-  const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube') => {
+  const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube' | 'keihan-karilun') => {
     if (target === 'tiktok') {
       fetchTiktokProperties()
       return
@@ -1756,8 +1756,12 @@ function App() {
       fetchInstagramProperties()
       return
     }
+    if (target === 'keihan-karilun') {
+      void fetchStoreSnsProperties('keihan-karilun')
+      return
+    }
     fetchYoutubeProperties()
-  }, [fetchInstagramProperties, fetchTiktokProperties, fetchYoutubeProperties])
+  }, [fetchInstagramProperties, fetchStoreSnsProperties, fetchTiktokProperties, fetchYoutubeProperties])
 
   const isStoreSnsPropertyPlatform = useCallback((platform: SnsPropertyPlatform): platform is StoreSnsPropertyPlatform => {
     return storeSnsPropertyPlatforms.includes(platform as StoreSnsPropertyPlatform)

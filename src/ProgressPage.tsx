@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 
 type ProductionStatus = '撮影済' | '制作中' | 'チェック中' | '完了'
 type ProcessStatus = '未着手' | '進行中' | '完了'
-type PromoteTarget = 'tiktok' | 'instagram' | 'youtube'
+type PromoteTarget = 'tiktok' | 'instagram' | 'youtube' | 'keihan-karilun'
 
 interface ProductionRecord {
   id: string
@@ -430,6 +430,10 @@ function isInstagramMedia(media: string) {
   return normalizeMediaName(getMediaDisplayName(media)).includes('instagram')
 }
 
+function isKeihanMedia(media: string) {
+  return normalizeMediaName(getMediaDisplayName(media)).includes('京阪')
+}
+
 function toRegisteredLabel(value: boolean) {
   return value ? '登録済' : ''
 }
@@ -607,6 +611,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return `${prefix}${String(maxValue + 1).padStart(digits, '0')}`
   }
 
+  async function getNextKeihanPropertyNumber() {
+    const { data } = await supabase
+      .from('sns_keihan_karilun_properties')
+      .select('property_number')
+
+    const maxValue = (data || []).reduce((max, row) => {
+      const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+      return Number.isFinite(value) ? Math.max(max, value) : max
+    }, 0)
+
+    return String(maxValue + 1)
+  }
+
   async function promoteToSnsProperty(record: ProductionRecord, trigger: 'post_completed' | 'youtube_reserved') {
     if (trigger === 'post_completed') {
       let tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | null = null
@@ -721,7 +738,35 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       let target: PromoteTarget | null = null
       let label = ''
 
-      if (isTikTokMedia(record.media)) {
+      if (isKeihanMedia(record.media)) {
+        if (!window.confirm('SNS物件管理の「京阪かりるん」へ反映しますか？')) return
+
+        const insertData = {
+          memo: record.memo || '',
+          post_date: record.scheduled_post_date || null,
+          category: record.post_type || '',
+          property_name: record.property_name || '',
+          room_number: record.room_number || '',
+          property_number: record.property_number || await getNextKeihanPropertyNumber(),
+          document_url: record.property_url || '',
+          tiktok_reserved: '',
+          tiktok_wp: '',
+          instagram_reserved: '',
+          instagram_wp: '',
+          youtube_reserved: '',
+          youtube_wp: '',
+          threads_post_date: '',
+          post_text: '',
+        }
+
+        const { error } = await supabase.from('sns_keihan_karilun_properties').insert([insertData])
+        if (error) {
+          alert(`京阪かりるん一覧への反映に失敗しました。\n${error.message}`)
+          return
+        }
+
+        onSnsPropertyPromoted?.('keihan-karilun')
+      } else if (isTikTokMedia(record.media)) {
         tableName = 'sns_tiktok_properties'
         target = 'tiktok'
         label = 'Karilun｜TikTok'
@@ -731,24 +776,27 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         label = 'Karilun｜Instagram'
       }
 
-      if (!tableName) return
-      if (!window.confirm(`SNS物件管理の「${label}」へ反映しますか？`)) return
+      if (tableName) {
+        if (!window.confirm(`SNS物件管理の「${label}」へ反映しますか？`)) return
 
-      const insertData = {
-        property_number: await getNextPropertyNumber(tableName),
-        ...buildExtendedSnsPropertyData(record),
-        ...(tableName === 'sns_tiktok_properties'
-          ? { aos_registered: record.aos_registered || '' }
-          : { category: record.post_type || '' }),
-      }
+        const insertData = {
+          property_number: await getNextPropertyNumber(tableName),
+          ...buildExtendedSnsPropertyData(record),
+          ...(tableName === 'sns_tiktok_properties'
+            ? { aos_registered: record.aos_registered || '' }
+            : { category: record.post_type || '' }),
+        }
 
-      const { error } = await supabase.from(tableName).insert([insertData])
-      if (error) {
-        alert(`SNS物件管理への反映に失敗しました。\n${error.message}`)
+        const { error } = await supabase.from(tableName).insert([insertData])
+        if (error) {
+          alert(`SNS物件管理への反映に失敗しました。\n${error.message}`)
+          return
+        }
+
+        if (target) onSnsPropertyPromoted?.(target)
+      } else if (!isKeihanMedia(record.media)) {
         return
       }
-
-      if (target) onSnsPropertyPromoted?.(target)
     }
 
     if (trigger === 'youtube_reserved') {
@@ -1147,7 +1195,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
     return (
       <div className="progress-link-cell" onClick={(e) => e.stopPropagation()}>
-        <button className="progress-link-empty" type="button" onClick={() => openEdit(record)}>
+        <button
+          className="progress-link-empty"
+          type="button"
+          onClick={() => {
+            const nextValue = window.prompt('資料URLを入力してください', record.property_url || '')
+            if (nextValue === null) return
+            void updateField(record.id, 'property_url', nextValue.trim())
+          }}
+        >
           未登録
         </button>
       </div>
@@ -1284,7 +1340,6 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderRegisterCell(record, 'youtube_reserved')}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
-              <td className="ptcell-group-5">{renderEditCell(record)}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
@@ -1371,7 +1426,49 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'audio_source', '音源')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
-              <td className="ptcell-group-5">{renderEditCell(record)}</td>
+              <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
+  function renderKeihanTable(mediaRecords: ProductionRecord[]) {
+    return (
+      <table className="progress-table progress-table-keihan">
+        <colgroup>
+          <col style={{ width: 115 }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.propertyName }} />
+          <col style={{ width: 49 }} />
+          <col style={{ width: 40 }} />
+          <col style={{ width: 296 }} />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 72 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="ptcol-group-1">投稿予定日</th>
+            <th className="ptcol-group-2">場所</th>
+            <th className="ptcol-group-2">物件名</th>
+            <th className="ptcol-group-2">号室</th>
+            <th className="ptcol-group-2">資料</th>
+            <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
+            <th className="ptcol-group-5">完了</th>
+            <th className="ptcol-group-5">削除</th>
+          </tr>
+        </thead>
+        <tbody>
+          {mediaRecords.map((record) => (
+            <tr key={record.id} className="row-hoverable">
+              <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'post_type', '場所')}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
+              <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
+              <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
@@ -1725,6 +1822,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 renderTikTokTable(mediaRecords)
               ) : isInstagramMedia(media) ? (
                 renderInstagramTable(mediaRecords)
+              ) : isKeihanMedia(media) ? (
+                renderKeihanTable(mediaRecords)
               ) : (
                 renderTikTokTable(mediaRecords)
               )}

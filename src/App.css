@@ -3434,6 +3434,10 @@ button.manual-chip {
   min-width: 0;
 }
 
+.progress-table-keihan {
+  min-width: 0;
+}
+
 .progress-table th {
   background: var(--blue-50);
   border: 1px solid var(--gray-200);
