@@ -3,7 +3,14 @@ import { supabase } from './supabase'
 
 type ProductionStatus = '撮影済' | '制作中' | 'チェック中' | '完了'
 type ProcessStatus = '未着手' | '進行中' | '完了'
-type PromoteTarget = 'tiktok' | 'instagram' | 'youtube' | 'keihan-karilun'
+type StorePromoteTarget = 'keihan-karilun' | 'nishinomiya-karilun' | 'nagase' | 'nishikita' | 'yao'
+type StoreProgressTableName =
+  | 'sns_keihan_karilun_properties'
+  | 'sns_nishinomiya_karilun_properties'
+  | 'sns_nagase_properties'
+  | 'sns_nishikita_properties'
+  | 'sns_yao_properties'
+type PromoteTarget = 'tiktok' | 'instagram' | 'youtube' | StorePromoteTarget
 
 interface ProductionRecord {
   id: string
@@ -342,6 +349,50 @@ const MEDIA_OPTIONS = [
 
 const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾']
 
+const STORE_PROGRESS_CONFIGS: {
+  target: StorePromoteTarget
+  tableName: StoreProgressTableName
+  matchText: string
+  label: string
+  typeLabel: string
+}[] = [
+  {
+    target: 'keihan-karilun',
+    tableName: 'sns_keihan_karilun_properties',
+    matchText: '京阪',
+    label: '京阪かりるん',
+    typeLabel: '場所',
+  },
+  {
+    target: 'nishinomiya-karilun',
+    tableName: 'sns_nishinomiya_karilun_properties',
+    matchText: '西宮市',
+    label: '西宮かりるん',
+    typeLabel: '種別',
+  },
+  {
+    target: 'nagase',
+    tableName: 'sns_nagase_properties',
+    matchText: '長瀬',
+    label: '長瀬店',
+    typeLabel: '種別',
+  },
+  {
+    target: 'nishikita',
+    tableName: 'sns_nishikita_properties',
+    matchText: '西北',
+    label: '西北店',
+    typeLabel: '種別',
+  },
+  {
+    target: 'yao',
+    tableName: 'sns_yao_properties',
+    matchText: '八尾',
+    label: '八尾店',
+    typeLabel: '種別',
+  },
+]
+
 const PROGRESS_SHARED_COLUMN_WIDTHS = {
   propertyName: 155,
   address: 146,
@@ -430,8 +481,9 @@ function isInstagramMedia(media: string) {
   return normalizeMediaName(getMediaDisplayName(media)).includes('instagram')
 }
 
-function isKeihanMedia(media: string) {
-  return normalizeMediaName(getMediaDisplayName(media)).includes('京阪')
+function getStoreProgressConfig(media: string) {
+  const normalized = normalizeMediaName(getMediaDisplayName(media))
+  return STORE_PROGRESS_CONFIGS.find((config) => normalized.includes(normalizeMediaName(config.matchText))) || null
 }
 
 function toRegisteredLabel(value: boolean) {
@@ -611,9 +663,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return `${prefix}${String(maxValue + 1).padStart(digits, '0')}`
   }
 
-  async function getNextKeihanPropertyNumber() {
+  async function getNextStorePropertyNumber(tableName: StoreProgressTableName) {
     const { data } = await supabase
-      .from('sns_keihan_karilun_properties')
+      .from(tableName)
       .select('property_number')
 
     const maxValue = (data || []).reduce((max, row) => {
@@ -738,8 +790,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       let target: PromoteTarget | null = null
       let label = ''
 
-      if (isKeihanMedia(record.media)) {
-        if (!window.confirm('SNS物件管理の「京阪かりるん」へ反映しますか？')) return
+      const storeConfig = getStoreProgressConfig(record.media)
+
+      if (storeConfig) {
+        if (!window.confirm(`SNS物件管理の「${storeConfig.label}」へ反映しますか？`)) return
 
         const insertData = {
           memo: record.memo || '',
@@ -747,7 +801,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           category: record.post_type || '',
           property_name: record.property_name || '',
           room_number: record.room_number || '',
-          property_number: record.property_number || await getNextKeihanPropertyNumber(),
+          property_number: record.property_number || await getNextStorePropertyNumber(storeConfig.tableName),
           document_url: record.property_url || '',
           tiktok_reserved: '',
           tiktok_wp: '',
@@ -759,13 +813,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           post_text: '',
         }
 
-        const { error } = await supabase.from('sns_keihan_karilun_properties').insert([insertData])
+        const { error } = await supabase.from(storeConfig.tableName).insert([insertData])
         if (error) {
-          alert(`京阪かりるん一覧への反映に失敗しました。\n${error.message}`)
+          alert(`${storeConfig.label}一覧への反映に失敗しました。\n${error.message}`)
           return
         }
 
-        onSnsPropertyPromoted?.('keihan-karilun')
+        onSnsPropertyPromoted?.(storeConfig.target)
       } else if (isTikTokMedia(record.media)) {
         tableName = 'sns_tiktok_properties'
         target = 'tiktok'
@@ -794,7 +848,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         }
 
         if (target) onSnsPropertyPromoted?.(target)
-      } else if (!isKeihanMedia(record.media)) {
+      } else if (!storeConfig) {
         return
       }
     }
@@ -1434,7 +1488,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
-  function renderKeihanTable(mediaRecords: ProductionRecord[]) {
+  function renderStoreProgressTable(mediaRecords: ProductionRecord[], config: NonNullable<ReturnType<typeof getStoreProgressConfig>>) {
     return (
       <table className="progress-table progress-table-keihan">
         <colgroup>
@@ -1450,7 +1504,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <thead>
           <tr>
             <th className="ptcol-group-1">投稿予定日</th>
-            <th className="ptcol-group-2">場所</th>
+            <th className="ptcol-group-2">{config.typeLabel}</th>
             <th className="ptcol-group-2">物件名</th>
             <th className="ptcol-group-2">号室</th>
             <th className="ptcol-group-2">資料</th>
@@ -1463,7 +1517,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           {mediaRecords.map((record) => (
             <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
-              <td className="ptcell-group-2">{renderTextCell(record, 'post_type', '場所')}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'post_type', config.typeLabel)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
               <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
@@ -1822,8 +1876,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 renderTikTokTable(mediaRecords)
               ) : isInstagramMedia(media) ? (
                 renderInstagramTable(mediaRecords)
-              ) : isKeihanMedia(media) ? (
-                renderKeihanTable(mediaRecords)
+              ) : getStoreProgressConfig(media) ? (
+                renderStoreProgressTable(mediaRecords, getStoreProgressConfig(media)!)
               ) : (
                 renderTikTokTable(mediaRecords)
               )}
