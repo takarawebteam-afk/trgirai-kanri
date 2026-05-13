@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import Color from '@tiptap/extension-color'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -8,7 +8,8 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
-import { EditorContent, useEditor } from '@tiptap/react'
+import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
+import type { NodeViewProps } from '@tiptap/react'
 import { supabase } from './supabase'
 
 type ManualPageRecord = {
@@ -42,6 +43,54 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 const MANUAL_IMAGE_BUCKET = 'manual-images'
 const EMPTY_CONTENT = '<p></p>'
 
+function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = (node.attrs.width as number) || 480
+
+    dragRef.current = { startX, startWidth }
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = moveEvent.clientX - dragRef.current.startX
+      const newWidth = Math.max(80, Math.min(920, dragRef.current.startWidth + delta))
+      updateAttributes({ width: Math.round(newWidth) })
+    }
+
+    const onMouseUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  return (
+    <NodeViewWrapper className="manual-image-wrapper">
+      <img
+        src={node.attrs.src as string}
+        width={(node.attrs.width as number) || 480}
+        style={{
+          display: 'block',
+          maxWidth: '100%',
+          borderRadius: '12px',
+          boxShadow: selected
+            ? '0 0 0 2px #3b8cf0, 0 10px 24px rgba(15,23,42,0.12)'
+            : '0 10px 24px rgba(15,23,42,0.12)',
+        }}
+        alt=""
+        draggable={false}
+      />
+      {selected && <div className="manual-image-resize-handle" onMouseDown={handleMouseDown} />}
+    </NodeViewWrapper>
+  )
+}
+
 const ManualImage = Image.extend({
   addAttributes() {
     return {
@@ -56,6 +105,9 @@ const ManualImage = Image.extend({
       },
     }
   },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView)
+  },
 })
 
 function ManualsPage() {
@@ -66,6 +118,7 @@ function ManualsPage() {
   const [draft, setDraft] = useState<ManualPageDraft | null>(null)
   const [search, setSearch] = useState('')
   const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([])
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [newCategoryName, setNewCategoryName] = useState('')
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('未保存の変更はありません')
@@ -74,6 +127,7 @@ function ManualsPage() {
   const autosaveTimerRef = useRef<number | null>(null)
   const lastSavedSignatureRef = useRef('')
   const draftRef = useRef<ManualPageDraft | null>(null)
+  const handleImageUploadRef = useRef<((file: File) => Promise<void>) | null>(null)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -94,6 +148,20 @@ function ManualsPage() {
       ManualImage,
     ],
     content: EMPTY_CONTENT,
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const imageFile = Array.from(event.clipboardData?.items ?? [])
+          .find((item) => item.type.startsWith('image/'))
+          ?.getAsFile()
+
+        if (imageFile && handleImageUploadRef.current) {
+          void handleImageUploadRef.current(imageFile)
+          return true
+        }
+
+        return false
+      },
+    },
     onUpdate: ({ editor: currentEditor }) => {
       setDraft((current) => {
         if (!current) return current
@@ -405,6 +473,15 @@ function ManualsPage() {
     )
   }
 
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current)
+      if (next.has(sectionId)) next.delete(sectionId)
+      else next.add(sectionId)
+      return next
+    })
+  }
+
   const setLink = () => {
     const previousUrl = editor?.getAttributes('link').href as string | undefined
     const url = window.prompt('リンクURLを入力してください', previousUrl || 'https://')
@@ -443,22 +520,15 @@ function ManualsPage() {
     editor.chain().focus().setImage({ src: data.publicUrl, width: 480 }).run()
   }
 
+  useEffect(() => {
+    handleImageUploadRef.current = handleImageUpload
+  })
+
   const handleImagePickerChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
     await handleImageUpload(file)
     event.target.value = ''
-  }
-
-  const handleEditorPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
-    const file = Array.from(event.clipboardData.items)
-      .find((item) => item.type.startsWith('image/'))
-      ?.getAsFile()
-
-    if (!file) return
-
-    event.preventDefault()
-    await handleImageUpload(file)
   }
 
   const insertTable = () => {
@@ -553,51 +623,105 @@ function ManualsPage() {
                 </button>
               ))}
             </div>
-
-            <div className="manual-category-create">
-              <input
-                type="text"
-                placeholder="新しいカテゴリ名"
-                value={newCategoryName}
-                onChange={(event) => setNewCategoryName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void handleCreateCategory()
-                  }
-                }}
-              />
-              <button type="button" className="secondary" onClick={handleCreateCategory}>追加</button>
-            </div>
           </div>
 
           <div className="manual-page-list">
             {loading && <p className="empty-text">読み込み中...</p>}
-            {!loading && filteredPages.length === 0 && <p className="empty-text">該当するページがありません</p>}
-            {filteredPages.map((page) => {
-              const pageCategoryIds = pageCategories.filter((entry) => entry.page_id === page.id).map((entry) => entry.category_id)
+            {categories.map((category) => {
+              const sectionNotes = filteredPages.filter((page) =>
+                pageCategories.some((entry) => entry.page_id === page.id && entry.category_id === category.id),
+              )
+              if (sectionNotes.length === 0) return null
+              const isCollapsed = collapsedSections.has(category.id)
+
               return (
-                <button
-                  key={page.id}
-                  type="button"
-                  className={`manual-page-item ${page.id === selectedPageId ? 'active' : ''}`}
-                  onClick={() => {
-                    void flushPendingSave()
-                    setSelectedPageId(page.id)
-                  }}
-                >
-                  <strong>{page.title || '無題'}</strong>
-                  <span>{stripHtml(page.content || '').slice(0, 56) || '本文はまだありません'}</span>
-                  <div className="manual-page-tags">
-                    {pageCategoryIds.slice(0, 3).map((categoryId) => (
-                      <span key={categoryId} className="manual-chip small">
-                        {categoryNameMap[categoryId]}
-                      </span>
-                    ))}
-                  </div>
-                </button>
+                <div key={category.id} className="manual-section">
+                  <button
+                    type="button"
+                    className="manual-section-header"
+                    onClick={() => toggleSection(category.id)}
+                  >
+                    <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
+                    <span className="manual-section-name">{category.name}</span>
+                    <span className="manual-section-count">{sectionNotes.length}</span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="manual-section-notes">
+                      {sectionNotes.map((page) => (
+                        <button
+                          key={page.id}
+                          type="button"
+                          className={`manual-page-item ${page.id === selectedPageId ? 'active' : ''}`}
+                          onClick={() => {
+                            void flushPendingSave()
+                            setSelectedPageId(page.id)
+                          }}
+                        >
+                          <strong>{page.title || '無題'}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )
             })}
+
+            {(() => {
+              const uncategorizedNotes = filteredPages.filter(
+                (page) => !pageCategories.some((entry) => entry.page_id === page.id),
+              )
+              if (uncategorizedNotes.length === 0) return null
+              const isCollapsed = collapsedSections.has('__uncategorized__')
+
+              return (
+                <div className="manual-section">
+                  <button
+                    type="button"
+                    className="manual-section-header"
+                    onClick={() => toggleSection('__uncategorized__')}
+                  >
+                    <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
+                    <span className="manual-section-name">未分類</span>
+                    <span className="manual-section-count">{uncategorizedNotes.length}</span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="manual-section-notes">
+                      {uncategorizedNotes.map((page) => (
+                        <button
+                          key={page.id}
+                          type="button"
+                          className={`manual-page-item ${page.id === selectedPageId ? 'active' : ''}`}
+                          onClick={() => {
+                            void flushPendingSave()
+                            setSelectedPageId(page.id)
+                          }}
+                        >
+                          <strong>{page.title || '無題'}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {!loading && filteredPages.length === 0 && <p className="empty-text">該当するページがありません</p>}
+          </div>
+
+          <div className="manual-category-add-area">
+            <input
+              type="text"
+              placeholder="新しいカテゴリ名..."
+              value={newCategoryName}
+              onChange={(event) => setNewCategoryName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateCategory()
+                }
+              }}
+            />
+            <button type="button" className="secondary" onClick={handleCreateCategory}>追加</button>
           </div>
         </aside>
 
@@ -746,7 +870,7 @@ function ManualsPage() {
                 </div>
               )}
 
-              <div className="manual-editor-surface" onPaste={handleEditorPaste}>
+              <div className="manual-editor-surface">
                 <EditorContent editor={editor} className="manual-rich-editor" />
               </div>
 
