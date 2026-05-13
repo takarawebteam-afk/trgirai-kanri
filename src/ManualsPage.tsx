@@ -10,14 +10,38 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { supabase } from './supabase'
 
 type ManualPageRecord = {
   id: string
   title: string
   content: string
+  section_id: string | null
+  sort_order: number
   created_at?: string
   updated_at?: string
+}
+
+type ManualSectionRecord = {
+  id: string
+  name: string
+  sort_order: number
+  created_at?: string
 }
 
 type ManualCategoryRecord = {
@@ -42,6 +66,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const MANUAL_IMAGE_BUCKET = 'manual-images'
 const EMPTY_CONTENT = '<p></p>'
+const UNCATEGORIZED_SECTION_ID = '__uncategorized__'
 
 function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -91,6 +116,37 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
   )
 }
 
+function SortableNoteItem({
+  page,
+  isSelected,
+  onSelect,
+}: {
+  page: ManualPageRecord
+  isSelected: boolean
+  onSelect: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <button
+        type="button"
+        className={`manual-page-item ${isSelected ? 'active' : ''}`}
+        onClick={onSelect}
+      >
+        <span className="manual-drag-handle" {...listeners}>::</span>
+        <strong>{page.title || '無題'}</strong>
+      </button>
+    </div>
+  )
+}
+
 const ManualImage = Image.extend({
   addAttributes() {
     return {
@@ -112,14 +168,16 @@ const ManualImage = Image.extend({
 
 function ManualsPage() {
   const [pages, setPages] = useState<ManualPageRecord[]>([])
+  const [sections, setSections] = useState<ManualSectionRecord[]>([])
   const [categories, setCategories] = useState<ManualCategoryRecord[]>([])
   const [pageCategories, setPageCategories] = useState<ManualPageCategoryRecord[]>([])
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
   const [draft, setDraft] = useState<ManualPageDraft | null>(null)
   const [search, setSearch] = useState('')
-  const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([])
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [newSectionName, setNewSectionName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('未保存の変更はありません')
   const [loading, setLoading] = useState(true)
@@ -128,6 +186,11 @@ function ManualsPage() {
   const lastSavedSignatureRef = useRef('')
   const draftRef = useRef<ManualPageDraft | null>(null)
   const handleImageUploadRef = useRef<((file: File) => Promise<void>) | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  )
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -179,10 +242,11 @@ function ManualsPage() {
 
   const loadManualData = async () => {
     setLoading(true)
-    const [pagesResult, categoriesResult, junctionsResult] = await Promise.all([
-      supabase.from('manual_pages').select('id, title, content, created_at, updated_at').order('updated_at', { ascending: false }),
+    const [pagesResult, categoriesResult, junctionsResult, sectionsResult] = await Promise.all([
+      supabase.from('manual_pages').select('id, title, content, section_id, sort_order, created_at, updated_at').order('sort_order', { ascending: true }),
       supabase.from('manual_categories').select('id, name, created_at').order('name', { ascending: true }),
       supabase.from('manual_page_categories').select('page_id, category_id'),
+      supabase.from('manual_sections').select('id, name, sort_order, created_at').order('sort_order', { ascending: true }),
     ])
 
     if (pagesResult.error) {
@@ -200,11 +264,18 @@ function ManualsPage() {
       setSaveMessage(`カテゴリ紐付け取得に失敗しました: ${junctionsResult.error.message}`)
     }
 
+    if (sectionsResult.error) {
+      setSaveState('error')
+      setSaveMessage(`セクション取得に失敗しました: ${sectionsResult.error.message}`)
+    }
+
     const nextPages = (pagesResult.data ?? []) as ManualPageRecord[]
     const nextCategories = (categoriesResult.data ?? []) as ManualCategoryRecord[]
     const nextPageCategories = (junctionsResult.data ?? []) as ManualPageCategoryRecord[]
+    const nextSections = (sectionsResult.data ?? []) as ManualSectionRecord[]
 
     setPages(nextPages)
+    setSections(nextSections)
     setCategories(nextCategories)
     setPageCategories(nextPageCategories)
     setLoading(false)
@@ -221,6 +292,7 @@ function ManualsPage() {
     const channel = supabase
       .channel('manual-pages-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_pages' }, loadManualData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_sections' }, loadManualData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_categories' }, loadManualData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_page_categories' }, loadManualData)
       .subscribe()
@@ -278,10 +350,6 @@ function ManualsPage() {
       const pageCategoryNames = pageCategoryIds.map((categoryId) => categoryNameMap[categoryId] || '')
       const plainText = stripHtml(page.content || '').toLowerCase()
 
-      if (activeCategoryFilters.length > 0 && !activeCategoryFilters.every((filterId) => pageCategoryIds.includes(filterId))) {
-        return false
-      }
-
       if (!keyword) return true
 
       return (
@@ -290,7 +358,7 @@ function ManualsPage() {
         pageCategoryNames.some((name) => name.toLowerCase().includes(keyword))
       )
     })
-  }, [activeCategoryFilters, categoryNameMap, pageCategories, pages, search])
+  }, [categoryNameMap, pageCategories, pages, search])
 
   const updateDraft = (updater: (current: ManualPageDraft) => ManualPageDraft) => {
     setDraft((current) => {
@@ -389,10 +457,15 @@ function ManualsPage() {
 
   const handleCreatePage = async () => {
     const id = crypto.randomUUID()
+    const maxOrder = pages
+      .filter((page) => (page.section_id ?? null) === null)
+      .reduce((max, page) => Math.max(max, page.sort_order), -1)
     const insertResult = await supabase.from('manual_pages').insert({
       id,
       title: '新しいページ',
       content: EMPTY_CONTENT,
+      section_id: null,
+      sort_order: maxOrder + 1,
       updated_at: new Date().toISOString(),
     })
 
@@ -456,6 +529,39 @@ function ManualsPage() {
     await loadManualData()
   }
 
+  const handleCreateSection = async () => {
+    const name = newSectionName.trim()
+    if (!name) return
+
+    const maxOrder = sections.reduce((max, section) => Math.max(max, section.sort_order), -1)
+    const insertResult = await supabase.from('manual_sections').insert({
+      id: crypto.randomUUID(),
+      name,
+      sort_order: maxOrder + 1,
+    })
+
+    if (insertResult.error) {
+      setSaveState('error')
+      setSaveMessage(`セクション作成に失敗しました: ${insertResult.error.message}`)
+      return
+    }
+
+    setNewSectionName('')
+    await loadManualData()
+  }
+
+  const handleDeleteSection = async (sectionId: string) => {
+    const deleteResult = await supabase.from('manual_sections').delete().eq('id', sectionId)
+
+    if (deleteResult.error) {
+      setSaveState('error')
+      setSaveMessage(`セクション削除に失敗しました: ${deleteResult.error.message}`)
+      return
+    }
+
+    await loadManualData()
+  }
+
   const toggleCategoryForDraft = (categoryId: string) => {
     updateDraft((current) => ({
       ...current,
@@ -465,14 +571,6 @@ function ManualsPage() {
     }))
   }
 
-  const toggleCategoryFilter = (categoryId: string) => {
-    setActiveCategoryFilters((current) =>
-      current.includes(categoryId)
-        ? current.filter((id) => id !== categoryId)
-        : [...current, categoryId],
-    )
-  }
-
   const toggleSection = (sectionId: string) => {
     setCollapsedSections((current) => {
       const next = new Set(current)
@@ -480,6 +578,48 @@ function ManualsPage() {
       else next.add(sectionId)
       return next
     })
+  }
+
+  const moveNoteToSection = async (noteId: string, targetSectionId: string | null) => {
+    const sectionNotes = pages
+      .filter((page) => (page.section_id ?? null) === targetSectionId && page.id !== noteId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+
+    const newOrder = sectionNotes.length > 0
+      ? (sectionNotes[sectionNotes.length - 1].sort_order ?? 0) + 1
+      : 0
+
+    const updateResult = await supabase
+      .from('manual_pages')
+      .update({ section_id: targetSectionId, sort_order: newOrder })
+      .eq('id', noteId)
+
+    if (updateResult.error) {
+      setSaveState('error')
+      setSaveMessage(`ページ移動に失敗しました: ${updateResult.error.message}`)
+      return
+    }
+
+    await loadManualData()
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id))
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const noteId = String(active.id)
+    const overId = String(over.id)
+
+    const overNote = pages.find((page) => page.id === overId)
+    if (overNote) {
+      const targetSectionId = overNote.section_id ?? null
+      await moveNoteToSection(noteId, targetSectionId)
+    }
   }
 
   const setLink = () => {
@@ -600,112 +740,134 @@ function ManualsPage() {
             />
           </div>
 
-          <div className="manuals-filter-block">
-            <div className="manuals-filter-header">
-              <strong>カテゴリフィルタ</strong>
-              {activeCategoryFilters.length > 0 && (
-                <button type="button" className="secondary" onClick={() => setActiveCategoryFilters([])}>
-                  クリア
-                </button>
-              )}
-            </div>
+          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="manual-page-list">
+              {loading && <p className="empty-text">読み込み中...</p>}
 
-            <div className="manual-tag-list">
-              {categories.length === 0 && <p className="empty-text">カテゴリがまだありません</p>}
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  className={`manual-chip ${activeCategoryFilters.includes(category.id) ? 'active' : ''}`}
-                  onClick={() => toggleCategoryFilter(category.id)}
-                >
-                  {category.name}
-                </button>
-              ))}
-            </div>
-          </div>
+              {sections.map((section) => {
+                const sectionNotes = filteredPages
+                  .filter((page) => page.section_id === section.id)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                const isCollapsed = collapsedSections.has(section.id)
 
-          <div className="manual-page-list">
-            {loading && <p className="empty-text">読み込み中...</p>}
-            {categories.map((category) => {
-              const sectionNotes = filteredPages.filter((page) =>
-                pageCategories.some((entry) => entry.page_id === page.id && entry.category_id === category.id),
-              )
-              if (sectionNotes.length === 0) return null
-              const isCollapsed = collapsedSections.has(category.id)
-
-              return (
-                <div key={category.id} className="manual-section">
-                  <button
-                    type="button"
-                    className="manual-section-header"
-                    onClick={() => toggleSection(category.id)}
-                  >
-                    <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
-                    <span className="manual-section-name">{category.name}</span>
-                    <span className="manual-section-count">{sectionNotes.length}</span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className="manual-section-notes">
-                      {sectionNotes.map((page) => (
-                        <button
-                          key={page.id}
-                          type="button"
-                          className={`manual-page-item ${page.id === selectedPageId ? 'active' : ''}`}
-                          onClick={() => {
-                            void flushPendingSave()
-                            setSelectedPageId(page.id)
-                          }}
+                return (
+                  <div key={section.id} className="manual-section">
+                    <div className="manual-section-header">
+                      <button
+                        type="button"
+                        className="manual-section-toggle"
+                        onClick={() => toggleSection(section.id)}
+                      >
+                        <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
+                        <span
+                          className="manual-section-name"
                         >
-                          <strong>{page.title || '無題'}</strong>
-                        </button>
-                      ))}
+                          {section.name}
+                        </span>
+                        <span className="manual-section-count">{sectionNotes.length}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="manual-section-delete"
+                        onClick={() => void handleDeleteSection(section.id)}
+                        title="セクションを削除"
+                      >
+                        ×
+                      </button>
                     </div>
-                  )}
-                </div>
-              )
-            })}
 
-            {(() => {
-              const uncategorizedNotes = filteredPages.filter(
-                (page) => !pageCategories.some((entry) => entry.page_id === page.id),
-              )
-              if (uncategorizedNotes.length === 0) return null
-              const isCollapsed = collapsedSections.has('__uncategorized__')
+                    {!isCollapsed && (
+                      <SortableContext items={sectionNotes.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+                        <div className="manual-section-notes manual-drop-zone">
+                          {sectionNotes.map((page) => (
+                            <SortableNoteItem
+                              key={page.id}
+                              page={page}
+                              isSelected={page.id === selectedPageId}
+                              onSelect={() => {
+                                void flushPendingSave()
+                                setSelectedPageId(page.id)
+                              }}
+                            />
+                          ))}
+                          {sectionNotes.length === 0 && (
+                            <p className="empty-text manual-drop-hint">ここにページを移動できます</p>
+                          )}
+                        </div>
+                      </SortableContext>
+                    )}
+                  </div>
+                )
+              })}
 
-              return (
-                <div className="manual-section">
-                  <button
-                    type="button"
-                    className="manual-section-header"
-                    onClick={() => toggleSection('__uncategorized__')}
-                  >
-                    <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
-                    <span className="manual-section-name">未分類</span>
-                    <span className="manual-section-count">{uncategorizedNotes.length}</span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className="manual-section-notes">
-                      {uncategorizedNotes.map((page) => (
-                        <button
-                          key={page.id}
-                          type="button"
-                          className={`manual-page-item ${page.id === selectedPageId ? 'active' : ''}`}
-                          onClick={() => {
-                            void flushPendingSave()
-                            setSelectedPageId(page.id)
-                          }}
-                        >
-                          <strong>{page.title || '無題'}</strong>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+              {(() => {
+                const uncategorizedNotes = filteredPages
+                  .filter((page) => page.section_id === null || page.section_id === undefined)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                const isCollapsed = collapsedSections.has(UNCATEGORIZED_SECTION_ID)
+                if (uncategorizedNotes.length === 0 && sections.length > 0) return null
 
-            {!loading && filteredPages.length === 0 && <p className="empty-text">該当するページがありません</p>}
+                return (
+                  <div className="manual-section">
+                    <button
+                      type="button"
+                      className="manual-section-toggle"
+                      onClick={() => toggleSection(UNCATEGORIZED_SECTION_ID)}
+                    >
+                      <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
+                      <span className="manual-section-name">未分類</span>
+                      <span className="manual-section-count">{uncategorizedNotes.length}</span>
+                    </button>
+                    {!isCollapsed && (
+                      <SortableContext items={uncategorizedNotes.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+                        <div className="manual-section-notes manual-drop-zone">
+                          {uncategorizedNotes.map((page) => (
+                            <SortableNoteItem
+                              key={page.id}
+                              page={page}
+                              isSelected={page.id === selectedPageId}
+                              onSelect={() => {
+                                void flushPendingSave()
+                                setSelectedPageId(page.id)
+                              }}
+                            />
+                          ))}
+                          {uncategorizedNotes.length === 0 && (
+                            <p className="empty-text manual-drop-hint">ここにページを移動できます</p>
+                          )}
+                        </div>
+                      </SortableContext>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {!loading && filteredPages.length === 0 && <p className="empty-text">該当するページがありません</p>}
+
+              <DragOverlay>
+                {activeId ? (
+                  <div className="manual-page-item manual-drag-overlay">
+                    <strong>{pages.find((page) => page.id === activeId)?.title || '無題'}</strong>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </div>
+          </DndContext>
+
+          <div className="manual-section-add-area">
+            <input
+              type="text"
+              placeholder="新しいセクション名..."
+              value={newSectionName}
+              onChange={(event) => setNewSectionName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateSection()
+                }
+              }}
+            />
+            <button type="button" className="secondary" onClick={handleCreateSection}>追加</button>
           </div>
 
           <div className="manual-category-add-area">

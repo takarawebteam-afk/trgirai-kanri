@@ -2315,6 +2315,134 @@ button.manual-chip {
   font-size: 0.82rem;
 }
 
+.manual-section {
+  margin-bottom: 2px;
+}
+
+.manual-section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  padding: 0;
+  border-radius: 0;
+}
+
+.manual-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-500);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-align: left;
+}
+
+.manual-section-toggle:hover {
+  background: var(--gray-50);
+  color: var(--gray-700);
+}
+
+.manual-section-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--gray-400);
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.manual-section:hover .manual-section-delete {
+  opacity: 1;
+}
+
+.manual-section-delete:hover {
+  background: var(--red-100);
+  color: var(--red-700);
+}
+
+.manual-section-notes {
+  padding-left: 10px;
+  min-height: 8px;
+}
+
+.manual-drop-zone {
+  min-height: 24px;
+}
+
+.manual-drop-hint {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  padding: 4px 8px;
+  font-style: italic;
+}
+
+.manual-page-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+
+.manual-page-item strong {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-drag-handle {
+  color: var(--gray-400);
+  font-size: 0.9rem;
+  cursor: grab;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.manual-drag-handle:active {
+  cursor: grabbing;
+}
+
+.manual-drag-overlay {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  border-radius: 6px;
+  background: white;
+  cursor: grabbing;
+}
+
+.manual-section-add-area {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100);
+}
+
+.manual-section-add-area input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
 .manuals-editor-header {
   margin-bottom: 20px;
 }
