@@ -25,6 +25,7 @@ interface ProductionRecord {
   property_name: string
   room_number: string
   property_address: string
+  acquisition_source: string
   management_company: string
   contact_info: string
   floor_plan: string
@@ -88,6 +89,7 @@ type SelectOptionGroup =
   | 'register_wp'
   | 'register_aos'
   | 'register_youtube'
+  | 'acquisition_source'
 type SelectMenuState = {
   id: string
   field: keyof ProductionRecord
@@ -114,7 +116,9 @@ const REGISTER_OPTIONS = [
 ]
 
 const INSTAGRAM_POST_TYPE_OPTIONS = ['動画', '画像'] as const
+const ACQUISITION_SOURCE_OPTIONS = ['SUUMO', 'HOME’S', 'at home', '自社', 'その他'] as const
 const DEFAULT_PROCESS_OPTIONS: string[] = [...PROCESS_STATUSES]
+void ACQUISITION_SOURCE_OPTIONS
 const PROCESS_FIELD_GROUPS: Record<ProcessField, SelectOptionGroup> = {
   floor_plan_order: 'process_floor_plan_order',
   material_processing: 'process_material_processing',
@@ -142,6 +146,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   register_wp: REGISTER_OPTIONS.map((option) => option.label),
   register_aos: REGISTER_OPTIONS.map((option) => option.label),
   register_youtube: REGISTER_OPTIONS.map((option) => option.label),
+  acquisition_source: ['リアプロ', 'イタンジ', 'レインズ', '管理会社HP', 'その他'],
 }
 
 const SELECT_OPTION_STORAGE_PREFIX = 'progress_select_options:'
@@ -155,6 +160,7 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   instagram_post_type: '遞ｮ蛻･',
   register_wp: 'WP逋ｻ骭ｲ',
   register_aos: 'AOS逋ｻ骭ｲ',
+  acquisition_source: '取得先',
   register_youtube: 'YouTube莠育ｴ・,
 }
 */
@@ -167,6 +173,7 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   register_wp: 'WP登録',
   register_aos: 'AOS登録',
   register_youtube: 'YouTube予約',
+  acquisition_source: '取得先',
 }
 const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
   floor_plan_order: '図面準備',
@@ -225,6 +232,11 @@ function getStoredSelectOptions(): Record<SelectOptionGroup, string[]> {
 
   ;(Object.keys(INITIAL_SELECT_OPTIONS) as SelectOptionGroup[]).forEach((group) => {
     try {
+      if (group === 'acquisition_source') {
+        next[group] = [...INITIAL_SELECT_OPTIONS[group]]
+        return
+      }
+
       let raw = window.localStorage.getItem(`${SELECT_OPTION_STORAGE_PREFIX}${group}`)
       if (!raw && group.startsWith('process_')) {
         raw = window.localStorage.getItem(`${SELECT_OPTION_STORAGE_PREFIX}process`)
@@ -400,6 +412,7 @@ const PROGRESS_SHARED_COLUMN_WIDTHS = {
   nearestStation: 118,
   floorPlan: 83,
   rent: 101,
+  acquisitionSource: 118,
   managementCompany: 166,
   audioSource: 160,
 } as const
@@ -411,6 +424,7 @@ const PROGRESS_INSTAGRAM_COLUMN_WIDTHS = {
   nearestStation: 118,
   floorPlan: 83,
   rent: PROGRESS_SHARED_COLUMN_WIDTHS.rent,
+  acquisitionSource: PROGRESS_SHARED_COLUMN_WIDTHS.acquisitionSource,
   managementCompany: 166,
   memo: 296,
   audioSource: 160,
@@ -434,6 +448,7 @@ const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
   property_name: '',
   room_number: '',
   property_address: '',
+  acquisition_source: '',
   management_company: '',
   contact_info: '',
   floor_plan: '',
@@ -558,6 +573,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           scheduled_post_date: sanitizeSelectText(record.scheduled_post_date),
           post_type: sanitizeSelectText(record.post_type),
           property_number: sanitizeSelectText(record.property_number),
+          acquisition_source: sanitizeSelectText(record.acquisition_source),
           youtube_reserved: sanitizeRegisterText(record.youtube_reserved),
           post_completed: Boolean(record.post_completed),
           aos_registered: sanitizeRegisterText(record.aos_registered),
@@ -700,6 +716,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         property_name: record.property_name || '',
         room_number: record.room_number || '',
         address: record.property_address || '',
+        acquisition_source: record.acquisition_source || '',
         management_company: record.management_company || '',
         contact: record.contact_info || '',
         floor_plan: record.floor_plan || '',
@@ -733,6 +750,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         property_name: record.property_name || '',
         room_number: record.room_number || '',
         address: record.property_address || '',
+        acquisition_source: record.acquisition_source || '',
         management_company: record.management_company || '',
         contact: record.contact_info || '',
         memo: record.memo || '',
@@ -765,6 +783,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       property_name: record.property_name || '',
       room_number: record.room_number || '',
       address: record.property_address || '',
+      acquisition_source: record.acquisition_source || '',
       management_company: record.management_company || '',
       contact: record.contact_info || '',
       memo: record.memo || '',
@@ -1093,6 +1112,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       nearest_station: source.nearest_station || '',
       floor_plan: source.floor_plan || '',
       rent: source.rent || '',
+      acquisition_source: source.acquisition_source || '',
       management_company: source.management_company || '',
       contact_info: source.contact_info || '',
     }
@@ -1312,6 +1332,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.nearestStation }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.floorPlan }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.rent }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.acquisitionSource }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.managementCompany }} />
           <col style={{ width: 101 }} />
           <col style={{ width: 96 }} />
@@ -1344,6 +1365,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">最寄り駅</th>
             <th className="ptcol-group-2">間取り</th>
             <th className="ptcol-group-2">家賃</th>
+            <th className="ptcol-group-2">取得先</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
             <th className="ptcol-group-2">図面準備</th>
@@ -1378,6 +1400,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'nearest_station', '最寄り駅')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'floor_plan', '間取り')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
+              <td className="ptcell-group-2">{renderSelectCell(record, 'acquisition_source', 'acquisition_source', '取得先', '', undefined, true, false)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-2">{renderIndependentProcessCell(record, 'floor_plan_order')}</td>
@@ -1418,6 +1441,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.nearestStation }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.floorPlan }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.rent }} />
+          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.acquisitionSource }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.managementCompany }} />
           <col style={{ width: 101 }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.memo }} />
@@ -1442,6 +1466,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">最寄り駅</th>
             <th className="ptcol-group-2">間取り</th>
             <th className="ptcol-group-2">家賃</th>
+            <th className="ptcol-group-2">取得先</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
             <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
@@ -1472,6 +1497,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'nearest_station', '最寄り駅')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'floor_plan', '間取り')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
+              <td className="ptcell-group-2">{renderSelectCell(record, 'acquisition_source', 'acquisition_source', '取得先', '', undefined, true, false)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
@@ -1654,6 +1680,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <label className="form-label">
               家賃
               <input value={form.rent} onChange={(e) => setForm({ ...form, rent: e.target.value })} />
+            </label>
+            <label className="form-label">
+              取得先
+              <select value={form.acquisition_source} onChange={(e) => setForm({ ...form, acquisition_source: e.target.value })}>
+                <option value="">未設定</option>
+                {selectOptions.acquisition_source.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </label>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -2029,6 +2064,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                     <span>最寄り駅: {record.nearest_station || '未入力'}</span>
                     <span>間取り: {record.floor_plan || '未入力'}</span>
                     <span>家賃: {record.rent || '未入力'}</span>
+                    <span>取得先: {record.acquisition_source || '未入力'}</span>
                     <span>管理会社: {record.management_company || '未入力'}</span>
                     <span>連絡先: {record.contact_info || '未入力'}</span>
                   </div>

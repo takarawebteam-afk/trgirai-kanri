@@ -1,0 +1,2 @@
+-- Remote migration sync placeholder.
+-- This file exists so local migration history matches the already-applied remote version.

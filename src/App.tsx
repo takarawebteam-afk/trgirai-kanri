@@ -239,6 +239,7 @@ type TiktokPropertyRecord = {
   property_name: string
   room_number: string
   address: string
+  acquisition_source: string
   management_company: string
   contact: string
 }
@@ -259,6 +260,7 @@ type InstagramPropertyRecord = {
   property_name: string
   room_number: string
   address: string
+  acquisition_source: string
   management_company: string
   contact: string
 }
@@ -274,6 +276,7 @@ type YoutubePropertyRecord = {
   property_name: string
   room_number: string
   address: string
+  acquisition_source: string
   management_company: string
   contact: string
 }
@@ -575,19 +578,19 @@ const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
 const defaultTiktokPropertyForm: Omit<TiktokPropertyRecord, 'id' | 'created_at'> = {
   memo: '', wp_registered: '', aos_registered: '', post_date: '', property_number: '',
   floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
-  property_name: '', room_number: '', address: '', management_company: '', contact: ''
+  property_name: '', room_number: '', address: '', acquisition_source: '', management_company: '', contact: ''
 }
 
 const defaultInstagramPropertyForm: Omit<InstagramPropertyRecord, 'id' | 'created_at'> = {
   memo: '', wp_registered: '', category: '', post_date: '', property_number: '',
   floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
-  property_name: '', room_number: '', address: '', management_company: '', contact: ''
+  property_name: '', room_number: '', address: '', acquisition_source: '', management_company: '', contact: ''
 }
 
 const defaultYoutubePropertyForm: Omit<YoutubePropertyRecord, 'id' | 'created_at'> = {
   memo: '', wp_registered: '', post_date: '', property_number: '',
   document_url: '', property_name: '', room_number: '', address: '',
-  management_company: '', contact: ''
+  acquisition_source: '', management_company: '', contact: ''
 }
 
 const defaultStoreSnsPropertyForm: Omit<StoreSnsPropertyRecord, 'id' | 'created_at'> = {
@@ -639,6 +642,7 @@ const storeSnsPropertyTableMap: Record<StoreSnsPropertyPlatform, SnsPropertyTabl
 type SnsPropertySelectField =
   | 'wp_registered'
   | 'aos_registered'
+  | 'acquisition_source'
   | 'tiktok_reserved'
   | 'tiktok_wp'
   | 'instagram_reserved'
@@ -707,9 +711,18 @@ const DEFAULT_STORE_SNS_POST_TEXT_OPTIONS = [
   '2重ﾁｪｯｸOK坂',
   '2重ﾁｪｯｸOK吉',
 ] as const
+const DEFAULT_ACQUISITION_SOURCE_OPTIONS = [
+  'リアプロ',
+  'イタンジ',
+  'レインズ',
+  '管理会社HP',
+  'その他',
+] as const
+const FIXED_ACQUISITION_SOURCE_OPTIONS = normalizeSnsPropertyOptions([...DEFAULT_ACQUISITION_SOURCE_OPTIONS])
 const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
   wp_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
   aos_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
+  acquisition_source: FIXED_ACQUISITION_SOURCE_OPTIONS,
   tiktok_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
   tiktok_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
   instagram_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
@@ -738,11 +751,18 @@ function buildSnsPropertyPageInfo(totalCount: number, currentPage: number) {
   }
 }
 
-function normalizeSnsPropertyOptions(options: string[]) {
-  return Array.from(new Set(options.map(option => option.trim()).filter(Boolean)))
+function normalizeSnsPropertyOptions(options: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      options
+        .map((option) => String(option ?? '').trim())
+        .filter(Boolean),
+    ),
+  )
 }
 
 function getStoredSnsPropertyOptions(field: SnsPropertySelectField) {
+  if (field === 'acquisition_source') return FIXED_ACQUISITION_SOURCE_OPTIONS
   if (typeof window === 'undefined') return null
   const raw = window.localStorage.getItem(`${SNS_PROPERTY_OPTION_STORAGE_PREFIX}${field}`)
   if (!raw) return null
@@ -1481,6 +1501,10 @@ function App() {
       ...SNS_PROPERTY_DEFAULT_OPTIONS.aos_registered,
       ...(getStoredSnsPropertyOptions('aos_registered') || []),
     ]),
+    acquisition_source: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.acquisition_source,
+      ...(getStoredSnsPropertyOptions('acquisition_source') || []),
+    ]),
     tiktok_reserved: normalizeSnsPropertyOptions([
       ...SNS_PROPERTY_DEFAULT_OPTIONS.tiktok_reserved,
       ...(getStoredSnsPropertyOptions('tiktok_reserved') || []),
@@ -1937,6 +1961,10 @@ function App() {
   }
 
   const getSnsPropertySelectOptions = useCallback((field: SnsPropertySelectField) => {
+    if (field === 'acquisition_source') {
+      return snsPropertyOptions.acquisition_source
+    }
+
     const storeValues = Object.values(storeSnsProperties).flatMap((rows) => rows.map((item) => {
       const value = item[field as keyof StoreSnsPropertyRecord]
       return typeof value === 'string' ? value : ''
@@ -2159,6 +2187,10 @@ function App() {
   }
 
   async function fetchSavedSnsPropertyOptions(field: SnsPropertySelectField) {
+    if (field === 'acquisition_source') {
+      return FIXED_ACQUISITION_SOURCE_OPTIONS
+    }
+
     const localOptions = getStoredSnsPropertyOptions(field) || []
     const { data, error } = await supabase
       .from('sns_property_select_options')
@@ -2212,6 +2244,10 @@ function App() {
   }
 
   async function fetchAllSnsPropertyOptionValues(field: SnsPropertySelectField) {
+    if (field === 'acquisition_source') {
+      return FIXED_ACQUISITION_SOURCE_OPTIONS
+    }
+
     const tableTargets = field === 'wp_registered'
       ? [
           'sns_tiktok_properties',
@@ -3526,6 +3562,7 @@ function App() {
           {renderSnsPropertyCreateInput('物件名', 'property_name', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('住所', 'address', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateSelect('取得先', 'acquisition_source', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
           {renderSnsPropertyCreateInput('管理会社', 'management_company', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('連絡先', 'contact', tiktokPropertyForm, setTiktokPropertyForm)}
         </>
@@ -3548,6 +3585,7 @@ function App() {
           {renderSnsPropertyCreateInput('物件名', 'property_name', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('住所', 'address', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateSelect('取得先', 'acquisition_source', instagramPropertyForm, setInstagramPropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
           {renderSnsPropertyCreateInput('管理会社', 'management_company', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('連絡先', 'contact', instagramPropertyForm, setInstagramPropertyForm)}
         </>
@@ -3565,6 +3603,7 @@ function App() {
           {renderSnsPropertyCreateInput('物件名', 'property_name', youtubePropertyForm, setYoutubePropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', youtubePropertyForm, setYoutubePropertyForm)}
           {renderSnsPropertyCreateInput('住所', 'address', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateSelect('取得先', 'acquisition_source', youtubePropertyForm, setYoutubePropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
           {renderSnsPropertyCreateInput('管理会社', 'management_company', youtubePropertyForm, setYoutubePropertyForm)}
           {renderSnsPropertyCreateInput('連絡先', 'contact', youtubePropertyForm, setYoutubePropertyForm)}
         </>
@@ -4627,12 +4666,12 @@ function App() {
                         <th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
-                        <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-source">取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tiktokProperties.length === 0 && (
-                        <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                        <tr><td colSpan={17} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {tiktokProperties.map((r) => {
                         return (
@@ -4654,6 +4693,7 @@ function App() {
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'property_name', value, setTiktokProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'room_number', value, setTiktokProperties))}</td>
                             <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'address', value, setTiktokProperties))}</td>
+                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'acquisition_source', value, setTiktokProperties), () => openSnsPropertyOptionEditor('acquisition_source', '取得先'))}</td>
                             <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'management_company', value, setTiktokProperties))}</td>
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'contact', value, setTiktokProperties))}</td>
                             <td className="sns-col-actions">
@@ -4703,12 +4743,12 @@ function App() {
                         <th className="sns-col-memo">メモ</th><th className="sns-col-check"><SnsPropertyHeader title="WP登録" /></th><th className="sns-col-plan">種別</th><th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
-                        <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-source">取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {instagramProperties.length === 0 && (
-                        <tr><td colSpan={16} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                        <tr><td colSpan={17} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {instagramProperties.map((r) => {
                         return (
@@ -4730,6 +4770,7 @@ function App() {
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'property_name', value, setInstagramProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'room_number', value, setInstagramProperties))}</td>
                             <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'address', value, setInstagramProperties))}</td>
+                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'acquisition_source', value, setInstagramProperties), () => openSnsPropertyOptionEditor('acquisition_source', '取得先'))}</td>
                             <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'management_company', value, setInstagramProperties))}</td>
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'contact', value, setInstagramProperties))}</td>
                             <td className="sns-col-actions">
@@ -4778,12 +4819,12 @@ function App() {
                       <tr>
                         <th className="sns-col-memo">メモ</th><th className="sns-col-check"><SnsPropertyHeader title="WP登録" /></th><th className="sns-col-date">投稿日</th><th className="sns-col-code">物件番号</th>
                         <th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
-                        <th className="sns-col-address">住所</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-source">取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {youtubeProperties.length === 0 && (
-                        <tr><td colSpan={11} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                        <tr><td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {youtubeProperties.map((r) => {
                         return (
@@ -4800,6 +4841,7 @@ function App() {
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_name', value, setYoutubeProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'room_number', value, setYoutubeProperties))}</td>
                             <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'address', value, setYoutubeProperties))}</td>
+                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'acquisition_source', value, setYoutubeProperties), () => openSnsPropertyOptionEditor('acquisition_source', '取得先'))}</td>
                             <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'management_company', value, setYoutubeProperties))}</td>
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'contact', value, setYoutubeProperties))}</td>
                             <td className="sns-col-actions">

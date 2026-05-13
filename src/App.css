@@ -4893,6 +4893,13 @@ button.manual-chip {
   max-width: 160px;
 }
 
+.sns-property-table th.sns-col-source,
+.sns-property-table td.sns-col-source {
+  width: 118px;
+  min-width: 118px;
+  max-width: 118px;
+}
+
 .sns-property-table th.sns-col-company,
 .sns-property-table td.sns-col-company {
   width: 160px;

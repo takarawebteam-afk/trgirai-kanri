@@ -16,6 +16,7 @@ create table if not exists sns_tiktok_properties (
   property_name text default '',
   room_number text default '',
   address text default '',
+  acquisition_source text default '',
   management_company text default '',
   contact text default ''
 );
@@ -36,6 +37,7 @@ create table if not exists sns_instagram_properties (
   property_name text default '',
   room_number text default '',
   address text default '',
+  acquisition_source text default '',
   management_company text default '',
   contact text default ''
 );
@@ -51,6 +53,7 @@ create table if not exists sns_youtube_properties (
   property_name text default '',
   room_number text default '',
   address text default '',
+  acquisition_source text default '',
   management_company text default '',
   contact text default ''
 );
