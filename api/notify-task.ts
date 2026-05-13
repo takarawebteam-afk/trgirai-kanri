@@ -27,16 +27,26 @@ function buildTaskSummary(taskName: string, dueDate?: string, workDate?: string,
 }
 
 async function postToSlack(text: string) {
-  if (!SLACK_BOT_TOKEN || !SLACK_CHANNEL_ID) return
+  if (!SLACK_BOT_TOKEN || !SLACK_CHANNEL_ID) {
+    return { ok: false, error: 'slack_not_configured' }
+  }
 
-  await fetch('https://slack.com/api/chat.postMessage', {
+  const response = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
     },
     body: JSON.stringify({ channel: SLACK_CHANNEL_ID, text }),
   })
+  const result = await response.json() as { ok?: boolean; error?: string }
+
+  if (!response.ok || !result.ok) {
+    console.error('Slack notification failed:', result.error || response.statusText)
+    return { ok: false, error: result.error || response.statusText }
+  }
+
+  return { ok: true }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -96,6 +106,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const text = `${mentions}\n${title}\n\n${summary}\n\n${APP_URL}`
-  await postToSlack(text)
+  const result = await postToSlack(text)
+  if (!result.ok) {
+    return res.status(502).json(result)
+  }
+
   res.status(200).json({ ok: true })
 }

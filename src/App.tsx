@@ -720,6 +720,7 @@ const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
   post_text: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_POST_TEXT_OPTIONS]),
 }
 const SNS_PROPERTY_PAGE_SIZE = 30
+const SNS_PROPERTY_CATEGORY_OPTIONS = ['動画', '画像'] as const
 
 function normalizeSnsPropertySearch(value: string) {
   return value.trim().toUpperCase()
@@ -2115,7 +2116,11 @@ function App() {
                 <tr key={r.id} className="row-hoverable">
                   <td className="sns-col-memo">{renderSnsMemoCell(tableName, r.id, r.memo)}</td>
                   <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_date', value), { type: 'date' })}</td>
-                  <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))}</td>
+                  <td className="sns-col-plan">
+                    {isKeihanKarilun
+                      ? renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))
+                      : renderSnsSelect(r.category, [...SNS_PROPERTY_CATEGORY_OPTIONS], (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))}
+                  </td>
                   <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateStoreSnsPropertyRow(platform, r.id, 'property_name', value))}</td>
                   <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'room_number', value))}</td>
                   <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'property_number', value))}</td>
@@ -2645,23 +2650,69 @@ function App() {
     setAllowedAccountMessage('')
   }
 
+  function formatDateForApi(date: Date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-')
+  }
+
+  function addDays(date: Date, days: number) {
+    const next = new Date(date)
+    next.setDate(next.getDate() + days)
+    return next
+  }
+
+  function isDateBefore(a: string, b: string) {
+    return a < b
+  }
+
+  function isDateAfter(a: string, b: string) {
+    return a > b
+  }
+
+  async function fetchWeatherRange(startDate: string, endDate: string, endpoint: 'forecast' | 'archive') {
+    if (isDateAfter(startDate, endDate)) return
+
+    const baseUrl = endpoint === 'archive'
+      ? 'https://archive-api.open-meteo.com/v1/archive'
+      : 'https://api.open-meteo.com/v1/forecast'
+    const url = `${baseUrl}?latitude=34.6937&longitude=135.5022&daily=weather_code&timezone=Asia%2FTokyo&start_date=${startDate}&end_date=${endDate}`
+    const res = await fetch(url)
+    if (!res.ok) return
+
+    const data = await res.json() as { daily?: { time: string[]; weather_code: (number | null)[] } }
+    if (data.daily?.time && data.daily?.weather_code) {
+      const map: Record<string, number> = {}
+      data.daily.time.forEach((date, i) => {
+        const code = data.daily!.weather_code[i]
+        if (code !== null && code !== undefined) map[date] = code
+      })
+      setWeatherMap(prev => ({ ...prev, ...map }))
+    }
+  }
+
   async function fetchWeather(yearMonth: string) {
     const [y, m] = yearMonth.split('-').map(Number)
     const startDate = `${y}-${String(m).padStart(2, '0')}-01`
     const lastDay = new Date(y, m, 0).getDate()
     const endDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    const today = new Date()
+    const todayDate = formatDateForApi(today)
+    const forecastLimit = formatDateForApi(addDays(today, 16))
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=34.6937&longitude=135.5022&daily=weather_code&timezone=Asia%2FTokyo&start_date=${startDate}&end_date=${endDate}`
-      const res = await fetch(url)
-      if (!res.ok) return
-      const data = await res.json() as { daily?: { time: string[]; weather_code: (number | null)[] } }
-      if (data.daily?.time && data.daily?.weather_code) {
-        const map: Record<string, number> = {}
-        data.daily.time.forEach((date, i) => {
-          const code = data.daily!.weather_code[i]
-          if (code !== null && code !== undefined) map[date] = code
-        })
-        setWeatherMap(prev => ({ ...prev, ...map }))
+      if (isDateBefore(startDate, todayDate)) {
+        const archiveEndDate = isDateBefore(endDate, todayDate) ? endDate : formatDateForApi(addDays(today, -1))
+        await fetchWeatherRange(startDate, archiveEndDate, 'archive')
+      }
+
+      if (!isDateAfter(endDate, todayDate) && !isDateBefore(endDate, todayDate)) {
+        await fetchWeatherRange(todayDate, todayDate, 'forecast')
+      } else if (!isDateBefore(endDate, todayDate)) {
+        const forecastStartDate = isDateBefore(startDate, todayDate) ? todayDate : startDate
+        const forecastEndDate = isDateAfter(endDate, forecastLimit) ? forecastLimit : endDate
+        await fetchWeatherRange(forecastStartDate, forecastEndDate, 'forecast')
       }
     } catch { /* 天気取得失敗時は無視 */ }
   }
@@ -3486,7 +3537,7 @@ function App() {
         <>
           {renderSnsPropertyCreateInput('メモ', 'memo', instagramPropertyForm, setInstagramPropertyForm, { textarea: true })}
           {renderSnsPropertyCreateSelect('WP登録', 'wp_registered', instagramPropertyForm, setInstagramPropertyForm, getSnsPropertySelectOptions('wp_registered'))}
-          {renderSnsPropertyCreateInput('種別', 'category', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateSelect('種別', 'category', instagramPropertyForm, setInstagramPropertyForm, [...SNS_PROPERTY_CATEGORY_OPTIONS])}
           {renderSnsPropertyCreateInput('投稿日', 'post_date', instagramPropertyForm, setInstagramPropertyForm, { type: 'date' })}
           {renderSnsPropertyCreateInput('物件番号', 'property_number', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('間取り', 'floor_plan', instagramPropertyForm, setInstagramPropertyForm)}
@@ -3528,7 +3579,9 @@ function App() {
         <>
           {renderSnsPropertyCreateInput('メモ', 'memo', storeSnsPropertyForm, setStoreSnsPropertyForm, { textarea: true })}
           {renderSnsPropertyCreateInput('投稿日', 'post_date', storeSnsPropertyForm, setStoreSnsPropertyForm, { type: 'date' })}
-          {renderSnsPropertyCreateInput(isKeihanKarilun ? '場所' : '種別', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm)}
+          {isKeihanKarilun
+            ? renderSnsPropertyCreateInput('場所', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm)
+            : renderSnsPropertyCreateSelect('種別', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm, [...SNS_PROPERTY_CATEGORY_OPTIONS])}
           {renderSnsPropertyCreateInput('物件名', 'property_name', storeSnsPropertyForm, setStoreSnsPropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', storeSnsPropertyForm, setStoreSnsPropertyForm)}
           {renderSnsPropertyCreateInput('番号', 'property_number', storeSnsPropertyForm, setStoreSnsPropertyForm)}
@@ -4662,7 +4715,7 @@ function App() {
                           <tr key={r.id} className="row-hoverable">
                             <td className="sns-col-memo">{renderSnsMemoCell('sns_instagram_properties', r.id, r.memo)}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'wp_registered', value, setInstagramProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
-                            <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'category', value, setInstagramProperties))}</td>
+                            <td className="sns-col-plan">{renderSnsSelect(r.category, [...SNS_PROPERTY_CATEGORY_OPTIONS], (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'category', value, setInstagramProperties))}</td>
                             <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'post_date', value, setInstagramProperties), { type: 'date' })}</td>
                             <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'property_number', value, setInstagramProperties))}</td>
                             <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:floor_plan`, r.floor_plan, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'floor_plan', value, setInstagramProperties))}</td>

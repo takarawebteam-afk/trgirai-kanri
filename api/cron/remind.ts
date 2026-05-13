@@ -57,15 +57,26 @@ function buildReminderLabel(task: { work_date?: string; due_date?: string }, tod
 }
 
 async function postToSlack(text: string) {
-  if (!SLACK_BOT_TOKEN || !SLACK_CHANNEL_ID) return
-  await fetch('https://slack.com/api/chat.postMessage', {
+  if (!SLACK_BOT_TOKEN || !SLACK_CHANNEL_ID) {
+    return { ok: false, error: 'slack_not_configured' }
+  }
+
+  const response = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
     },
     body: JSON.stringify({ channel: SLACK_CHANNEL_ID, text }),
   })
+  const result = await response.json() as { ok?: boolean; error?: string }
+
+  if (!response.ok || !result.ok) {
+    console.error('Slack reminder failed:', result.error || response.statusText)
+    return { ok: false, error: result.error || response.statusText }
+  }
+
+  return { ok: true }
 }
 
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
@@ -99,8 +110,10 @@ ${reminderLabel}
 
 ${APP_URL}`
 
-    await postToSlack(text)
-    sent += 1
+    const result = await postToSlack(text)
+    if (result.ok) {
+      sent += 1
+    }
   }
 
   res.status(200).json({ ok: true, sent })
