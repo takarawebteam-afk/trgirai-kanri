@@ -2700,7 +2700,7 @@ function App() {
     const endDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     const today = new Date()
     const todayDate = formatDateForApi(today)
-    const forecastLimit = formatDateForApi(addDays(today, 16))
+    const forecastLimit = formatDateForApi(addDays(today, 15))
     try {
       if (isDateBefore(startDate, todayDate)) {
         const archiveEndDate = isDateBefore(endDate, todayDate) ? endDate : formatDateForApi(addDays(today, -1))
