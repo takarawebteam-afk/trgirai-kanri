@@ -2447,11 +2447,45 @@ button.secondary.small {
   white-space: nowrap;
 }
 
+.manual-sidebar-add-button {
+  width: 92px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 .manual-category-filter {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.manual-category-filter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--gray-200);
+  border-radius: 7px;
+  background: var(--white);
+  color: var(--gray-900);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manual-category-filter-toggle strong {
+  color: var(--blue-700);
+  font-size: 0.72rem;
+}
+
+.manual-category-filter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .manual-category-filter-clear {

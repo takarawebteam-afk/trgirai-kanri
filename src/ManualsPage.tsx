@@ -187,6 +187,7 @@ function ManualsPage() {
   const [newSectionName, setNewSectionName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
   const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([])
+  const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('未保存の変更はありません')
@@ -775,7 +776,7 @@ function ManualsPage() {
                 }
               }}
             />
-            <button type="button" className="secondary small" onClick={handleCreateSection}>+ セクション</button>
+            <button type="button" className="primary small manual-sidebar-add-button" onClick={handleCreateSection}>+ セクション</button>
           </div>
 
           <div className="manual-sidebar-add-row">
@@ -791,38 +792,52 @@ function ManualsPage() {
                 }
               }}
             />
-            <button type="button" className="secondary small" onClick={handleCreateCategory}>+ カテゴリ</button>
+            <button type="button" className="primary small manual-sidebar-add-button" onClick={handleCreateCategory}>+ カテゴリ</button>
           </div>
 
           {categories.length > 0 && (
             <div className="manual-category-filter">
-              {activeCategoryFilters.length > 0 && (
-                <button
-                  type="button"
-                  className="manual-category-filter-clear"
-                  onClick={() => setActiveCategoryFilters([])}
-                >
-                  クリア
-                </button>
+              <button
+                type="button"
+                className="manual-category-filter-toggle"
+                onClick={() => setIsCategoryFilterOpen((current) => !current)}
+              >
+                <span>{isCategoryFilterOpen ? '▼' : '▶'} カテゴリ検索</span>
+                {activeCategoryFilters.length > 0 && (
+                  <strong>{activeCategoryFilters.length}件選択中</strong>
+                )}
+              </button>
+              {isCategoryFilterOpen && (
+                <div className="manual-category-filter-body">
+                  {activeCategoryFilters.length > 0 && (
+                    <button
+                      type="button"
+                      className="manual-category-filter-clear"
+                      onClick={() => setActiveCategoryFilters([])}
+                    >
+                      クリア
+                    </button>
+                  )}
+                  <div className="manual-tag-list">
+                    {categories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        className={`manual-chip ${activeCategoryFilters.includes(category.id) ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveCategoryFilters((current) =>
+                            current.includes(category.id)
+                              ? current.filter((id) => id !== category.id)
+                              : [...current, category.id],
+                          )
+                        }}
+                      >
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
-              <div className="manual-tag-list">
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    className={`manual-chip ${activeCategoryFilters.includes(category.id) ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveCategoryFilters((current) =>
-                        current.includes(category.id)
-                          ? current.filter((id) => id !== category.id)
-                          : [...current, category.id],
-                      )
-                    }}
-                  >
-                    {category.name}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
