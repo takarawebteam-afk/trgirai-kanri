@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import Color from '@tiptap/extension-color'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -14,17 +14,13 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  useDraggable,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { supabase } from './supabase'
 
 type ManualPageRecord = {
@@ -116,7 +112,7 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
   )
 }
 
-function SortableNoteItem({
+function DraggableNoteItem({
   page,
   isSelected,
   onSelect,
@@ -125,24 +121,37 @@ function SortableNoteItem({
   isSelected: boolean
   onSelect: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  }
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: page.id })
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.4 : 1 }}>
       <button
         type="button"
         className={`manual-page-item ${isSelected ? 'active' : ''}`}
         onClick={onSelect}
       >
-        <span className="manual-drag-handle" {...listeners}>::</span>
+        <span className="manual-drag-handle" {...listeners} {...attributes}>⠿</span>
         <strong>{page.title || '無題'}</strong>
       </button>
+    </div>
+  )
+}
+
+function DroppableSection({
+  sectionId,
+  children,
+}: {
+  sectionId: string
+  children: ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `drop:${sectionId}` })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`manual-section-notes manual-drop-zone${isOver ? ' manual-drop-zone-over' : ''}`}
+    >
+      {children}
     </div>
   )
 }
@@ -177,6 +186,7 @@ function ManualsPage() {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [newSectionName, setNewSectionName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('未保存の変更はありません')
@@ -347,10 +357,18 @@ function ManualsPage() {
 
     return pages.filter((page) => {
       const pageCategoryIds = pageCategories.filter((entry) => entry.page_id === page.id).map((entry) => entry.category_id)
-      const pageCategoryNames = pageCategoryIds.map((categoryId) => categoryNameMap[categoryId] || '')
-      const plainText = stripHtml(page.content || '').toLowerCase()
+
+      if (
+        activeCategoryFilters.length > 0 &&
+        !activeCategoryFilters.every((id) => pageCategoryIds.includes(id))
+      ) {
+        return false
+      }
 
       if (!keyword) return true
+
+      const pageCategoryNames = pageCategoryIds.map((categoryId) => categoryNameMap[categoryId] || '')
+      const plainText = stripHtml(page.content || '').toLowerCase()
 
       return (
         page.title.toLowerCase().includes(keyword) ||
@@ -358,7 +376,7 @@ function ManualsPage() {
         pageCategoryNames.some((name) => name.toLowerCase().includes(keyword))
       )
     })
-  }, [categoryNameMap, pageCategories, pages, search])
+  }, [activeCategoryFilters, categoryNameMap, pageCategories, pages, search])
 
   const updateDraft = (updater: (current: ManualPageDraft) => ManualPageDraft) => {
     setDraft((current) => {
@@ -610,15 +628,19 @@ function ManualsPage() {
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveId(null)
     const { active, over } = event
-    if (!over || active.id === over.id) return
+    if (!over) return
 
     const noteId = String(active.id)
     const overId = String(over.id)
 
-    const overNote = pages.find((page) => page.id === overId)
-    if (overNote) {
-      const targetSectionId = overNote.section_id ?? null
-      await moveNoteToSection(noteId, targetSectionId)
+    if (overId.startsWith('drop:')) {
+      const targetSectionId = overId.replace('drop:', '')
+      const resolvedSectionId = targetSectionId === UNCATEGORIZED_SECTION_ID ? null : targetSectionId
+      const currentNote = pages.find((page) => page.id === noteId)
+      if (!currentNote) return
+      const currentSectionId = currentNote.section_id ?? null
+      if (currentSectionId === resolvedSectionId) return
+      await moveNoteToSection(noteId, resolvedSectionId)
     }
   }
 
@@ -725,10 +747,10 @@ function ManualsPage() {
         <aside className="panel manuals-sidebar">
           <div className="panel-heading">
             <div>
-              <h2>ページ一覧</h2>
+              <h2>ノート一覧</h2>
               <p>{filteredPages.length}件表示 / 全{pages.length}件</p>
             </div>
-            <button type="button" className="primary" onClick={handleCreatePage}>ページ追加</button>
+            <button type="button" className="primary" onClick={handleCreatePage}>ノート追加</button>
           </div>
 
           <div className="manuals-search">
@@ -739,6 +761,70 @@ function ManualsPage() {
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
+
+          <div className="manual-sidebar-add-row">
+            <input
+              type="text"
+              placeholder="新しいセクション名..."
+              value={newSectionName}
+              onChange={(event) => setNewSectionName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateSection()
+                }
+              }}
+            />
+            <button type="button" className="secondary small" onClick={handleCreateSection}>+ セクション</button>
+          </div>
+
+          <div className="manual-sidebar-add-row">
+            <input
+              type="text"
+              placeholder="新しいカテゴリ名..."
+              value={newCategoryName}
+              onChange={(event) => setNewCategoryName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateCategory()
+                }
+              }}
+            />
+            <button type="button" className="secondary small" onClick={handleCreateCategory}>+ カテゴリ</button>
+          </div>
+
+          {categories.length > 0 && (
+            <div className="manual-category-filter">
+              {activeCategoryFilters.length > 0 && (
+                <button
+                  type="button"
+                  className="manual-category-filter-clear"
+                  onClick={() => setActiveCategoryFilters([])}
+                >
+                  クリア
+                </button>
+              )}
+              <div className="manual-tag-list">
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={`manual-chip ${activeCategoryFilters.includes(category.id) ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveCategoryFilters((current) =>
+                        current.includes(category.id)
+                          ? current.filter((id) => id !== category.id)
+                          : [...current, category.id],
+                      )
+                    }}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="manual-page-list">
@@ -777,24 +863,22 @@ function ManualsPage() {
                     </div>
 
                     {!isCollapsed && (
-                      <SortableContext items={sectionNotes.map((page) => page.id)} strategy={verticalListSortingStrategy}>
-                        <div className="manual-section-notes manual-drop-zone">
-                          {sectionNotes.map((page) => (
-                            <SortableNoteItem
-                              key={page.id}
-                              page={page}
-                              isSelected={page.id === selectedPageId}
-                              onSelect={() => {
-                                void flushPendingSave()
-                                setSelectedPageId(page.id)
-                              }}
-                            />
-                          ))}
-                          {sectionNotes.length === 0 && (
-                            <p className="empty-text manual-drop-hint">ここにページを移動できます</p>
-                          )}
-                        </div>
-                      </SortableContext>
+                      <DroppableSection sectionId={section.id}>
+                        {sectionNotes.map((page) => (
+                          <DraggableNoteItem
+                            key={page.id}
+                            page={page}
+                            isSelected={page.id === selectedPageId}
+                            onSelect={() => {
+                              void flushPendingSave()
+                              setSelectedPageId(page.id)
+                            }}
+                          />
+                        ))}
+                        {sectionNotes.length === 0 && (
+                          <p className="empty-text manual-drop-hint">ここにドロップ</p>
+                        )}
+                      </DroppableSection>
                     )}
                   </div>
                 )
@@ -819,30 +903,28 @@ function ManualsPage() {
                       <span className="manual-section-count">{uncategorizedNotes.length}</span>
                     </button>
                     {!isCollapsed && (
-                      <SortableContext items={uncategorizedNotes.map((page) => page.id)} strategy={verticalListSortingStrategy}>
-                        <div className="manual-section-notes manual-drop-zone">
-                          {uncategorizedNotes.map((page) => (
-                            <SortableNoteItem
-                              key={page.id}
-                              page={page}
-                              isSelected={page.id === selectedPageId}
-                              onSelect={() => {
-                                void flushPendingSave()
-                                setSelectedPageId(page.id)
-                              }}
-                            />
-                          ))}
-                          {uncategorizedNotes.length === 0 && (
-                            <p className="empty-text manual-drop-hint">ここにページを移動できます</p>
-                          )}
-                        </div>
-                      </SortableContext>
+                      <DroppableSection sectionId={UNCATEGORIZED_SECTION_ID}>
+                        {uncategorizedNotes.map((page) => (
+                          <DraggableNoteItem
+                            key={page.id}
+                            page={page}
+                            isSelected={page.id === selectedPageId}
+                            onSelect={() => {
+                              void flushPendingSave()
+                              setSelectedPageId(page.id)
+                            }}
+                          />
+                        ))}
+                        {uncategorizedNotes.length === 0 && (
+                          <p className="empty-text manual-drop-hint">ここにドロップ</p>
+                        )}
+                      </DroppableSection>
                     )}
                   </div>
                 )
               })()}
 
-              {!loading && filteredPages.length === 0 && <p className="empty-text">該当するページがありません</p>}
+              {!loading && filteredPages.length === 0 && <p className="empty-text">該当するノートがありません</p>}
 
               <DragOverlay>
                 {activeId ? (
@@ -853,45 +935,13 @@ function ManualsPage() {
               </DragOverlay>
             </div>
           </DndContext>
-
-          <div className="manual-section-add-area">
-            <input
-              type="text"
-              placeholder="新しいセクション名..."
-              value={newSectionName}
-              onChange={(event) => setNewSectionName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void handleCreateSection()
-                }
-              }}
-            />
-            <button type="button" className="secondary" onClick={handleCreateSection}>追加</button>
-          </div>
-
-          <div className="manual-category-add-area">
-            <input
-              type="text"
-              placeholder="新しいカテゴリ名..."
-              value={newCategoryName}
-              onChange={(event) => setNewCategoryName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void handleCreateCategory()
-                }
-              }}
-            />
-            <button type="button" className="secondary" onClick={handleCreateCategory}>追加</button>
-          </div>
         </aside>
 
         <div className="panel manuals-editor-panel">
           {!draft ? (
             <div className="manual-empty-state">
               <h2>ルール・マニュアル</h2>
-              <p>左の「ページ追加」から新しいマニュアルページを作成できます。</p>
+              <p>左の「ノート追加」から新しいマニュアルページを作成できます。</p>
             </div>
           ) : (
             <>

@@ -2427,6 +2427,50 @@ button.manual-chip {
   cursor: grabbing;
 }
 
+.manual-sidebar-add-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.manual-sidebar-add-row input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+
+button.secondary.small {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.manual-category-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.manual-category-filter-clear {
+  align-self: flex-end;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 999px;
+  background: var(--gray-100);
+  color: var(--gray-500);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.manual-drop-zone-over {
+  background: var(--blue-50);
+  border-radius: 6px;
+  outline: 2px dashed var(--blue-300);
+}
+
 .manual-section-add-area {
   display: flex;
   gap: 8px;
