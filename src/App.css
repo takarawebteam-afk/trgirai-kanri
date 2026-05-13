@@ -4736,6 +4736,28 @@ button.manual-chip {
 }
 
 /* SNS物件管理 テーブル */
+.sns-property-create-modal {
+  max-width: 920px;
+}
+
+.sns-property-create-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.sns-property-create-form .form-label:has(textarea),
+.sns-property-create-actions {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .sns-property-create-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 .sns-property-table thead th {
   position: sticky;
   top: 0;

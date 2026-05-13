@@ -719,7 +719,7 @@ const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
   threads_post_date: [],
   post_text: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_POST_TEXT_OPTIONS]),
 }
-const SNS_PROPERTY_PAGE_SIZE = 100
+const SNS_PROPERTY_PAGE_SIZE = 30
 
 function normalizeSnsPropertySearch(value: string) {
   return value.trim().toUpperCase()
@@ -1310,7 +1310,7 @@ function buildTaskItemRecurringForm(form: Omit<TaskItem, 'id' | 'created_at'>, p
   }
 }
 
-function notifyTaskEvent(payload: {
+async function notifyTaskEvent(payload: {
   type: 'new' | 'updated' | 'deleted' | 'completed'
   taskName: string
   dueDate?: string
@@ -1321,14 +1321,33 @@ function notifyTaskEvent(payload: {
   members: Member[]
 }) {
   const notifySecret = import.meta.env.VITE_NOTIFY_SECRET as string | undefined
-  fetch('/api/notify-task', {
+  const response = await fetch('/api/notify-task', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(notifySecret ? { 'x-notify-secret': notifySecret } : {}),
     },
     body: JSON.stringify(payload),
-  }).catch(() => {})
+  })
+  const result = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null
+
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || 'Slack通知に失敗しました')
+  }
+}
+
+function getSlackNotificationErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : ''
+  if (message === 'invalid_auth') {
+    return 'Slackの接続キーが無効です。VercelのSLACK_BOT_TOKENを新しい値に更新してください。'
+  }
+  if (message === 'channel_not_found') {
+    return 'Slackの通知先チャンネルが見つかりません。VercelのSLACK_CHANNEL_IDを確認してください。'
+  }
+  if (message === 'not_in_channel') {
+    return 'Slackアプリが通知先チャンネルに入っていません。Slackでアプリをチャンネルに追加してください。'
+  }
+  return message || 'Slack通知に失敗しました。'
 }
 
 function App() {
@@ -1495,6 +1514,16 @@ function App() {
     ]),
   }))
   const [snsPropertyOptionEditor, setSnsPropertyOptionEditor] = useState<SnsPropertyOptionEditorState | null>(null)
+  const [snsPropertyCreatePlatform, setSnsPropertyCreatePlatform] = useState<SnsPropertyPlatform | null>(null)
+  const [snsPropertyCreateSaving, setSnsPropertyCreateSaving] = useState(false)
+  const [tiktokPropertyForm, setTiktokPropertyForm] = useState(defaultTiktokPropertyForm)
+  const [instagramPropertyForm, setInstagramPropertyForm] = useState(defaultInstagramPropertyForm)
+  const [youtubePropertyForm, setYoutubePropertyForm] = useState(defaultYoutubePropertyForm)
+  const [storeSnsPropertyForm, setStoreSnsPropertyForm] = useState(defaultStoreSnsPropertyForm)
+  const [snsTiktokSheetSyncing, setSnsTiktokSheetSyncing] = useState(false)
+  const [snsInstagramSheetSyncing, setSnsInstagramSheetSyncing] = useState(false)
+  const [snsYoutubeSheetSyncing, setSnsYoutubeSheetSyncing] = useState(false)
+  const [storeSnsSheetSyncing, setStoreSnsSheetSyncing] = useState<StoreSnsPropertyPlatform | null>(null)
 
   // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
@@ -1994,12 +2023,38 @@ function App() {
     }))
   }
 
+  async function syncStoreSnsPropertiesToSheet(platform: StoreSnsPropertyPlatform) {
+    const label = snsPropertyTabs.find((tab) => tab.key === platform)?.label || '店舗'
+    const confirmed = window.confirm(`${label}の一覧をスプレッドシートへ上書きしますか？`)
+    if (!confirmed) return
+
+    setStoreSnsSheetSyncing(platform)
+    try {
+      const params = new URLSearchParams({ platform })
+      const response = await fetch(`/api/sync-store-sns-property-sheet?${params.toString()}`, { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; count?: number; sheetName?: string; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || '反映に失敗しました。')
+      }
+
+      alert(`スプレッドシート「${data.sheetName || ''}」へ反映しました。\n反映件数: ${data.count ?? 0}件`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '反映に失敗しました。'
+      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+    } finally {
+      setStoreSnsSheetSyncing(null)
+    }
+  }
+
   function renderStoreSnsPropertySection(platform: StoreSnsPropertyPlatform) {
     const rows = storeSnsProperties[platform]
     const title = snsPropertyTabs.find((tab) => tab.key === platform)?.title || 'SNS物件管理'
     const tableName = storeSnsPropertyTableMap[platform]
     const isKeihanKarilun = platform === 'keihan-karilun'
-    const emptyColSpan = isKeihanKarilun ? 14 : 16
+    const isNishinomiyaKarilun = platform === 'nishinomiya-karilun'
+    const hidesThreadsPostDate = isNishinomiyaKarilun || platform === 'nishikita'
+    const emptyColSpan = 16 - (isKeihanKarilun ? 2 : 0) - (hidesThreadsPostDate ? 1 : 0)
 
     return (
       <section className="panel table-panel">
@@ -2015,7 +2070,15 @@ function App() {
             {snsPropertySearch[platform] && (
               <button type="button" className="secondary" onClick={() => updateSnsPropertySearch(platform, '')}>×</button>
             )}
-            <button className="primary" onClick={() => addStoreSnsProperty(platform)}>＋ 行を追加</button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void syncStoreSnsPropertiesToSheet(platform)}
+              disabled={storeSnsSheetSyncing === platform}
+            >
+              {storeSnsSheetSyncing === platform ? '反映中...' : 'シート反映'}
+            </button>
+            <button type="button" className="primary" onClick={() => openSnsPropertyCreate(platform)}>新規登録</button>
           </div>
         </div>
         <div className="table-wrap sns-property-table-wrap">
@@ -2039,7 +2102,7 @@ function App() {
                     <th className="sns-col-check">YouTube WP</th>
                   </>
                 )}
-                <th className="sns-col-date">threads投稿日</th>
+                {!hidesThreadsPostDate && <th className="sns-col-date">threads投稿日</th>}
                 <th className="sns-col-post-text">投稿文</th>
                 <th className="sns-col-actions">操作</th>
               </tr>
@@ -2071,7 +2134,9 @@ function App() {
                       <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
                     </>
                   )}
-                  <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value))}</td>
+                  {!hidesThreadsPostDate && (
+                    <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value))}</td>
+                  )}
                   <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
                   <td className="sns-col-actions">
                     <div className="row-actions">
@@ -2396,6 +2461,72 @@ function App() {
       ...prev,
       [platform]: prev[platform].map((item) => (item.id === id ? { ...item, document_url: value } : item)),
     }))
+  }
+
+  async function syncTiktokPropertiesToSheet() {
+    const confirmed = window.confirm('Karilun｜TikTokの一覧をスプレッドシート「TikTok(K000)」へ上書きしますか？')
+    if (!confirmed) return
+
+    setSnsTiktokSheetSyncing(true)
+    try {
+      const response = await fetch('/api/sync-sns-tiktok-sheet', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; count?: number; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || '反映に失敗しました。')
+      }
+
+      alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '反映に失敗しました。'
+      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+    } finally {
+      setSnsTiktokSheetSyncing(false)
+    }
+  }
+
+  async function syncInstagramPropertiesToSheet() {
+    const confirmed = window.confirm('Karilun｜Instagramの一覧をスプレッドシート「INSTA(G000)」へ上書きしますか？')
+    if (!confirmed) return
+
+    setSnsInstagramSheetSyncing(true)
+    try {
+      const response = await fetch('/api/sync-sns-instagram-sheet', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; count?: number; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || '反映に失敗しました。')
+      }
+
+      alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '反映に失敗しました。'
+      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+    } finally {
+      setSnsInstagramSheetSyncing(false)
+    }
+  }
+
+  async function syncYoutubePropertiesToSheet() {
+    const confirmed = window.confirm('Karilun｜YouTubeの一覧をスプレッドシート「YouTube(R/Y000)」へ上書きしますか？')
+    if (!confirmed) return
+
+    setSnsYoutubeSheetSyncing(true)
+    try {
+      const response = await fetch('/api/sync-sns-youtube-sheet', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; count?: number; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || '反映に失敗しました。')
+      }
+
+      alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '反映に失敗しました。'
+      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+    } finally {
+      setSnsYoutubeSheetSyncing(false)
+    }
   }
 
   async function fetchGoogleUserEmail(token: string) {
@@ -2796,16 +2927,20 @@ function App() {
       console.error('Task Item Insert Error:', error)
       return 
     }
-    notifyTaskEvent({
-      type: 'new',
-      taskName: taskItemForm.name,
-      dueDate: taskItemForm.due_date,
-      workDate: taskItemForm.work_date,
-      priority: taskItemForm.priority,
-      assignees: taskItemForm.assignees,
-      creator: taskItemForm.creator,
-      members,
-    })
+    try {
+      await notifyTaskEvent({
+        type: 'new',
+        taskName: taskItemForm.name,
+        dueDate: taskItemForm.due_date,
+        workDate: taskItemForm.work_date,
+        priority: taskItemForm.priority,
+        assignees: taskItemForm.assignees,
+        creator: taskItemForm.creator,
+        members,
+      })
+    } catch (notifyError) {
+      setTaskError(`タスクは追加されましたが、Slack通知に失敗しました: ${getSlackNotificationErrorMessage(notifyError)}`)
+    }
     setTaskItemForm({ ...defaultTaskItemForm, date: new Date().toISOString().split('T')[0] })
     fetchTaskItems()
     setShowModal(false)
@@ -2831,6 +2966,8 @@ function App() {
         assignees: item.assignees,
         creator: item.creator,
         members,
+      }).catch((notifyError) => {
+        setTaskError(`Slack通知に失敗しました: ${getSlackNotificationErrorMessage(notifyError)}`)
       })
 
       await supabase.from('task_items').update({ completed_notified: true }).eq('id', id)
@@ -2981,6 +3118,8 @@ function App() {
       assignees: selectedAssignees,
       creator: taskItemInlineForm.creator,
       members,
+    }).catch((notifyError) => {
+      setTaskError(`Slack通知に失敗しました: ${getSlackNotificationErrorMessage(notifyError)}`)
     })
 
     if (currentItem && currentItem.status !== '完了' && taskItemInlineForm.status === '完了' && !currentItem.completed_notified) {
@@ -2994,6 +3133,8 @@ function App() {
         assignees: selectedAssignees,
         creator: taskItemInlineForm.creator,
         members,
+      }).catch((notifyError) => {
+        setTaskError(`Slack通知に失敗しました: ${getSlackNotificationErrorMessage(notifyError)}`)
       })
     }
 
@@ -3053,6 +3194,8 @@ function App() {
         assignees: target.assignees,
         creator: target.creator,
         members,
+      }).catch((notifyError) => {
+        setTaskError(`Slack通知に失敗しました: ${getSlackNotificationErrorMessage(notifyError)}`)
       })
     })
 
@@ -3122,24 +3265,287 @@ function App() {
     fetchDm()
   }
 
-  const addTiktokProperty = async () => {
-    await supabase.from('sns_tiktok_properties').insert([defaultTiktokPropertyForm])
-    fetchTiktokProperties()
+  async function getNextSnsPropertyNumber(platform: SnsPropertyPlatform) {
+    if (platform === 'recruitment') return ''
+
+    if (platform === 'tiktok' || platform === 'instagram' || platform === 'youtube') {
+      const tableName =
+        platform === 'tiktok'
+          ? 'sns_tiktok_properties'
+          : platform === 'instagram'
+            ? 'sns_instagram_properties'
+            : 'sns_youtube_properties'
+      const prefix = platform === 'tiktok' ? 'K' : platform === 'instagram' ? 'G' : 'Y'
+      const digits = platform === 'tiktok' ? 4 : 3
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('property_number')
+        .ilike('property_number', `${prefix}%`)
+
+      if (error) throw error
+
+      const maxValue = (data || []).reduce((max, row) => {
+        const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+        return Number.isFinite(value) ? Math.max(max, value) : max
+      }, 0)
+
+      return `${prefix}${String(maxValue + 1).padStart(digits, '0')}`
+    }
+
+    const tableName = storeSnsPropertyTableMap[platform as StoreSnsPropertyPlatform]
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('property_number')
+
+    if (error) throw error
+
+    const maxValue = (data || []).reduce((max, row) => {
+      const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+      return Number.isFinite(value) ? Math.max(max, value) : max
+    }, 0)
+
+    return String(maxValue + 1)
   }
 
-  const addInstagramProperty = async () => {
-    await supabase.from('sns_instagram_properties').insert([defaultInstagramPropertyForm])
-    fetchInstagramProperties()
+  async function openSnsPropertyCreate(platform: SnsPropertyPlatform) {
+    if (platform === 'recruitment') return
+
+    try {
+      const nextPropertyNumber = await getNextSnsPropertyNumber(platform)
+
+      if (platform === 'tiktok') {
+        setTiktokPropertyForm({ ...defaultTiktokPropertyForm, property_number: nextPropertyNumber })
+      } else if (platform === 'instagram') {
+        setInstagramPropertyForm({ ...defaultInstagramPropertyForm, property_number: nextPropertyNumber })
+      } else if (platform === 'youtube') {
+        setYoutubePropertyForm({ ...defaultYoutubePropertyForm, property_number: nextPropertyNumber })
+      } else if (isStoreSnsPropertyPlatform(platform)) {
+        setStoreSnsPropertyForm({ ...defaultStoreSnsPropertyForm, property_number: nextPropertyNumber })
+      }
+
+      setSnsPropertyCreatePlatform(platform)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '番号を作れませんでした。'
+      alert(`番号の自動入力に失敗しました。\n\n${message}`)
+    }
   }
 
-  const addYoutubeProperty = async () => {
-    await supabase.from('sns_youtube_properties').insert([defaultYoutubePropertyForm])
-    fetchYoutubeProperties()
+  function closeSnsPropertyCreate() {
+    setSnsPropertyCreatePlatform(null)
+    setTiktokPropertyForm(defaultTiktokPropertyForm)
+    setInstagramPropertyForm(defaultInstagramPropertyForm)
+    setYoutubePropertyForm(defaultYoutubePropertyForm)
+    setStoreSnsPropertyForm(defaultStoreSnsPropertyForm)
   }
 
-  const addStoreSnsProperty = async (platform: StoreSnsPropertyPlatform) => {
-    await supabase.from(storeSnsPropertyTableMap[platform]).insert([defaultStoreSnsPropertyForm])
-    void fetchStoreSnsProperties(platform)
+  function prepareSnsPropertyPayload<T extends { post_date: string }>(form: T) {
+    return {
+      ...form,
+      post_date: form.post_date || null,
+    }
+  }
+
+  async function saveSnsPropertyCreate(event: React.FormEvent) {
+    event.preventDefault()
+    if (!snsPropertyCreatePlatform || snsPropertyCreatePlatform === 'recruitment') return
+
+    setSnsPropertyCreateSaving(true)
+    try {
+      if (snsPropertyCreatePlatform === 'tiktok') {
+        const { data, error } = await supabase
+          .from('sns_tiktok_properties')
+          .insert([prepareSnsPropertyPayload(tiktokPropertyForm)])
+          .select()
+          .single()
+        if (error || !data) throw new Error(error?.message || 'データを作成できませんでした。')
+        setSnsPropertySearch((prev) => ({ ...prev, tiktok: '' }))
+        setSnsPropertyPage((prev) => ({ ...prev, tiktok: 1 }))
+        setSnsPropertyTotalCount((prev) => ({ ...prev, tiktok: prev.tiktok + 1 }))
+        setTiktokProperties((prev) => [data as TiktokPropertyRecord, ...prev])
+      } else if (snsPropertyCreatePlatform === 'instagram') {
+        const { data, error } = await supabase
+          .from('sns_instagram_properties')
+          .insert([prepareSnsPropertyPayload(instagramPropertyForm)])
+          .select()
+          .single()
+        if (error || !data) throw new Error(error?.message || 'データを作成できませんでした。')
+        setSnsPropertySearch((prev) => ({ ...prev, instagram: '' }))
+        setSnsPropertyPage((prev) => ({ ...prev, instagram: 1 }))
+        setSnsPropertyTotalCount((prev) => ({ ...prev, instagram: prev.instagram + 1 }))
+        setInstagramProperties((prev) => [data as InstagramPropertyRecord, ...prev])
+      } else if (snsPropertyCreatePlatform === 'youtube') {
+        const { data, error } = await supabase
+          .from('sns_youtube_properties')
+          .insert([prepareSnsPropertyPayload(youtubePropertyForm)])
+          .select()
+          .single()
+        if (error || !data) throw new Error(error?.message || 'データを作成できませんでした。')
+        setSnsPropertySearch((prev) => ({ ...prev, youtube: '' }))
+        setSnsPropertyPage((prev) => ({ ...prev, youtube: 1 }))
+        setSnsPropertyTotalCount((prev) => ({ ...prev, youtube: prev.youtube + 1 }))
+        setYoutubeProperties((prev) => [data as YoutubePropertyRecord, ...prev])
+      } else if (isStoreSnsPropertyPlatform(snsPropertyCreatePlatform)) {
+        const platform = snsPropertyCreatePlatform
+        const { data, error } = await supabase
+          .from(storeSnsPropertyTableMap[platform])
+          .insert([storeSnsPropertyForm])
+          .select()
+          .single()
+        if (error || !data) throw new Error(error?.message || 'データを作成できませんでした。')
+        setSnsPropertySearch((prev) => ({ ...prev, [platform]: '' }))
+        setSnsPropertyPage((prev) => ({ ...prev, [platform]: 1 }))
+        setSnsPropertyTotalCount((prev) => ({ ...prev, [platform]: prev[platform] + 1 }))
+        setStoreSnsProperties((prev) => ({
+          ...prev,
+          [platform]: [data as StoreSnsPropertyRecord, ...prev[platform]],
+        }))
+      }
+
+      closeSnsPropertyCreate()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '登録に失敗しました。'
+      alert(`新規登録に失敗しました。\n\n${message}`)
+    } finally {
+      setSnsPropertyCreateSaving(false)
+    }
+  }
+
+  function renderSnsPropertyCreateInput<T extends Record<string, string>>(
+    label: string,
+    field: keyof T,
+    form: T,
+    setForm: React.Dispatch<React.SetStateAction<T>>,
+    options?: { type?: 'text' | 'date'; textarea?: boolean },
+  ) {
+    return (
+      <label className="form-label">
+        {label}
+        {options?.textarea ? (
+          <textarea
+            rows={3}
+            value={form[field] || ''}
+            onChange={(e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))}
+          />
+        ) : (
+          <input
+            type={options?.type || 'text'}
+            value={form[field] || ''}
+            onChange={(e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))}
+          />
+        )}
+      </label>
+    )
+  }
+
+  function renderSnsPropertyCreateSelect<T extends Record<string, string>>(
+    label: string,
+    field: keyof T,
+    form: T,
+    setForm: React.Dispatch<React.SetStateAction<T>>,
+    options: string[],
+  ) {
+    return (
+      <label className="form-label">
+        {label}
+        <select
+          value={form[field] || ''}
+          onChange={(e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))}
+        >
+          <option value="">未設定</option>
+          {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </label>
+    )
+  }
+
+  function renderSnsPropertyCreateFields() {
+    if (snsPropertyCreatePlatform === 'tiktok') {
+      return (
+        <>
+          {renderSnsPropertyCreateInput('メモ', 'memo', tiktokPropertyForm, setTiktokPropertyForm, { textarea: true })}
+          {renderSnsPropertyCreateSelect('WP登録', 'wp_registered', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('wp_registered'))}
+          {renderSnsPropertyCreateSelect('AOS登録', 'aos_registered', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('aos_registered'))}
+          {renderSnsPropertyCreateInput('投稿日', 'post_date', tiktokPropertyForm, setTiktokPropertyForm, { type: 'date' })}
+          {renderSnsPropertyCreateInput('物件番号', 'property_number', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('間取り', 'floor_plan', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('家賃', 'rent', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('エリア', 'area', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('最寄り駅', 'nearest_station', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('資料URL', 'document_url', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('物件名', 'property_name', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('号室', 'room_number', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('住所', 'address', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('管理会社', 'management_company', tiktokPropertyForm, setTiktokPropertyForm)}
+          {renderSnsPropertyCreateInput('連絡先', 'contact', tiktokPropertyForm, setTiktokPropertyForm)}
+        </>
+      )
+    }
+
+    if (snsPropertyCreatePlatform === 'instagram') {
+      return (
+        <>
+          {renderSnsPropertyCreateInput('メモ', 'memo', instagramPropertyForm, setInstagramPropertyForm, { textarea: true })}
+          {renderSnsPropertyCreateSelect('WP登録', 'wp_registered', instagramPropertyForm, setInstagramPropertyForm, getSnsPropertySelectOptions('wp_registered'))}
+          {renderSnsPropertyCreateInput('種別', 'category', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('投稿日', 'post_date', instagramPropertyForm, setInstagramPropertyForm, { type: 'date' })}
+          {renderSnsPropertyCreateInput('物件番号', 'property_number', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('間取り', 'floor_plan', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('家賃', 'rent', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('エリア', 'area', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('最寄り駅', 'nearest_station', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('資料URL', 'document_url', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('物件名', 'property_name', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('号室', 'room_number', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('住所', 'address', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('管理会社', 'management_company', instagramPropertyForm, setInstagramPropertyForm)}
+          {renderSnsPropertyCreateInput('連絡先', 'contact', instagramPropertyForm, setInstagramPropertyForm)}
+        </>
+      )
+    }
+
+    if (snsPropertyCreatePlatform === 'youtube') {
+      return (
+        <>
+          {renderSnsPropertyCreateInput('メモ', 'memo', youtubePropertyForm, setYoutubePropertyForm, { textarea: true })}
+          {renderSnsPropertyCreateSelect('WP登録', 'wp_registered', youtubePropertyForm, setYoutubePropertyForm, getSnsPropertySelectOptions('wp_registered'))}
+          {renderSnsPropertyCreateInput('投稿日', 'post_date', youtubePropertyForm, setYoutubePropertyForm, { type: 'date' })}
+          {renderSnsPropertyCreateInput('物件番号', 'property_number', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateInput('資料URL', 'document_url', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateInput('物件名', 'property_name', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateInput('号室', 'room_number', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateInput('住所', 'address', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateInput('管理会社', 'management_company', youtubePropertyForm, setYoutubePropertyForm)}
+          {renderSnsPropertyCreateInput('連絡先', 'contact', youtubePropertyForm, setYoutubePropertyForm)}
+        </>
+      )
+    }
+
+    if (snsPropertyCreatePlatform && isStoreSnsPropertyPlatform(snsPropertyCreatePlatform)) {
+      const isKeihanKarilun = snsPropertyCreatePlatform === 'keihan-karilun'
+      const hidesThreadsPostDate = snsPropertyCreatePlatform === 'nishinomiya-karilun' || snsPropertyCreatePlatform === 'nishikita'
+
+      return (
+        <>
+          {renderSnsPropertyCreateInput('メモ', 'memo', storeSnsPropertyForm, setStoreSnsPropertyForm, { textarea: true })}
+          {renderSnsPropertyCreateInput('投稿日', 'post_date', storeSnsPropertyForm, setStoreSnsPropertyForm, { type: 'date' })}
+          {renderSnsPropertyCreateInput(isKeihanKarilun ? '場所' : '種別', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm)}
+          {renderSnsPropertyCreateInput('物件名', 'property_name', storeSnsPropertyForm, setStoreSnsPropertyForm)}
+          {renderSnsPropertyCreateInput('号室', 'room_number', storeSnsPropertyForm, setStoreSnsPropertyForm)}
+          {renderSnsPropertyCreateInput('番号', 'property_number', storeSnsPropertyForm, setStoreSnsPropertyForm)}
+          {renderSnsPropertyCreateInput('資料URL', 'document_url', storeSnsPropertyForm, setStoreSnsPropertyForm)}
+          {renderSnsPropertyCreateSelect('Tiktok予約', 'tiktok_reserved', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('tiktok_reserved'))}
+          {renderSnsPropertyCreateSelect('TiktokWP', 'tiktok_wp', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('tiktok_wp'))}
+          {renderSnsPropertyCreateSelect('INSTA予約', 'instagram_reserved', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('instagram_reserved'))}
+          {renderSnsPropertyCreateSelect('INSTA WP', 'instagram_wp', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('instagram_wp'))}
+          {!isKeihanKarilun && renderSnsPropertyCreateSelect('YouTube予約', 'youtube_reserved', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('youtube_reserved'))}
+          {!isKeihanKarilun && renderSnsPropertyCreateSelect('YouTube WP', 'youtube_wp', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('youtube_wp'))}
+          {!hidesThreadsPostDate && renderSnsPropertyCreateSelect('threads投稿日', 'threads_post_date', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('threads_post_date'))}
+          {renderSnsPropertyCreateSelect('投稿文', 'post_text', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('post_text'))}
+        </>
+      )
+    }
+
+    return null
   }
 
   // ===== ストック管理ハンドラー =====
@@ -3770,6 +4176,7 @@ function App() {
                 完了表示
               </label>
             </div>
+            {taskError && <p className="error-msg">{taskError}</p>}
 
             {/* タスク一覧テーブル */}
             <section className="panel tm-table-panel">
@@ -4142,7 +4549,15 @@ function App() {
                     {snsPropertySearch.tiktok && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('tiktok', '')}>×</button>
                     )}
-                    <button className="primary" onClick={addTiktokProperty}>＋ 行を追加</button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncTiktokPropertiesToSheet()}
+                      disabled={snsTiktokSheetSyncing}
+                    >
+                      {snsTiktokSheetSyncing ? '反映中...' : 'シート反映'}
+                    </button>
+                    <button type="button" className="primary" onClick={() => openSnsPropertyCreate('tiktok')}>新規登録</button>
                   </div>
                 </div>
                 <div className="table-wrap sns-property-table-wrap">
@@ -4217,7 +4632,15 @@ function App() {
                     {snsPropertySearch.instagram && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('instagram', '')}>×</button>
                     )}
-                    <button className="primary" onClick={addInstagramProperty}>＋ 行を追加</button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncInstagramPropertiesToSheet()}
+                      disabled={snsInstagramSheetSyncing}
+                    >
+                      {snsInstagramSheetSyncing ? '反映中...' : 'シート反映'}
+                    </button>
+                    <button type="button" className="primary" onClick={() => openSnsPropertyCreate('instagram')}>新規登録</button>
                   </div>
                 </div>
                 <div className="table-wrap sns-property-table-wrap">
@@ -4285,7 +4708,15 @@ function App() {
                     {snsPropertySearch.youtube && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('youtube', '')}>×</button>
                     )}
-                    <button className="primary" onClick={addYoutubeProperty}>＋ 行を追加</button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncYoutubePropertiesToSheet()}
+                      disabled={snsYoutubeSheetSyncing}
+                    >
+                      {snsYoutubeSheetSyncing ? '反映中...' : 'シート反映'}
+                    </button>
+                    <button type="button" className="primary" onClick={() => openSnsPropertyCreate('youtube')}>新規登録</button>
                   </div>
                 </div>
                 <div className="table-wrap sns-property-table-wrap">
@@ -4405,6 +4836,31 @@ function App() {
               </div>
             </section>
           </>
+        )}
+
+        {snsPropertyCreatePlatform && snsPropertyCreatePlatform !== 'recruitment' && (
+          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeSnsPropertyCreate() }}>
+            <div className="modal-content sns-property-create-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">
+                  {snsPropertyTabs.find((tab) => tab.key === snsPropertyCreatePlatform)?.title || 'SNS物件管理'} 新規登録
+                </h3>
+                <button className="modal-close" onClick={closeSnsPropertyCreate}>×</button>
+              </div>
+
+              <form className="data-form sns-property-create-form" onSubmit={saveSnsPropertyCreate}>
+                {renderSnsPropertyCreateFields()}
+                <div className="form-actions sns-property-create-actions">
+                  <button type="submit" className="primary" disabled={snsPropertyCreateSaving}>
+                    {snsPropertyCreateSaving ? '登録中...' : '登録する'}
+                  </button>
+                  <button type="button" className="secondary" onClick={closeSnsPropertyCreate} disabled={snsPropertyCreateSaving}>
+                    キャンセル
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
 
         {/* SNS物件管理メモポップアップ */}
