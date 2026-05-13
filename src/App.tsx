@@ -5069,6 +5069,7 @@ function App() {
                 <table className="compact-list-table">
                   <thead>
                     <tr>
+                      <th>操作</th>
                       <th>確認</th>
                       <th>反響日</th>
                       <th>顧客名</th>
@@ -5081,7 +5082,6 @@ function App() {
                       <th>送客先店舗</th>
                       <th>希望エリア</th>
                       <th>備考</th>
-                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5097,6 +5097,21 @@ function App() {
                           className={isEditing ? 'row-editing' : (r.store === '対象外' || r.store === '重複') ? 'row-gray' : checkedHankyoIds.has(r.id) ? 'row-yellow' : 'row-hoverable'}
                           onClick={() => { if (!isEditing) startHankyoInline(r) }}
                         >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="row-actions">
+                              {isEditing ? (
+                                <>
+                                  <button className="primary" onClick={saveHankyoInline}>保存</button>
+                                  <button className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
+                                  <button className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
+                                </>
+                              )}
+                            </div>
+                          </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
@@ -5164,21 +5179,6 @@ function App() {
                             {isEditing
                               ? <input className="inline-input" value={f.note} onChange={(e) => setHankyoInlineForm({ ...f, note: e.target.value })} />
                               : <span className="cell-truncate" title={r.note}>{r.note}</span>}
-                          </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <div className="row-actions">
-                              {isEditing ? (
-                                <>
-                                  <button className="primary" onClick={saveHankyoInline}>保存</button>
-                                  <button className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
-                                </>
-                              ) : (
-                                <>
-                                  <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
-                                </>
-                              )}
-                            </div>
                           </td>
                         </tr>
                       )
