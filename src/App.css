@@ -5125,6 +5125,142 @@ button.secondary.small {
   font-weight: 700;
 }
 
+/* 総管理パネル */
+.sokanri-panel {
+  padding: 16px;
+}
+
+.sokanri-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sokanri-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.sokanri-settings-btn {
+  padding: 6px 14px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.sokanri-settings-btn:hover {
+  background: #f0f0f0;
+}
+
+.sokanri-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.sokanri-table th,
+.sokanri-table td {
+  border: 1px solid #ddd;
+  padding: 6px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sokanri-th-account,
+.sokanri-td-account {
+  text-align: left;
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.sokanri-th-platform,
+.sokanri-td-platform {
+  min-width: 90px;
+}
+
+.sokanri-th-day {
+  min-width: 60px;
+}
+
+.sokanri-day-label {
+  font-size: 11px;
+  color: #666;
+}
+
+.sokanri-sunday {
+  color: #c0392b;
+}
+
+.sokanri-saturday {
+  color: #2980b9;
+}
+
+.sokanri-platform-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sokanri-status-done {
+  font-size: 16px;
+}
+
+.sokanri-status-warn {
+  font-size: 16px;
+  background: #fff3cd;
+}
+
+.sokanri-status-none {
+  color: #ccc;
+}
+
+.sokanri-settings-modal {
+  max-width: 900px;
+  width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.sokanri-settings-desc {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 12px;
+}
+
+.sokanri-settings-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.sokanri-settings-table th,
+.sokanri-settings-table td {
+  border: 1px solid #ddd;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.sokanri-settings-table th:first-child,
+.sokanri-settings-table td:first-child {
+  text-align: left;
+}
+
+.sokanri-settings-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.sokanri-settings-body {
+  padding: 8px 0;
+}
+
 .empty-state {
   padding: 40px 24px;
   text-align: center;

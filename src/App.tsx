@@ -197,6 +197,7 @@ type DMRecord = {
 }
 
 type SnsPropertyPlatform =
+  | 'sokanri'
   | 'tiktok'
   | 'instagram'
   | 'youtube'
@@ -216,6 +217,11 @@ type SnsPropertyTableName =
   | 'sns_nagase_properties'
   | 'sns_nishikita_properties'
   | 'sns_yao_properties'
+
+type SnsPostingRule = {
+  account_platform_key: string
+  day_of_week: number
+}
 
 type SnsMemoEditorState = {
   tableName: SnsPropertyTableName
@@ -625,6 +631,7 @@ const defaultStoreSnsPropertyForm: Omit<StoreSnsPropertyRecord, 'id' | 'created_
 }
 
 const snsPropertyTabs: SnsPropertyTab[] = [
+  { key: 'sokanri', label: '総管理', title: '総管理', status: 'ready' },
   { key: 'tiktok', label: 'Karilun｜TikTok', title: 'Karilun｜TikTok 物件管理', status: 'ready' },
   { key: 'instagram', label: 'Karilun｜Instagram', title: 'Karilun｜Instagram 物件管理', status: 'ready' },
   { key: 'youtube', label: 'Karilun｜YouTube', title: 'Karilun｜YouTube 物件管理', status: 'ready' },
@@ -635,6 +642,34 @@ const snsPropertyTabs: SnsPropertyTab[] = [
   { key: 'yao', label: '八尾店', title: '八尾店 物件管理', status: 'ready' },
   { key: 'recruitment', label: '採用', title: '採用 物件管理', status: 'placeholder' },
 ]
+
+const SOKANRI_ROWS = [
+  { apKey: 'karilun-tiktok', account: 'Karilun', platform: 'TikTok', accountColor: '#EBF5FB' },
+  { apKey: 'karilun-instagram', account: 'Karilun', platform: 'Instagram', accountColor: '#EBF5FB' },
+  { apKey: 'karilun-youtube', account: 'Karilun', platform: 'YouTube', accountColor: '#EBF5FB' },
+  { apKey: 'keihan-tiktok', account: '京阪かりるん', platform: 'TikTok', accountColor: '#EAF4F4' },
+  { apKey: 'keihan-instagram', account: '京阪かりるん', platform: 'Instagram', accountColor: '#EAF4F4' },
+  { apKey: 'nishinomiya-tiktok', account: '西宮かりるん', platform: 'TikTok', accountColor: '#F4ECF7' },
+  { apKey: 'nishinomiya-instagram', account: '西宮かりるん', platform: 'Instagram', accountColor: '#F4ECF7' },
+  { apKey: 'nishinomiya-youtube', account: '西宮かりるん', platform: 'YouTube', accountColor: '#F4ECF7' },
+  { apKey: 'nagase-tiktok', account: '長瀬店', platform: 'TikTok', accountColor: '#FEF9E7' },
+  { apKey: 'nagase-instagram', account: '長瀬店', platform: 'Instagram', accountColor: '#FEF9E7' },
+  { apKey: 'nagase-youtube', account: '長瀬店', platform: 'YouTube', accountColor: '#FEF9E7' },
+  { apKey: 'nishikita-tiktok', account: '西北店', platform: 'TikTok', accountColor: '#FEF5E4' },
+  { apKey: 'nishikita-instagram', account: '西北店', platform: 'Instagram', accountColor: '#FEF5E4' },
+  { apKey: 'nishikita-youtube', account: '西北店', platform: 'YouTube', accountColor: '#FEF5E4' },
+  { apKey: 'yao-tiktok', account: '八尾店', platform: 'TikTok', accountColor: '#F9EBF8' },
+  { apKey: 'yao-instagram', account: '八尾店', platform: 'Instagram', accountColor: '#F9EBF8' },
+  { apKey: 'yao-youtube', account: '八尾店', platform: 'YouTube', accountColor: '#F9EBF8' },
+]
+
+const PLATFORM_LABEL_STYLE: Record<string, { bg: string; color: string }> = {
+  TikTok: { bg: '#010101', color: '#fff' },
+  Instagram: { bg: '#C13584', color: '#fff' },
+  YouTube: { bg: '#FF0000', color: '#fff' },
+}
+
+const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
 const storeSnsPropertyPlatforms: StoreSnsPropertyPlatform[] = [
   'keihan-karilun',
@@ -1461,7 +1496,7 @@ function App() {
   const [dmAccountFilter, setDmAccountFilter] = useState('all')
   const [dmPage, setDmPage] = useState(1)
   const [dmAreaLoading, setDmAreaLoading] = useState(false)
-  const [activeSnsPropertyPlatform, setActiveSnsPropertyPlatform] = useState<SnsPropertyPlatform>('tiktok')
+  const [activeSnsPropertyPlatform, setActiveSnsPropertyPlatform] = useState<SnsPropertyPlatform>('sokanri')
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
   const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
   const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
@@ -1473,6 +1508,7 @@ function App() {
     yao: [],
   })
   const [snsPropertySearch, setSnsPropertySearch] = useState<Record<SnsPropertyPlatform, string>>({
+    sokanri: '',
     tiktok: '',
     instagram: '',
     youtube: '',
@@ -1484,6 +1520,7 @@ function App() {
     recruitment: '',
   })
   const [snsPropertyPage, setSnsPropertyPage] = useState<Record<SnsPropertyPlatform, number>>({
+    sokanri: 1,
     tiktok: 1,
     instagram: 1,
     youtube: 1,
@@ -1495,6 +1532,7 @@ function App() {
     recruitment: 1,
   })
   const [snsPropertyTotalCount, setSnsPropertyTotalCount] = useState<Record<SnsPropertyPlatform, number>>({
+    sokanri: 0,
     tiktok: 0,
     instagram: 0,
     youtube: 0,
@@ -1562,6 +1600,10 @@ function App() {
   const [snsInstagramSheetSyncing, setSnsInstagramSheetSyncing] = useState(false)
   const [snsYoutubeSheetSyncing, setSnsYoutubeSheetSyncing] = useState(false)
   const [storeSnsSheetSyncing, setStoreSnsSheetSyncing] = useState<StoreSnsPropertyPlatform | null>(null)
+  const [snsPostingRules, setSnsPostingRules] = useState<SnsPostingRule[]>([])
+  const [sokanriData, setSokanriData] = useState<Record<string, string[]>>({})
+  const [sokanriLoading, setSokanriLoading] = useState(false)
+  const [sokanriSettingsOpen, setSokanriSettingsOpen] = useState(false)
 
   // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
@@ -1835,6 +1877,112 @@ function App() {
   const isStoreSnsPropertyPlatform = useCallback((platform: SnsPropertyPlatform): platform is StoreSnsPropertyPlatform => {
     return storeSnsPropertyPlatforms.includes(platform as StoreSnsPropertyPlatform)
   }, [])
+
+  const fetchSokanriData = useCallback(async () => {
+    setSokanriLoading(true)
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    const end = new Date(today)
+    end.setDate(end.getDate() + 6)
+    const endStr = end.toISOString().slice(0, 10)
+
+    const { data: rules } = await supabase.from('sns_posting_rules').select('*')
+    setSnsPostingRules((rules || []) as SnsPostingRule[])
+
+    const result: Record<string, string[]> = {}
+    const karilunMap = [
+      { key: 'karilun-tiktok', table: 'sns_tiktok_properties' },
+      { key: 'karilun-instagram', table: 'sns_instagram_properties' },
+      { key: 'karilun-youtube', table: 'sns_youtube_properties' },
+    ]
+
+    for (const { key, table } of karilunMap) {
+      const { data } = await supabase
+        .from(table)
+        .select('post_date')
+        .gte('post_date', todayStr)
+        .lte('post_date', endStr)
+
+      result[key] = ((data || []) as { post_date?: string | null }[])
+        .map((row) => row.post_date?.slice(0, 10))
+        .filter((date): date is string => Boolean(date))
+    }
+
+    const storeMap = [
+      { accountKey: 'keihan', table: 'sns_keihan_karilun_properties', platforms: ['tiktok', 'instagram'] },
+      { accountKey: 'nishinomiya', table: 'sns_nishinomiya_karilun_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
+      { accountKey: 'nagase', table: 'sns_nagase_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
+      { accountKey: 'nishikita', table: 'sns_nishikita_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
+      { accountKey: 'yao', table: 'sns_yao_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
+    ]
+    const reservedColMap: Record<string, 'tiktok_reserved' | 'instagram_reserved' | 'youtube_reserved'> = {
+      tiktok: 'tiktok_reserved',
+      instagram: 'instagram_reserved',
+      youtube: 'youtube_reserved',
+    }
+
+    for (const { accountKey, table, platforms } of storeMap) {
+      const { data: rows } = await supabase
+        .from(table)
+        .select('post_date,tiktok_reserved,instagram_reserved,youtube_reserved')
+        .gte('post_date', todayStr)
+        .lte('post_date', endStr)
+
+      const typedRows = (rows || []) as {
+        post_date?: string | null
+        tiktok_reserved?: string | null
+        instagram_reserved?: string | null
+        youtube_reserved?: string | null
+      }[]
+
+      for (const platform of platforms) {
+        const apKey = `${accountKey}-${platform}`
+        const col = reservedColMap[platform]
+        const byDate: Record<string, typeof typedRows> = {}
+        for (const row of typedRows) {
+          const date = row.post_date?.slice(0, 10)
+          if (!date) continue
+          if (!byDate[date]) byDate[date] = []
+          byDate[date].push(row)
+        }
+
+        const doneDates: string[] = []
+        for (const [date, dateRows] of Object.entries(byDate)) {
+          const allDone = dateRows.every((row) => row[col] && String(row[col]).includes('〇'))
+          if (allDone) doneDates.push(date)
+        }
+        result[apKey] = doneDates
+      }
+    }
+
+    setSokanriData(result)
+    setSokanriLoading(false)
+  }, [])
+
+  async function saveSokanriRule(apKey: string, dayOfWeek: number, checked: boolean) {
+    if (checked) {
+      await supabase.from('sns_posting_rules').upsert({ account_platform_key: apKey, day_of_week: dayOfWeek })
+    } else {
+      await supabase.from('sns_posting_rules').delete().eq('account_platform_key', apKey).eq('day_of_week', dayOfWeek)
+    }
+    const { data } = await supabase.from('sns_posting_rules').select('*')
+    setSnsPostingRules((data || []) as SnsPostingRule[])
+  }
+
+  function getSokanriCellStatus(apKey: string, date: Date): '✅' | '⚠️' | '─' {
+    const dayOfWeek = date.getDay()
+    const hasRule = snsPostingRules.some((rule) => rule.account_platform_key === apKey && rule.day_of_week === dayOfWeek)
+    if (!hasRule) return '─'
+    const dateStr = date.toISOString().slice(0, 10)
+    const done = (sokanriData[apKey] || []).includes(dateStr)
+    return done ? '✅' : '⚠️'
+  }
+
+  const sokanriDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date()
+    date.setDate(date.getDate() + index)
+    return date
+  })
 
   async function fetchStock() {
     const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
@@ -2901,6 +3049,10 @@ function App() {
   useEffect(() => {
     if (!currentUserEmail || activePage !== 'snsproperty') return
 
+    if (activeSnsPropertyPlatform === 'sokanri') {
+      void fetchSokanriData()
+      return
+    }
     if (activeSnsPropertyPlatform === 'tiktok') {
       void fetchTiktokProperties()
       return
@@ -2920,6 +3072,7 @@ function App() {
     activePage,
     activeSnsPropertyPlatform,
     currentUserEmail,
+    fetchSokanriData,
     fetchStoreSnsProperties,
     fetchInstagramProperties,
     fetchTiktokProperties,
@@ -4740,6 +4893,114 @@ function App() {
                 >{tab.label}</button>
               ))}
             </div>
+
+            {activeSnsPropertyPlatform === 'sokanri' && (
+              <section className="panel table-panel sokanri-panel">
+                <div className="sokanri-header">
+                  <h2>総管理</h2>
+                  <button type="button" className="sokanri-settings-btn" onClick={() => setSokanriSettingsOpen(true)}>
+                    ⚙ 投稿ルール設定
+                  </button>
+                </div>
+
+                {sokanriLoading ? (
+                  <div>読み込み中...</div>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="sokanri-table">
+                      <thead>
+                        <tr>
+                          <th className="sokanri-th-account">アカウント</th>
+                          <th className="sokanri-th-platform">媒体</th>
+                          {sokanriDays.map((date) => (
+                            <th
+                              key={date.toISOString()}
+                              className={`sokanri-th-day${date.getDay() === 0 ? ' sokanri-sunday' : date.getDay() === 6 ? ' sokanri-saturday' : ''}`}
+                            >
+                              <div>{date.getMonth() + 1}/{date.getDate()}</div>
+                              <div className="sokanri-day-label">{DAY_LABELS[date.getDay()]}</div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {SOKANRI_ROWS.map((row) => {
+                          const platStyle = PLATFORM_LABEL_STYLE[row.platform]
+                          return (
+                            <tr key={row.apKey} style={{ backgroundColor: row.accountColor }}>
+                              <td className="sokanri-td-account">{row.account}</td>
+                              <td className="sokanri-td-platform">
+                                <span className="sokanri-platform-badge" style={{ backgroundColor: platStyle.bg, color: platStyle.color }}>
+                                  {row.platform}
+                                </span>
+                              </td>
+                              {sokanriDays.map((date) => {
+                                const status = getSokanriCellStatus(row.apKey, date)
+                                return (
+                                  <td
+                                    key={date.toISOString()}
+                                    className={`sokanri-td-cell sokanri-status-${status === '✅' ? 'done' : status === '⚠️' ? 'warn' : 'none'}`}
+                                  >
+                                    {status}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {sokanriSettingsOpen && (
+                  <div className="modal-overlay" onClick={() => setSokanriSettingsOpen(false)}>
+                    <div className="modal-content sokanri-settings-modal" onClick={(event) => event.stopPropagation()}>
+                      <div className="modal-header">
+                        <h3 className="modal-title">投稿ルール設定</h3>
+                        <button className="modal-close" onClick={() => setSokanriSettingsOpen(false)}>×</button>
+                      </div>
+                      <div className="sokanri-settings-body">
+                        <p className="sokanri-settings-desc">各アカウント×媒体の投稿曜日にチェックを入れてください。</p>
+                        <table className="sokanri-settings-table">
+                          <thead>
+                            <tr>
+                              <th>アカウント</th>
+                              <th>媒体</th>
+                              {DAY_LABELS.map((label, index) => <th key={index}>{label}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {SOKANRI_ROWS.map((row) => (
+                              <tr key={row.apKey} style={{ backgroundColor: row.accountColor }}>
+                                <td>{row.account}</td>
+                                <td>
+                                  <span className="sokanri-platform-badge" style={{ backgroundColor: PLATFORM_LABEL_STYLE[row.platform].bg, color: PLATFORM_LABEL_STYLE[row.platform].color }}>
+                                    {row.platform}
+                                  </span>
+                                </td>
+                                {[0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
+                                  const checked = snsPostingRules.some((rule) => rule.account_platform_key === row.apKey && rule.day_of_week === dayOfWeek)
+                                  return (
+                                    <td key={dayOfWeek} className="sokanri-settings-check">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(event) => void saveSokanriRule(row.apKey, dayOfWeek, event.target.checked)}
+                                      />
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
 
             {activeSnsPropertyPlatform === 'tiktok' && (
               <section className="panel table-panel">
