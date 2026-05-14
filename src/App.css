@@ -4544,6 +4544,14 @@ button.secondary.small {
   white-space: nowrap;
 }
 
+.task-report-day-summary-card small {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
 .task-report-day-summary-card.member-0 {
   background: linear-gradient(180deg, #fbfbfb 0%, #ececec 100%);
   border-color: #d1d1d1;

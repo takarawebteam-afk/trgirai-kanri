@@ -397,6 +397,13 @@ const STOCK_ATTENDANCE_MEMBERS = [
   { name: '吉田', badge: '吉', calendarId: 'takarabaito1@gmail.com' },
 ] as const
 const STOCK_HONMACHI_MEMBER = { name: '新居', badge: '新', calendarId: 'trg.yshini@gmail.com' } as const
+const TASK_REPORT_WORK_MINUTES: Record<string, number> = {
+  泉: 480,
+  坂本: 480,
+  吉田: 330,
+}
+const TASK_REPORT_NII_HONMACHI_MINUTES = 480
+const TASK_REPORT_NII_HONSHA_TO_HONMACHI_MINUTES = 300
 
 const DEFAULT_TASK_REPORT_CATEGORIES = [
   {
@@ -6962,6 +6969,37 @@ function formatTaskReportChartAxis(value: number, metric: 'count' | 'minutes') {
   return `${Math.round((value / 60) * 10) / 10}h`
 }
 
+function getTaskReportMonthKeys(startDate: string, endDate: string) {
+  if (!startDate || !endDate || startDate > endDate) return []
+
+  const months: string[] = []
+  const cursor = new Date(`${startDate.slice(0, 7)}-01T00:00:00`)
+  const limit = new Date(`${endDate.slice(0, 7)}-01T00:00:00`)
+
+  while (cursor <= limit) {
+    months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`)
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  return months
+}
+
+function getTaskReportWorkMinutes(memberName: string, summaries: string[]) {
+  const normalizedSummaries = summaries.map((summary) => normalizeTaskReportText(summary))
+  const hasDayOff = normalizedSummaries.some((summary) => summary.includes('公休'))
+  if (hasDayOff) return 0
+
+  if (memberName === STOCK_HONMACHI_MEMBER.name) {
+    const hasHonshaToHonmachi = normalizedSummaries.some((summary) => summary.includes('本社→本町') || summary.includes('本社本町'))
+    if (hasHonshaToHonmachi) return TASK_REPORT_NII_HONSHA_TO_HONMACHI_MINUTES
+
+    const hasHonmachi = normalizedSummaries.some((summary) => summary.includes('本町'))
+    return hasHonmachi ? TASK_REPORT_NII_HONMACHI_MINUTES : 0
+  }
+
+  return TASK_REPORT_WORK_MINUTES[memberName] || 0
+}
+
 function TaskReportPanel() {
   const today = new Date().toISOString().slice(0, 10)
   const firstDayOfMonth = `${today.slice(0, 8)}01`
@@ -6982,6 +7020,7 @@ function TaskReportPanel() {
   const [categoryModalSaving, setCategoryModalSaving] = useState(false)
   const [categoryModalError, setCategoryModalError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState({ id: '', name: '', keywords: '' })
+  const [workMinutesByDate, setWorkMinutesByDate] = useState<Record<string, Record<string, number>>>({})
   const categoryOptions = getTaskReportCategoryOptions(categoryMasters)
 
   const loadCategoryMasters = useCallback(async () => {
@@ -7105,6 +7144,89 @@ function TaskReportPanel() {
     setLoading(false)
   }, [categoryMasters, endDate, startDate])
 
+  const fetchWorkMinutes = useCallback(async (yearMonth: string) => {
+    const token = getSavedToken()
+    if (!token) {
+      setWorkMinutesByDate({})
+      return
+    }
+
+    const [year, month] = yearMonth.split('-').map(Number)
+    const startDateText = `${year}-${String(month).padStart(2, '0')}-01`
+    const endDateText = `${month === 12 ? year + 1 : year}-${String(month === 12 ? 1 : month + 1).padStart(2, '0')}-01`
+    const monthLastDay = new Date(year, month, 0).getDate()
+    const dateTexts = Array.from({ length: monthLastDay }, (_, index) => (
+      `${year}-${String(month).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`
+    ))
+    const summariesByMember: Record<string, Record<string, string[]>> = {}
+    const loadedCalendarIds = new Set<string>()
+    const formatJapanDate = (dateTime: string) => {
+      const parts = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(new Date(dateTime))
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+      return `${values.year}-${values.month}-${values.day}`
+    }
+
+    await Promise.all(
+      TEAM_MEMBER_OPTIONS.map(async (member) => {
+        try {
+          const params = new URLSearchParams({
+            timeMin: `${startDateText}T00:00:00+09:00`,
+            timeMax: `${endDateText}T00:00:00+09:00`,
+            timeZone: 'Asia/Tokyo',
+            singleEvents: 'true',
+            orderBy: 'startTime',
+            maxResults: '2500',
+          })
+          const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?${params.toString()}`
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+          if (res.status === 401) {
+            clearToken()
+            return
+          }
+          if (!res.ok) return
+
+          const data = await res.json() as {
+            items?: { summary?: string; start?: { dateTime?: string; date?: string } }[]
+          }
+          loadedCalendarIds.add(member.calendarId)
+          const summariesByDate: Record<string, string[]> = {}
+          ;(data.items || []).forEach((event) => {
+            const dateText = event.start?.date
+              || (event.start?.dateTime ? formatJapanDate(event.start.dateTime) : '')
+            if (!dateText) return
+            if (!summariesByDate[dateText]) summariesByDate[dateText] = []
+            summariesByDate[dateText].push(event.summary || '')
+          })
+          summariesByMember[member.calendarId] = summariesByDate
+        } catch {
+          summariesByMember[member.calendarId] = {}
+        }
+      }),
+    )
+
+    const nextWorkMinutesByDate: Record<string, Record<string, number>> = {}
+    dateTexts.forEach((dateText) => {
+      const dayMinutes: Record<string, number> = {}
+      TEAM_MEMBER_OPTIONS.forEach((member) => {
+        const summaries = summariesByMember[member.calendarId]?.[dateText] || []
+        dayMinutes[member.name] = loadedCalendarIds.has(member.calendarId)
+          ? getTaskReportWorkMinutes(member.name, summaries)
+          : 0
+      })
+      nextWorkMinutesByDate[dateText] = dayMinutes
+    })
+
+    setWorkMinutesByDate((current) => ({
+      ...current,
+      ...nextWorkMinutesByDate,
+    }))
+  }, [])
+
   useEffect(() => {
     loadCategoryMasters()
   }, [loadCategoryMasters])
@@ -7114,25 +7236,52 @@ function TaskReportPanel() {
     fetchReport()
   }, [categoryMastersReady, fetchReport])
 
+  useEffect(() => {
+    void fetchWorkMinutes(listMonth)
+  }, [fetchWorkMinutes, listMonth])
+
+  useEffect(() => {
+    getTaskReportMonthKeys(startDate, endDate).forEach((month) => {
+      void fetchWorkMinutes(month)
+    })
+  }, [endDate, fetchWorkMinutes, startDate])
+
   const memberNames = TEAM_MEMBER_OPTIONS.map((member) => member.name)
+  const reportDateTexts = (() => {
+    if (!startDate || !endDate || startDate > endDate) return []
+    const dates: string[] = []
+    const cursor = new Date(`${startDate}T00:00:00`)
+    const limit = new Date(`${endDate}T00:00:00`)
+    while (cursor <= limit) {
+      dates.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`)
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return dates
+  })()
   const totalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0)
   const perMember = TEAM_MEMBER_OPTIONS.map((member) => {
     const memberRows = rows.filter((row) => row.member_name === member.name)
     const minutes = memberRows.reduce((sum, row) => sum + row.minutes, 0)
+    const workMinutes = reportDateTexts.reduce((sum, dateText) => sum + (workMinutesByDate[dateText]?.[member.name] || 0), 0)
     return {
       name: member.name,
       count: memberRows.length,
       minutes,
+      workMinutes,
       averageMinutes: memberRows.length > 0 ? Math.round(minutes / memberRows.length) : 0,
+      utilization: workMinutes > 0 ? Math.round((minutes / workMinutes) * 100) : null,
     }
   })
+  const totalWorkMinutes = perMember.reduce((sum, member) => sum + member.workMinutes, 0)
 
   const summaryCards = [
     {
       name: 'WEBチーム全体',
       count: rows.length,
       minutes: totalMinutes,
+      workMinutes: totalWorkMinutes,
       averageMinutes: rows.length > 0 ? Math.round(totalMinutes / rows.length) : 0,
+      utilization: totalWorkMinutes > 0 ? Math.round((totalMinutes / totalWorkMinutes) * 100) : null,
       tone: 'total',
     },
     ...perMember.map((member, index) => ({
@@ -7278,7 +7427,8 @@ function TaskReportPanel() {
 
     return {
       name: member.name,
-      minutes: totalMinutes,
+      taskMinutes: totalMinutes,
+      workMinutes: workMinutesByDate[listDate]?.[member.name] || 0,
     }
   })
 
@@ -7424,8 +7574,12 @@ function TaskReportPanel() {
             <article key={member.name} className={`task-report-member-card ${member.tone}`}>
               <span>{member.name}</span>
               <strong>{member.count}件</strong>
-              <p>{formatTaskReportTime(member.minutes)}</p>
-              <small>平均 {member.averageMinutes}分/件</small>
+              <p>仕事時間 {formatTaskReportTime(member.minutes)}</p>
+              <small>勤務時間 {formatTaskReportTime(member.workMinutes)}</small>
+              <small>
+                平均 {member.averageMinutes}分/件
+                {member.utilization != null ? ` / 業務占有率 ${member.utilization}%` : ''}
+              </small>
             </article>
           ))}
         </div>
@@ -7631,7 +7785,8 @@ function TaskReportPanel() {
               {filteredRowMemberSummaries.map((member, index) => (
                 <div key={member.name} className={`task-report-day-summary-card member-${index}`}>
                   <span>{member.name}</span>
-                  <strong>{formatTaskReportTime(member.minutes)}</strong>
+                  <strong>{formatTaskReportTime(member.taskMinutes)}</strong>
+                  <small>勤務時間 {formatTaskReportTime(member.workMinutes)}</small>
                 </div>
               ))}
             </div>
