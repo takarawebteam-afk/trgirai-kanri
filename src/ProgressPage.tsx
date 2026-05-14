@@ -60,6 +60,11 @@ type ProgressTextCellInputProps = {
   value: string
   placeholder?: string
   className?: string
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
+  lang?: string
+  autoCapitalize?: React.HTMLAttributes<HTMLInputElement>['autoCapitalize']
+  autoCorrect?: string
+  spellCheck?: boolean
   onSave: (value: string) => void | Promise<void>
 }
 
@@ -219,6 +224,66 @@ function getRegisterGroupByField(field: 'wp_registered' | 'aos_registered' | 'yo
   return 'register_youtube' as const
 }
 
+const FULL_WIDTH_PROGRESS_FIELDS: (keyof ProductionRecord)[] = [
+  'property_name',
+  'property_address',
+  'area',
+  'nearest_station',
+  'management_company',
+  'memo',
+  'audio_source',
+  'post_text',
+]
+
+const HALF_WIDTH_PROGRESS_FIELDS: (keyof ProductionRecord)[] = [
+  'room_number',
+  'floor_plan',
+  'contact_info',
+]
+
+function toFullWidthAscii(value: string) {
+  return value
+    .replace(/ /g, '　')
+    .replace(/[!-~]/g, (char) => String.fromCharCode(char.charCodeAt(0) + 0xfee0))
+}
+
+function toHalfWidthAscii(value: string) {
+  return value
+    .replace(/　/g, ' ')
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+}
+
+function formatRentValue(value: string) {
+  const normalized = toHalfWidthAscii(value).replace(/,/g, '').trim()
+  if (!normalized) return ''
+  if (!/^\d+$/.test(normalized)) return normalized
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+function normalizeProgressFieldValue(field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
+  if (typeof value !== 'string') return value
+  if (field === 'rent') return formatRentValue(value)
+  if (FULL_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toFullWidthAscii(value)
+  if (HALF_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toHalfWidthAscii(value).trim()
+  return value
+}
+
+function getProgressTextInputProps(field: keyof ProductionRecord) {
+  if (field === 'rent') {
+    return { inputMode: 'numeric' as const, autoCapitalize: 'off' as const, autoCorrect: 'off', spellCheck: false }
+  }
+
+  if (HALF_WIDTH_PROGRESS_FIELDS.includes(field)) {
+    return { inputMode: 'text' as const, autoCapitalize: 'off' as const, autoCorrect: 'off', spellCheck: false }
+  }
+
+  if (FULL_WIDTH_PROGRESS_FIELDS.includes(field)) {
+    return { inputMode: 'text' as const, lang: 'ja' }
+  }
+
+  return {}
+}
+
 function getProcessGroupByField(field: ProcessField) {
   return PROCESS_FIELD_GROUPS[field]
 }
@@ -272,6 +337,11 @@ function ProgressTextCellInput({
   value,
   placeholder = '',
   className = 'progress-cell-input',
+  inputMode,
+  lang,
+  autoCapitalize,
+  autoCorrect,
+  spellCheck,
   onSave,
 }: ProgressTextCellInputProps) {
   const [draft, setDraft] = useState(value)
@@ -302,6 +372,11 @@ function ProgressTextCellInput({
         className={className}
         value={draft}
         placeholder={placeholder}
+        inputMode={inputMode}
+        lang={lang}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        spellCheck={spellCheck}
         onFocus={() => setIsFocused(true)}
         onChange={(e) => setDraft(e.target.value)}
         onCompositionStart={() => {
@@ -766,6 +841,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       }
 
       onSnsPropertyPromoted?.('youtube')
+      return
     }
 
     if (window.confirm('反映できたので、進捗管理からこの行を削除しますか？')) {
@@ -888,6 +964,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       }
 
       onSnsPropertyPromoted?.('youtube')
+      return
     }
 
     if (window.confirm('反映できたので、この行を進捗管理から削除しますか？')) {
@@ -900,7 +977,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   async function updateField(id: string, field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
     const dbField = field === 'material_saved' ? 'shooting_date' : field
-    const { error } = await supabase.from('production_records').update({ [dbField]: value }).eq('id', id)
+    const normalizedValue = normalizeProgressFieldValue(field, value)
+    const { error } = await supabase.from('production_records').update({ [dbField]: normalizedValue }).eq('id', id)
     if (error) {
       alert(`更新に失敗しました。\n${error.message}`)
       return
@@ -910,7 +988,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     const updatedRecord: ProductionRecord | null = currentRecord
       ? {
         ...currentRecord,
-        ...(field === 'material_saved' ? { material_saved: String(value) } : { [field]: value }),
+        ...(field === 'material_saved' ? { material_saved: String(normalizedValue) } : { [field]: normalizedValue }),
       }
       : null
 
@@ -926,10 +1004,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     if (
       updatedRecord
       && field === 'youtube_reserved'
-      && typeof value === 'string'
+      && typeof normalizedValue === 'string'
       && currentRecord
-      && currentRecord.youtube_reserved !== value
-      && isCustomRegisterSelected(value, selectOptions.register_youtube)
+      && currentRecord.youtube_reserved !== normalizedValue
+      && isCustomRegisterSelected(normalizedValue, selectOptions.register_youtube)
     ) {
       await promoteToSnsPropertySafe(updatedRecord, field)
     }
@@ -1045,6 +1123,18 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
     const submissionData: any = {
       ...form,
+      property_name: normalizeProgressFieldValue('property_name', form.property_name),
+      room_number: normalizeProgressFieldValue('room_number', form.room_number),
+      property_address: normalizeProgressFieldValue('property_address', form.property_address),
+      area: normalizeProgressFieldValue('area', form.area),
+      nearest_station: normalizeProgressFieldValue('nearest_station', form.nearest_station),
+      floor_plan: normalizeProgressFieldValue('floor_plan', form.floor_plan),
+      rent: normalizeProgressFieldValue('rent', form.rent),
+      management_company: normalizeProgressFieldValue('management_company', form.management_company),
+      contact_info: normalizeProgressFieldValue('contact_info', form.contact_info),
+      memo: normalizeProgressFieldValue('memo', form.memo),
+      audio_source: normalizeProgressFieldValue('audio_source', form.audio_source),
+      post_text: normalizeProgressFieldValue('post_text', form.post_text),
       media: getMediaDisplayName(form.media),
       shooting_date: form.material_saved || null,
       scheduled_post_date: form.scheduled_post_date || null,
@@ -1162,6 +1252,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         className={className}
         value={String(record[field] || '')}
         placeholder={placeholder}
+        {...getProgressTextInputProps(field)}
         onSave={(value) => updateField(record.id, field, value)}
       />
     )
