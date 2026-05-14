@@ -258,6 +258,29 @@ function toHalfWidthAscii(value: string) {
     .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
 }
 
+const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/g
+
+function toFullWidthAsciiPreservingUrls(value: string) {
+  const halfWidthValue = toHalfWidthAscii(value)
+  let result = ''
+  let lastIndex = 0
+
+  halfWidthValue.replace(URL_PATTERN, (match, _url, offset) => {
+    if (offset > lastIndex) {
+      result += toFullWidthAscii(value.slice(lastIndex, offset))
+    }
+    result += match
+    lastIndex = offset + match.length
+    return match
+  })
+
+  if (lastIndex < value.length) {
+    result += toFullWidthAscii(value.slice(lastIndex))
+  }
+
+  return result
+}
+
 function formatRentValue(value: string) {
   const normalized = toHalfWidthAscii(value).replace(/,/g, '').trim()
   if (!normalized) return ''
@@ -268,7 +291,7 @@ function formatRentValue(value: string) {
 function normalizeProgressFieldValue(field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
   if (typeof value !== 'string') return value
   if (field === 'rent') return formatRentValue(value)
-  if (FULL_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toFullWidthAscii(value)
+  if (FULL_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toFullWidthAsciiPreservingUrls(value)
   if (HALF_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toHalfWidthAscii(value).trim()
   return value
 }
@@ -338,17 +361,16 @@ function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
   )
 }
 
-const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/g
-
 function getUrlParts(value: string) {
-  const parts: { text: string; isUrl: boolean }[] = []
+  const halfWidthValue = toHalfWidthAscii(value)
+  const parts: { text: string; isUrl: boolean; href?: string }[] = []
   let lastIndex = 0
 
-  value.replace(URL_PATTERN, (match, _url, offset) => {
+  halfWidthValue.replace(URL_PATTERN, (match, _url, offset) => {
     if (offset > lastIndex) {
       parts.push({ text: value.slice(lastIndex, offset), isUrl: false })
     }
-    parts.push({ text: match, isUrl: true })
+    parts.push({ text: value.slice(offset, offset + match.length), isUrl: true, href: match })
     lastIndex = offset + match.length
     return match
   })
@@ -419,7 +441,7 @@ function ProgressTextCellInput({
                 <a
                   key={`${part.text}-${index}`}
                   className="progress-inline-link"
-                  href={toHref(part.text)}
+                  href={toHref(part.href || part.text)}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
