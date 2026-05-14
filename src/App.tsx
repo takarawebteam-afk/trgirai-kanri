@@ -887,12 +887,22 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
   const rawDate = String(postDate || '').trim()
   if (!rawDate) return ''
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) return rawDate
+  const propertyYear = getSnsPropertyYearFromPropertyNumber(propertyNumber, storePlatform)
+  const applyPropertyYear = (year: string, month: string, day: string) => {
+    const fixedYear = propertyYear || Number(year)
+    return `${fixedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const isoDateMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoDateMatch) {
+    const [, year, month, day] = isoDateMatch
+    return applyPropertyYear(year, month, day)
+  }
 
   const slashDateMatch = rawDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
   if (slashDateMatch) {
     const [, year, month, day] = slashDateMatch
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    return applyPropertyYear(year, month, day)
   }
 
   const normalized = rawDate
@@ -906,11 +916,10 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
   const monthDayMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})$/)
   if (!monthDayMatch) return rawDate
 
-  const year = getSnsPropertyYearFromPropertyNumber(propertyNumber, storePlatform)
-  if (!year) return rawDate
+  if (!propertyYear) return rawDate
 
   const [, month, day] = monthDayMatch
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  return `${propertyYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
 }
 
 function sortSnsPropertyRowsByPropertyNumber<T extends { property_number: string; created_at?: string }>(rows: T[]) {
@@ -1906,12 +1915,12 @@ function App() {
     for (const { key, table } of karilunMap) {
       const { data } = await supabase
         .from(table)
-        .select('post_date')
+        .select('post_date,property_number')
         .gte('post_date', todayStr)
         .lte('post_date', endStr)
 
-      result[key] = ((data || []) as { post_date?: string | null }[])
-        .map((row) => row.post_date?.slice(0, 10))
+      result[key] = ((data || []) as { post_date?: string | null; property_number?: string | null }[])
+        .map((row) => normalizeSnsPropertyPostDate(row.post_date, row.property_number).slice(0, 10))
         .filter((date): date is string => Boolean(date))
     }
 
@@ -1932,12 +1941,13 @@ function App() {
     for (const { accountKey, table, platforms } of storeMap) {
       const { data: rows } = await supabase
         .from(table)
-        .select('post_date,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
+        .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
         .gte('post_date', todayStr)
         .lte('post_date', endStr)
 
       const typedRows = (rows || []) as {
         post_date?: string | null
+        property_number?: string | null
         tiktok_reserved?: string | null
         instagram_reserved?: string | null
         youtube_reserved?: string | null
@@ -1949,7 +1959,7 @@ function App() {
         const col = reservedColMap[platform]
         const byDate: Record<string, typeof typedRows> = {}
         for (const row of typedRows) {
-          const date = row.post_date?.slice(0, 10)
+          const date = normalizeSnsPropertyPostDate(row.post_date, row.property_number, accountKey as StoreSnsPropertyPlatform).slice(0, 10)
           if (!date) continue
           if (!byDate[date]) byDate[date] = []
           byDate[date].push(row)
