@@ -632,11 +632,11 @@ const defaultStoreSnsPropertyForm: Omit<StoreSnsPropertyRecord, 'id' | 'created_
 
 const snsPropertyTabs: SnsPropertyTab[] = [
   { key: 'sokanri', label: '総管理', title: '総管理', status: 'ready' },
-  { key: 'tiktok', label: 'Karilun｜TikTok', title: 'Karilun｜TikTok 物件管理', status: 'ready' },
-  { key: 'instagram', label: 'Karilun｜Instagram', title: 'Karilun｜Instagram 物件管理', status: 'ready' },
-  { key: 'youtube', label: 'Karilun｜YouTube', title: 'Karilun｜YouTube 物件管理', status: 'ready' },
-  { key: 'keihan-karilun', label: '京阪かりるん', title: '京阪かりるん 物件管理', status: 'ready' },
-  { key: 'nishinomiya-karilun', label: '西宮かりるん', title: '西宮かりるん 物件管理', status: 'ready' },
+  { key: 'tiktok', label: 'TikTok', title: 'Karilun｜TikTok 物件管理', status: 'ready' },
+  { key: 'instagram', label: 'Instagram', title: 'Karilun｜Instagram 物件管理', status: 'ready' },
+  { key: 'youtube', label: 'YouTube', title: 'Karilun｜YouTube 物件管理', status: 'ready' },
+  { key: 'keihan-karilun', label: '京阪', title: '京阪かりるん 物件管理', status: 'ready' },
+  { key: 'nishinomiya-karilun', label: '西宮市', title: '西宮かりるん 物件管理', status: 'ready' },
   { key: 'nagase', label: '長瀬店', title: '長瀬店 物件管理', status: 'ready' },
   { key: 'nishikita', label: '西北店', title: '西北店 物件管理', status: 'ready' },
   { key: 'yao', label: '八尾店', title: '八尾店 物件管理', status: 'ready' },
