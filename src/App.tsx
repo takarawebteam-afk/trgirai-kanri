@@ -846,44 +846,44 @@ function isMissingSnsPropertyOptionTableError(error: unknown) {
   return maybeCode === '42P01' || maybeMessage.includes('sns_property_select_options')
 }
 
-function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | undefined) {
+function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | undefined, storePlatform?: StoreSnsPropertyPlatform) {
   const normalizedPropertyNumber = String(propertyNumber || '').trim().toUpperCase()
   const tikTokMatch = normalizedPropertyNumber.match(/^K(\d{4})$/)
   if (tikTokMatch) {
     const code = Number(tikTokMatch[1])
-    if (code >= 922 && code <= 970) return 2026
-    if (code >= 661 && code <= 921) return 2025
-    if (code >= 369 && code <= 660) return 2024
-    if (code >= 116 && code <= 368) return 2023
-    return 2022
+    if (code >= 922) return 2026
+    return 2025
   }
 
   const instagramMatch = normalizedPropertyNumber.match(/^G(\d{3})$/)
   if (instagramMatch) {
     const code = Number(instagramMatch[1])
-    if (code >= 597) return 2026
+    if (code >= 485) return 2026
     return 2025
   }
 
   const storeMatch = normalizedPropertyNumber.match(/^(\d{3})$/)
   if (storeMatch) {
     const code = Number(storeMatch[1])
-    if (code >= 360) return 2026
-    if (code >= 35) return 2025
-    if (code >= 1) return 2024
+    if (storePlatform === 'nagase') return 2025
+    if (storePlatform === 'nishikita') {
+      if (code >= 207) return 2026
+      return 2025
+    }
+    // keihan-karilun / nishinomiya-karilun / yao
+    if (code >= 153) return 2026
+    return 2025
   }
 
   const youtubeMatch = normalizedPropertyNumber.match(/^Y(\d{3})$/)
   if (!youtubeMatch) return null
 
   const code = Number(youtubeMatch[1])
-  if (code >= 545 && code <= 612) return 2026
-  if (code >= 201 && code <= 544) return 2025
-  if (code >= 1 && code <= 200) return 2024
-  return null
+  if (code >= 545) return 2026
+  return 2025
 }
 
-function normalizeSnsPropertyPostDate(postDate: string | null | undefined, propertyNumber: string | null | undefined) {
+function normalizeSnsPropertyPostDate(postDate: string | null | undefined, propertyNumber: string | null | undefined, storePlatform?: StoreSnsPropertyPlatform) {
   const rawDate = String(postDate || '').trim()
   if (!rawDate) return ''
 
@@ -906,7 +906,7 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
   const monthDayMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})$/)
   if (!monthDayMatch) return rawDate
 
-  const year = getSnsPropertyYearFromPropertyNumber(propertyNumber)
+  const year = getSnsPropertyYearFromPropertyNumber(propertyNumber, storePlatform)
   if (!year) return rawDate
 
   const [, month, day] = monthDayMatch
@@ -2361,7 +2361,7 @@ function App() {
               {rows.map((r) => (
                 <tr key={r.id} className="row-hoverable">
                   <td className="sns-col-memo">{renderSnsMemoCell(tableName, r.id, r.memo)}</td>
-                  <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_date', value), { type: 'date' })}</td>
+                  <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number, platform), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_date', value), { type: 'date' })}</td>
                   <td className="sns-col-plan">
                     {isKeihanKarilun
                       ? renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))
