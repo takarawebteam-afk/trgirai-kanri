@@ -655,18 +655,21 @@ const SOKANRI_ROWS = [
   { apKey: 'nagase-tiktok', account: '長瀬店', platform: 'TikTok', accountColor: '#FEF9E7' },
   { apKey: 'nagase-instagram', account: '長瀬店', platform: 'Instagram', accountColor: '#FEF9E7' },
   { apKey: 'nagase-youtube', account: '長瀬店', platform: 'YouTube', accountColor: '#FEF9E7' },
+  { apKey: 'nagase-threads', account: '長瀬店', platform: 'Threads', accountColor: '#FEF9E7' },
   { apKey: 'nishikita-tiktok', account: '西北店', platform: 'TikTok', accountColor: '#FEF5E4' },
   { apKey: 'nishikita-instagram', account: '西北店', platform: 'Instagram', accountColor: '#FEF5E4' },
   { apKey: 'nishikita-youtube', account: '西北店', platform: 'YouTube', accountColor: '#FEF5E4' },
   { apKey: 'yao-tiktok', account: '八尾店', platform: 'TikTok', accountColor: '#F9EBF8' },
   { apKey: 'yao-instagram', account: '八尾店', platform: 'Instagram', accountColor: '#F9EBF8' },
   { apKey: 'yao-youtube', account: '八尾店', platform: 'YouTube', accountColor: '#F9EBF8' },
+  { apKey: 'yao-threads', account: '八尾店', platform: 'Threads', accountColor: '#F9EBF8' },
 ]
 
 const PLATFORM_LABEL_STYLE: Record<string, { bg: string; color: string }> = {
   TikTok: { bg: '#010101', color: '#fff' },
   Instagram: { bg: '#C13584', color: '#fff' },
   YouTube: { bg: '#FF0000', color: '#fff' },
+  Threads: { bg: '#101010', color: '#fff' },
 }
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
@@ -1911,20 +1914,21 @@ function App() {
     const storeMap = [
       { accountKey: 'keihan', table: 'sns_keihan_karilun_properties', platforms: ['tiktok', 'instagram'] },
       { accountKey: 'nishinomiya', table: 'sns_nishinomiya_karilun_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
-      { accountKey: 'nagase', table: 'sns_nagase_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
+      { accountKey: 'nagase', table: 'sns_nagase_properties', platforms: ['tiktok', 'instagram', 'youtube', 'threads'] },
       { accountKey: 'nishikita', table: 'sns_nishikita_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
-      { accountKey: 'yao', table: 'sns_yao_properties', platforms: ['tiktok', 'instagram', 'youtube'] },
+      { accountKey: 'yao', table: 'sns_yao_properties', platforms: ['tiktok', 'instagram', 'youtube', 'threads'] },
     ]
-    const reservedColMap: Record<string, 'tiktok_reserved' | 'instagram_reserved' | 'youtube_reserved'> = {
+    const reservedColMap: Record<string, 'tiktok_reserved' | 'instagram_reserved' | 'youtube_reserved' | 'threads_post_date'> = {
       tiktok: 'tiktok_reserved',
       instagram: 'instagram_reserved',
       youtube: 'youtube_reserved',
+      threads: 'threads_post_date',
     }
 
     for (const { accountKey, table, platforms } of storeMap) {
       const { data: rows } = await supabase
         .from(table)
-        .select('post_date,tiktok_reserved,instagram_reserved,youtube_reserved')
+        .select('post_date,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
         .gte('post_date', todayStr)
         .lte('post_date', endStr)
 
@@ -1933,6 +1937,7 @@ function App() {
         tiktok_reserved?: string | null
         instagram_reserved?: string | null
         youtube_reserved?: string | null
+        threads_post_date?: string | null
       }[]
 
       for (const platform of platforms) {
