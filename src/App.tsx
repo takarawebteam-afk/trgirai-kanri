@@ -7574,11 +7574,23 @@ function TaskReportPanel() {
             <article key={member.name} className={`task-report-member-card ${member.tone}`}>
               <span>{member.name}</span>
               <strong>{member.count}件</strong>
-              <p>仕事時間 {formatTaskReportTime(member.minutes)}</p>
+              <p>
+                仕事時間{' '}
+                <b className={member.workMinutes > 0 && member.minutes > member.workMinutes ? 'task-report-alert-value' : undefined}>
+                  {formatTaskReportTime(member.minutes)}
+                </b>
+              </p>
               <small>勤務時間 {formatTaskReportTime(member.workMinutes)}</small>
               <small>
                 平均 {member.averageMinutes}分/件
-                {member.utilization != null ? ` / 業務占有率 ${member.utilization}%` : ''}
+                {member.utilization != null && (
+                  <>
+                    {' / 業務占有率 '}
+                    <b className={member.utilization > 100 ? 'task-report-alert-value' : undefined}>
+                      {member.utilization}%
+                    </b>
+                  </>
+                )}
               </small>
             </article>
           ))}
@@ -7785,7 +7797,9 @@ function TaskReportPanel() {
               {filteredRowMemberSummaries.map((member, index) => (
                 <div key={member.name} className={`task-report-day-summary-card member-${index}`}>
                   <span>{member.name}</span>
-                  <strong>{formatTaskReportTime(member.taskMinutes)}</strong>
+                  <strong className={member.taskMinutes > member.workMinutes ? 'task-report-alert-value' : undefined}>
+                    {formatTaskReportTime(member.taskMinutes)}
+                  </strong>
                   <small>勤務時間 {formatTaskReportTime(member.workMinutes)}</small>
                 </div>
               ))}
@@ -7974,6 +7988,10 @@ function TodayTasksPanel() {
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskMinutes, setNewTaskMinutes] = useState('')
   const [manualTaskSaving, setManualTaskSaving] = useState(false)
+  const [openMemoMemberId, setOpenMemoMemberId] = useState<string | null>(null)
+  const [memoDraft, setMemoDraft] = useState('')
+  const [memoSavingMemberId, setMemoSavingMemberId] = useState<string | null>(null)
+  const [memoError, setMemoError] = useState('')
   const [calendarLoading, setCalendarLoading] = useState(false)
   const [categoryMasters, setCategoryMasters] = useState<TaskReportCategoryMaster[]>([...DEFAULT_TASK_REPORT_CATEGORIES])
   const today = new Date().toISOString().slice(0, 10)
@@ -8087,9 +8105,12 @@ function TodayTasksPanel() {
 
   useEffect(() => {
     setOpenAddFormMemberId(null)
+    setOpenMemoMemberId(null)
     closeMinutePopup()
     setNewTaskName('')
     setNewTaskMinutes('')
+    setMemoDraft('')
+    setMemoError('')
   }, [closeMinutePopup, selectedViewDate])
 
   // タイマークリーンアップ
@@ -8254,6 +8275,46 @@ function TodayTasksPanel() {
     setNewTaskName('')
     setNewTaskMinutes('')
     setOpenAddFormMemberId(null)
+  }
+
+  const sendTodayMemo = async (memberName: string) => {
+    const memo = memoDraft.trim()
+    if (!memo || memoSavingMemberId) return
+
+    setMemoSavingMemberId(memberName)
+    setMemoError('')
+    try {
+      const notifySecret = import.meta.env.VITE_NOTIFY_SECRET as string | undefined
+      const response = await fetch('/api/notify-today-memo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(notifySecret ? { 'x-notify-secret': notifySecret } : {}),
+        },
+        body: JSON.stringify({ memberName, memo }),
+      })
+      const result = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null
+
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || 'Slack送信に失敗しました')
+      }
+
+      setOpenMemoMemberId(null)
+      setMemoDraft('')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message === 'invalid_auth') {
+        setMemoError('Slackの接続キーが無効です。')
+      } else if (message === 'channel_not_found') {
+        setMemoError('Slackのチャンネルが見つかりません。')
+      } else if (message === 'not_in_channel') {
+        setMemoError('Slackアプリがチャンネルに入っていません。')
+      } else {
+        setMemoError('Slack送信に失敗しました')
+      }
+    } finally {
+      setMemoSavingMemberId(null)
+    }
   }
 
   const deleteManualTask = async (task: ManualTask) => {
@@ -8451,11 +8512,60 @@ function TodayTasksPanel() {
                 </div>
                 <button
                   type="button"
+                  className="today-memo-btn"
+                  onClick={() => {
+                    const nextOpenMemberId = openMemoMemberId === member.calendarId ? null : member.calendarId
+                    setOpenMemoMemberId(nextOpenMemberId)
+                    setOpenAddFormMemberId(null)
+                    setMemoDraft('')
+                    setMemoError('')
+                  }}
+                >
+                  メモ
+                </button>
+                {openMemoMemberId === member.calendarId && (
+                  <div className="today-memo-form">
+                    <textarea
+                      className="today-memo-textarea"
+                      value={memoDraft}
+                      onChange={(e) => setMemoDraft(e.target.value)}
+                      placeholder="メモを入力"
+                      rows={4}
+                    />
+                    {memoError && <p className="today-memo-error">{memoError}</p>}
+                    <div className="today-memo-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setOpenMemoMemberId(null)
+                          setMemoDraft('')
+                          setMemoError('')
+                        }}
+                        disabled={memoSavingMemberId === member.name}
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => sendTodayMemo(member.name)}
+                        disabled={!memoDraft.trim() || memoSavingMemberId === member.name}
+                      >
+                        {memoSavingMemberId === member.name ? '送信中...' : '保存'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
                   className="manual-task-add-btn"
                   onClick={() => {
                     setOpenAddFormMemberId(openAddFormMemberId === member.calendarId ? null : member.calendarId)
+                    setOpenMemoMemberId(null)
                     setNewTaskName('')
                     setNewTaskMinutes('')
+                    setMemoError('')
                   }}
                 >
                   ＋ 業務を追加

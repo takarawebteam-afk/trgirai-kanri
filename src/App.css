@@ -4323,6 +4323,46 @@ button.secondary.small {
 .manual-task-delete { margin-left: auto; background: none; border: none; color: #bbb; cursor: pointer; font-size: 14px; padding: 0 4px; }
 .manual-task-delete:hover { color: #e00; }
 
+.today-memo-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 0;
+  background: #fff;
+  border: 1px dashed var(--blue-300);
+  border-radius: 4px;
+  color: var(--blue-700);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.today-memo-btn:hover { background: var(--blue-50); color: var(--blue-900); }
+.today-memo-form { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; padding: 0 6px; }
+.today-memo-textarea {
+  width: 100%;
+  min-height: 82px;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.today-memo-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.today-memo-actions .primary,
+.today-memo-actions .secondary {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.today-memo-error {
+  margin: 0;
+  color: var(--red-700);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .task-report-page {
   display: grid;
   gap: 20px;
@@ -4425,6 +4465,11 @@ button.secondary.small {
   display: block;
   margin-top: 6px;
   color: #64748b;
+}
+
+.task-report-alert-value {
+  color: #e60012;
+  font-weight: 900;
 }
 
 .task-report-member-card.total {
@@ -4550,6 +4595,10 @@ button.secondary.small {
   font-size: 0.72rem;
   color: #64748b;
   white-space: nowrap;
+}
+
+.task-report-day-summary-card .task-report-alert-value {
+  color: #e60012;
 }
 
 .task-report-day-summary-card.member-0 {

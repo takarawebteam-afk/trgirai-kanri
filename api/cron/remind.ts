@@ -12,6 +12,15 @@ const APP_URL = 'https://trgirai-kanri.vercel.app/'
 
 type MemberInfo = { name: string; slack_user_id: string }
 
+function resolveSender(creator: string | undefined, assignees: string[], members: MemberInfo[]) {
+  const senderName = creator || assignees?.[0] || ''
+  const sender = members.find((item) => item.name === senderName)
+  return {
+    name: senderName || 'タスク通知',
+    slackUserId: sender?.slack_user_id || '',
+  }
+}
+
 function parseDate(value?: string) {
   if (!value) return null
   const [year, month, day] = value.split('-').map(Number)
@@ -56,9 +65,36 @@ function buildReminderLabel(task: { work_date?: string; due_date?: string }, tod
   return null
 }
 
-async function postToSlack(text: string) {
+async function getSlackUserIcon(slackUserId: string) {
+  if (!SLACK_BOT_TOKEN || !slackUserId) return ''
+
+  try {
+    const params = new URLSearchParams({ user: slackUserId })
+    const response = await fetch(`https://slack.com/api/users.info?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
+    })
+    const result = await response.json() as {
+      ok?: boolean
+      user?: { profile?: { image_72?: string; image_48?: string } }
+    }
+    if (!response.ok || !result.ok) return ''
+    return result.user?.profile?.image_72 || result.user?.profile?.image_48 || ''
+  } catch {
+    return ''
+  }
+}
+
+async function postToSlack(text: string, sender: { name: string; slackUserId?: string }) {
   if (!SLACK_BOT_TOKEN || !SLACK_CHANNEL_ID) {
     return { ok: false, error: 'slack_not_configured' }
+  }
+
+  const iconUrl = await getSlackUserIcon(sender.slackUserId || '')
+  const payload = {
+    channel: SLACK_CHANNEL_ID,
+    text,
+    username: sender.name,
+    ...(iconUrl ? { icon_url: iconUrl } : {}),
   }
 
   const response = await fetch('https://slack.com/api/chat.postMessage', {
@@ -67,7 +103,7 @@ async function postToSlack(text: string) {
       'Content-Type': 'application/json; charset=utf-8',
       Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
     },
-    body: JSON.stringify({ channel: SLACK_CHANNEL_ID, text }),
+    body: JSON.stringify(payload),
   })
   const result = await response.json() as { ok?: boolean; error?: string }
 
@@ -100,6 +136,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
     if (!reminderLabel) continue
 
     const mentions = buildMentions(task.assignees || [], task.creator, membersList as MemberInfo[])
+    const sender = resolveSender(task.creator, task.assignees || [], membersList as MemberInfo[])
     const text = `${mentions}
 ${reminderLabel}
 
@@ -110,7 +147,7 @@ ${reminderLabel}
 
 ${APP_URL}`
 
-    const result = await postToSlack(text)
+    const result = await postToSlack(text, sender)
     if (result.ok) {
       sent += 1
     }
