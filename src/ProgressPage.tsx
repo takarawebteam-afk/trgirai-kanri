@@ -1435,18 +1435,24 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   function renderPropertyLink(record: ProductionRecord) {
+    function editPropertyUrl() {
+      const nextValue = window.prompt('資料URLを入力してください', record.property_url || '')
+      if (nextValue === null) return
+      void updateField(record.id, 'property_url', nextValue.trim())
+    }
+
     if (record.property_url) {
       return (
         <div className="progress-link-cell" onClick={(e) => e.stopPropagation()}>
-          <a
+          <button
+            type="button"
             className="progress-link-icon"
-            href={record.property_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="資料を開く"
+            title="資料URLを変更"
+            aria-label="資料URLを変更"
+            onClick={editPropertyUrl}
           >
             <LinkIcon />
-          </a>
+          </button>
         </div>
       )
     }
@@ -1456,11 +1462,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <button
           className="progress-link-empty"
           type="button"
-          onClick={() => {
-            const nextValue = window.prompt('資料URLを入力してください', record.property_url || '')
-            if (nextValue === null) return
-            void updateField(record.id, 'property_url', nextValue.trim())
-          }}
+          onClick={editPropertyUrl}
         >
           未登録
         </button>
