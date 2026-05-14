@@ -3826,6 +3826,14 @@ button.secondary.small {
   box-shadow: none;
 }
 
+.progress-ime-active {
+  ime-mode: active;
+}
+
+.progress-ime-inactive {
+  ime-mode: inactive;
+}
+
 .progress-cell-hitbox {
   display: flex;
   align-items: center;

@@ -63,10 +63,11 @@ type ProgressTextCellInputProps = {
   linkify?: boolean
   inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
   lang?: string
+  imeMode?: 'active' | 'inactive'
   autoCapitalize?: React.HTMLAttributes<HTMLInputElement>['autoCapitalize']
   autoCorrect?: string
   spellCheck?: boolean
-  onSave: (value: string) => void | Promise<void>
+  onSave: (value: string) => boolean | void | Promise<boolean | void>
 }
 
 type FormTabKey = 'basic' | 'production' | 'check' | 'finish'
@@ -246,12 +247,6 @@ const HALF_WIDTH_PROGRESS_FIELDS: (keyof ProductionRecord)[] = [
   'contact_info',
 ]
 
-function toFullWidthAscii(value: string) {
-  return value
-    .replace(/ /g, '　')
-    .replace(/[!-~]/g, (char) => String.fromCharCode(char.charCodeAt(0) + 0xfee0))
-}
-
 function toHalfWidthAscii(value: string) {
   return value
     .replace(/　/g, ' ')
@@ -259,27 +254,6 @@ function toHalfWidthAscii(value: string) {
 }
 
 const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/g
-
-function toFullWidthAsciiPreservingUrls(value: string) {
-  const halfWidthValue = toHalfWidthAscii(value)
-  let result = ''
-  let lastIndex = 0
-
-  halfWidthValue.replace(URL_PATTERN, (match, _url, offset) => {
-    if (offset > lastIndex) {
-      result += toFullWidthAscii(value.slice(lastIndex, offset))
-    }
-    result += match
-    lastIndex = offset + match.length
-    return match
-  })
-
-  if (lastIndex < value.length) {
-    result += toFullWidthAscii(value.slice(lastIndex))
-  }
-
-  return result
-}
 
 function formatRentValue(value: string) {
   const normalized = toHalfWidthAscii(value).replace(/,/g, '').trim()
@@ -291,22 +265,20 @@ function formatRentValue(value: string) {
 function normalizeProgressFieldValue(field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
   if (typeof value !== 'string') return value
   if (field === 'rent') return formatRentValue(value)
-  if (FULL_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toFullWidthAsciiPreservingUrls(value)
-  if (HALF_WIDTH_PROGRESS_FIELDS.includes(field as keyof ProductionRecord)) return toHalfWidthAscii(value).trim()
   return value
 }
 
 function getProgressTextInputProps(field: keyof ProductionRecord) {
   if (field === 'rent') {
-    return { inputMode: 'numeric' as const, autoCapitalize: 'off' as const, autoCorrect: 'off', spellCheck: false }
+    return { inputMode: 'numeric' as const, imeMode: 'inactive' as const, autoCapitalize: 'off' as const, autoCorrect: 'off', spellCheck: false }
   }
 
   if (HALF_WIDTH_PROGRESS_FIELDS.includes(field)) {
-    return { inputMode: 'text' as const, autoCapitalize: 'off' as const, autoCorrect: 'off', spellCheck: false }
+    return { inputMode: 'text' as const, imeMode: 'inactive' as const, autoCapitalize: 'off' as const, autoCorrect: 'off', spellCheck: false }
   }
 
   if (FULL_WIDTH_PROGRESS_FIELDS.includes(field)) {
-    return { inputMode: 'text' as const, lang: 'ja' }
+    return { inputMode: 'text' as const, lang: 'ja', imeMode: 'active' as const }
   }
 
   return {}
@@ -393,6 +365,7 @@ function ProgressTextCellInput({
   linkify = true,
   inputMode,
   lang,
+  imeMode,
   autoCapitalize,
   autoCorrect,
   spellCheck,
@@ -402,14 +375,16 @@ function ProgressTextCellInput({
   const [isComposing, setIsComposing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
+  const [unsavedDraft, setUnsavedDraft] = useState<string | null>(null)
   const shouldCommitAfterCompositionRef = useRef(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
+    if (unsavedDraft !== null && draft === unsavedDraft) return
     if (!isComposing && !isSaving && !isFocused) {
       setDraft(value)
     }
-  }, [isComposing, isFocused, isSaving, value])
+  }, [draft, isComposing, isFocused, isSaving, unsavedDraft, value])
 
   const urlParts = getUrlParts(draft)
   const shouldShowLinkView = linkify && !isFocused && urlParts.some((part) => part.isUrl)
@@ -425,7 +400,13 @@ function ProgressTextCellInput({
     if (isSaving || nextValue === value) return
     setIsSaving(true)
     try {
-      await onSave(nextValue)
+      const saved = await onSave(nextValue)
+      if (saved === false) {
+        setUnsavedDraft(nextValue)
+        setDraft(nextValue)
+        return
+      }
+      setUnsavedDraft(null)
     } finally {
       setIsSaving(false)
     }
@@ -460,7 +441,7 @@ function ProgressTextCellInput({
       ) : (
       <input
         ref={inputRef}
-        className={className}
+        className={`${className}${imeMode ? ` progress-ime-${imeMode}` : ''}`}
         value={draft}
         placeholder={placeholder}
         inputMode={inputMode}
@@ -1074,7 +1055,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     const { error } = await supabase.from('production_records').update({ [dbField]: normalizedValue }).eq('id', id)
     if (error) {
       alert(`更新に失敗しました。\n${error.message}`)
-      return
+      return false
     }
 
     const currentRecord = records.find((record) => record.id === id) || null
@@ -1104,6 +1085,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     ) {
       await promoteToSnsPropertySafe(updatedRecord, field)
     }
+
+    return true
   }
 
   function openSelectMenu(
