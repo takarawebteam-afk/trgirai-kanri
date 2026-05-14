@@ -1523,6 +1523,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.propertyName }} />
           <col style={{ width: 49 }} />
           <col style={{ width: 40 }} />
+          <col style={{ width: 88 }} />
+          <col style={{ width: 180 }} />
           <col style={{ width: 296 }} />
           <col style={{ width: 56 }} />
           <col style={{ width: 72 }} />
@@ -1534,6 +1536,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">物件名</th>
             <th className="ptcol-group-2">号室</th>
             <th className="ptcol-group-2">資料</th>
+            <th className="ptcol-group-3">画像編集</th>
+            <th className="ptcol-group-4">投稿文</th>
             <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
             <th className="ptcol-group-5">完了</th>
             <th className="ptcol-group-5">削除</th>
@@ -1547,6 +1551,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
               <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'floor_plan_insert')}</td>
+              <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
