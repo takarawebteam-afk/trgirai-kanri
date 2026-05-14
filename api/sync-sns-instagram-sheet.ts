@@ -15,6 +15,7 @@ type InstagramPropertyRecord = {
   document_url: string | null
   property_name: string | null
   room_number: string | null
+  acquisition_source: string | null
   management_company: string | null
   contact: string | null
 }
@@ -104,6 +105,7 @@ function toSheetRow(record: InstagramPropertyRecord) {
     text(record.document_url),
     text(record.management_company),
     text(record.contact),
+    text(record.acquisition_source),
   ]
 }
 
@@ -115,7 +117,7 @@ async function fetchAllInstagramProperties() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from('sns_instagram_properties')
-      .select('created_at, post_date, property_number, area, document_url, property_name, room_number, management_company, contact')
+      .select('created_at, post_date, property_number, area, document_url, property_name, room_number, acquisition_source, management_company, contact')
       .order('property_number', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, from + pageSize - 1)
@@ -131,7 +133,7 @@ async function fetchAllInstagramProperties() {
 }
 
 async function clearSheet(accessToken: string) {
-  const range = encodeURIComponent(`'${SHEET_NAME}'!A3:H`)
+  const range = encodeURIComponent(`'${SHEET_NAME}'!A3:I`)
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}:clear`,
     {
@@ -147,7 +149,7 @@ async function clearSheet(accessToken: string) {
 async function updateSheet(accessToken: string, values: string[][]) {
   if (values.length === 0) return
 
-  const range = encodeURIComponent(`'${SHEET_NAME}'!A3:H`)
+  const range = encodeURIComponent(`'${SHEET_NAME}'!A3:I`)
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`,
     {

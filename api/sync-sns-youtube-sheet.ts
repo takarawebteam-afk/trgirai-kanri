@@ -14,6 +14,7 @@ type YoutubePropertyRecord = {
   document_url: string | null
   property_name: string | null
   room_number: string | null
+  acquisition_source: string | null
   management_company: string | null
   contact: string | null
 }
@@ -103,6 +104,7 @@ function toSheetRow(record: YoutubePropertyRecord) {
     text(record.document_url),
     text(record.management_company),
     text(record.contact),
+    text(record.acquisition_source),
   ]
 }
 
@@ -114,7 +116,7 @@ async function fetchAllYoutubeProperties() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from('sns_youtube_properties')
-      .select('created_at, post_date, property_number, document_url, property_name, room_number, management_company, contact')
+      .select('created_at, post_date, property_number, document_url, property_name, room_number, acquisition_source, management_company, contact')
       .order('property_number', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, from + pageSize - 1)
@@ -131,7 +133,7 @@ async function fetchAllYoutubeProperties() {
 
 function buildSheetRange(sheetName: string) {
   const escapedSheetName = sheetName.replace(/'/g, "''")
-  return encodeURIComponent(`'${escapedSheetName}'!A3:H`)
+  return encodeURIComponent(`'${escapedSheetName}'!A3:I`)
 }
 
 async function resolveSheetName(accessToken: string) {
