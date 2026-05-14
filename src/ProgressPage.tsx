@@ -2286,7 +2286,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
             {!editId && (
               <form className="data-form" onSubmit={handleSubmit}>
-                <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--gray-500)', lineHeight: 1.8 }}>最初は3つだけ入れて保存できます。残りは下の一覧でそのまま入力できます。</p>
+                <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--gray-500)', lineHeight: 1.8 }}>最初は4つだけ入れて保存できます。残りは下の一覧でそのまま入力できます。</p>
                 <label className="form-label">
                   媒体
                   <select value={form.media} onChange={(e) => handleMediaChange(e.target.value)}>
@@ -2307,6 +2307,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 <label className="form-label">
                   素材保存日
                   <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
+                </label>
+                <label className="form-label">
+                  投稿予定日
+                  <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />
                 </label>
                 <label className="form-label">
                   物件名
