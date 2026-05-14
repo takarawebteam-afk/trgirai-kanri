@@ -284,6 +284,17 @@ function getProgressTextInputProps(field: keyof ProductionRecord) {
   return {}
 }
 
+function getProgressFormInputProps(field: keyof ProductionRecord, className = '') {
+  const { imeMode, ...inputProps } = getProgressTextInputProps(field)
+  const imeClass = imeMode ? `progress-ime-${imeMode}` : ''
+
+  return {
+    ...inputProps,
+    className: [className, imeClass].filter(Boolean).join(' ') || undefined,
+    'data-ime-mode': imeMode,
+  }
+}
+
 function getProcessGroupByField(field: ProcessField) {
   return PROCESS_FIELD_GROUPS[field]
 }
@@ -1826,35 +1837,40 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
             <label className="form-label">
               物件名
-              <input value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
+              <input {...getProgressFormInputProps('property_name')} value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
             </label>
             <label className="form-label">
               号室
-              <input value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
+              <input {...getProgressFormInputProps('room_number')} value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
             </label>
           </div>
           <label className="form-label">
             住所
-            <input value={form.property_address} onChange={(e) => setForm({ ...form, property_address: e.target.value })} />
+            <input {...getProgressFormInputProps('property_address')} value={form.property_address} onChange={(e) => setForm({ ...form, property_address: e.target.value })} />
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label className="form-label">
               エリア
-              <input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
+              <input {...getProgressFormInputProps('area')} value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
             </label>
             <label className="form-label">
               最寄り駅
-              <input value={form.nearest_station} onChange={(e) => setForm({ ...form, nearest_station: e.target.value })} />
+              <input {...getProgressFormInputProps('nearest_station')} value={form.nearest_station} onChange={(e) => setForm({ ...form, nearest_station: e.target.value })} />
             </label>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label className="form-label">
               間取り
-              <input value={form.floor_plan} onChange={(e) => setForm({ ...form, floor_plan: e.target.value })} />
+              <input {...getProgressFormInputProps('floor_plan')} value={form.floor_plan} onChange={(e) => setForm({ ...form, floor_plan: e.target.value })} />
             </label>
             <label className="form-label">
               家賃
-              <input value={form.rent} onChange={(e) => setForm({ ...form, rent: e.target.value })} />
+              <input
+                {...getProgressFormInputProps('rent')}
+                value={form.rent}
+                onChange={(e) => setForm({ ...form, rent: e.target.value })}
+                onBlur={(e) => setForm((prev) => ({ ...prev, rent: formatRentValue(e.target.value) }))}
+              />
             </label>
             <label className="form-label">
               取得先
@@ -1869,11 +1885,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label className="form-label">
               管理会社
-              <input value={form.management_company} onChange={(e) => setForm({ ...form, management_company: e.target.value })} />
+              <input {...getProgressFormInputProps('management_company')} value={form.management_company} onChange={(e) => setForm({ ...form, management_company: e.target.value })} />
             </label>
             <label className="form-label">
               連絡先
-              <input value={form.contact_info} onChange={(e) => setForm({ ...form, contact_info: e.target.value })} />
+              <input {...getProgressFormInputProps('contact_info')} value={form.contact_info} onChange={(e) => setForm({ ...form, contact_info: e.target.value })} />
             </label>
           </div>
           {isInstagramMedia(form.media) ? (
@@ -1993,7 +2009,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           </label>
           <label className="form-label">
             メモ
-            <textarea value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
+            <textarea {...getProgressFormInputProps('memo')} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
           </label>
         </>
       )
@@ -2028,7 +2044,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label className="form-label">
             音源
-            <input value={form.audio_source} onChange={(e) => setForm({ ...form, audio_source: e.target.value })} />
+            <input {...getProgressFormInputProps('audio_source')} value={form.audio_source} onChange={(e) => setForm({ ...form, audio_source: e.target.value })} />
           </label>
           <label className="form-label">
             AOS
@@ -2299,11 +2315,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 </label>
                 <label className="form-label">
                   物件名
-                  <input value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
+                  <input {...getProgressFormInputProps('property_name')} value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
                 </label>
                 <label className="form-label">
                   号室
-                  <input value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
+                  <input {...getProgressFormInputProps('room_number')} value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
                 </label>
                 <div className="form-actions" style={{ marginTop: 10 }}>
                   <button type="submit" className="primary">保存する</button>
