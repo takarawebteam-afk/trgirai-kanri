@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 
 const SHEET_ID = '1Pell1SGF4KhC4sGo5JQwzps-2mViOli-p2fhswBM5kc'
-const SHEET_GID = process.env.KEIHAN_SHEET_GID || '0'
+const SHEET_GID = process.env.NISHINOMIYA_SHEET_GID || '0'
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
 
 function loadEnvFile(filePath) {
@@ -78,14 +78,14 @@ function normalizeText(value) {
   return String(value || '').trim()
 }
 
-function getKeihanYearFromPropertyNumber(propertyNumber) {
+function getNishinomiyaYearFromPropertyNumber(propertyNumber) {
   const code = Number(normalizeText(propertyNumber))
   if (!Number.isInteger(code) || code <= 0) return null
   if (code >= 153) return 2026
   return 2025
 }
 
-function normalizeKeihanPostDate(value, propertyNumber) {
+function normalizeNishinomiyaPostDate(value, propertyNumber) {
   const text = normalizeText(value)
   if (!text) return null
 
@@ -108,17 +108,17 @@ function normalizeKeihanPostDate(value, propertyNumber) {
   const monthDayMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})$/)
   if (!monthDayMatch) return text
 
-  const year = getKeihanYearFromPropertyNumber(propertyNumber)
+  const year = getNishinomiyaYearFromPropertyNumber(propertyNumber)
   if (!year) return text
 
   const [, month, day] = monthDayMatch
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
 }
 
-function toKeihanRecord(columns) {
+function toNishinomiyaRecord(columns) {
   return {
     memo: normalizeText(columns[0]),
-    post_date: normalizeKeihanPostDate(columns[1], columns[5]),
+    post_date: normalizeNishinomiyaPostDate(columns[1], columns[5]),
     category: normalizeText(columns[2]),
     property_name: normalizeText(columns[3]),
     room_number: normalizeText(columns[4]),
@@ -128,10 +128,10 @@ function toKeihanRecord(columns) {
     tiktok_wp: normalizeText(columns[8]),
     instagram_reserved: normalizeText(columns[9]),
     instagram_wp: normalizeText(columns[10]),
-    youtube_reserved: '',
-    youtube_wp: '',
+    youtube_reserved: normalizeText(columns[11]),
+    youtube_wp: normalizeText(columns[12]),
     threads_post_date: '',
-    post_text: normalizeText(columns[11]),
+    post_text: normalizeText(columns[13]),
   }
 }
 
@@ -146,7 +146,7 @@ async function fetchSheetRecords() {
 
   return rows
     .slice(1)
-    .map(toKeihanRecord)
+    .map(toNishinomiyaRecord)
     .filter((record) => /^\d+$/.test(record.property_number) && record.property_name)
 }
 
@@ -172,11 +172,11 @@ async function main() {
   const nextMap = groupByPropertyNumber(sheetRecords)
 
   const { data: currentData, error: fetchError } = await supabase
-    .from('sns_keihan_karilun_properties')
+    .from('sns_nishinomiya_karilun_properties')
     .select('id, property_number')
 
   if (fetchError) {
-    throw new Error(`現在の京阪かりるんデータの読み込みに失敗しました: ${fetchError.message}`)
+    throw new Error(`現在の西宮かりるんデータの読み込みに失敗しました: ${fetchError.message}`)
   }
 
   const currentRows = currentData || []
@@ -202,24 +202,24 @@ async function main() {
     .map((row) => row.id)
 
   if (deleteIds.length > 0) {
-    const { error } = await supabase.from('sns_keihan_karilun_properties').delete().in('id', deleteIds)
+    const { error } = await supabase.from('sns_nishinomiya_karilun_properties').delete().in('id', deleteIds)
     if (error) {
-      throw new Error(`不要な京阪かりるんデータの削除に失敗しました: ${error.message}`)
+      throw new Error(`不要な西宮かりるんデータの削除に失敗しました: ${error.message}`)
     }
   }
 
   for (const record of updates) {
     const { id, ...payload } = record
-    const { error } = await supabase.from('sns_keihan_karilun_properties').update(payload).eq('id', id)
+    const { error } = await supabase.from('sns_nishinomiya_karilun_properties').update(payload).eq('id', id)
     if (error) {
-      throw new Error(`京阪かりるんデータの更新に失敗しました (${record.property_number}): ${error.message}`)
+      throw new Error(`西宮かりるんデータの更新に失敗しました (${record.property_number}): ${error.message}`)
     }
   }
 
   if (inserts.length > 0) {
-    const { error } = await supabase.from('sns_keihan_karilun_properties').insert(inserts)
+    const { error } = await supabase.from('sns_nishinomiya_karilun_properties').insert(inserts)
     if (error) {
-      throw new Error(`京阪かりるんデータの追加に失敗しました: ${error.message}`)
+      throw new Error(`西宮かりるんデータの追加に失敗しました: ${error.message}`)
     }
   }
 

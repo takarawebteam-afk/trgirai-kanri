@@ -2,22 +2,28 @@ import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 
 const SHEET_ID = '1Pell1SGF4KhC4sGo5JQwzps-2mViOli-p2fhswBM5kc'
-const SHEET_GID = process.env.KEIHAN_SHEET_GID || '0'
+const SHEET_GID = process.env.NISHIKITA_SHEET_GID || '0'
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
+const TABLE_NAME = 'sns_nishikita_properties'
 
 function loadEnvFile(filePath) {
-  const env = {}
-  const content = readFileSync(filePath, 'utf8')
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#')) continue
-    const equalIndex = line.indexOf('=')
-    if (equalIndex === -1) continue
-    const key = line.slice(0, equalIndex).trim()
-    const value = line.slice(equalIndex + 1).trim().replace(/^['"]|['"]$/g, '')
-    env[key] = value
+  try {
+    const env = {}
+    const content = readFileSync(filePath, 'utf8')
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line || line.startsWith('#')) continue
+      const equalIndex = line.indexOf('=')
+      if (equalIndex === -1) continue
+      const key = line.slice(0, equalIndex).trim()
+      const value = line.slice(equalIndex + 1).trim().replace(/^['"]|['"]$/g, '')
+      env[key] = value
+    }
+    return env
+  } catch (error) {
+    if (error.code === 'ENOENT') return {}
+    throw error
   }
-  return env
 }
 
 function loadEnv() {
@@ -78,14 +84,14 @@ function normalizeText(value) {
   return String(value || '').trim()
 }
 
-function getKeihanYearFromPropertyNumber(propertyNumber) {
+function getNishikitaYearFromPropertyNumber(propertyNumber) {
   const code = Number(normalizeText(propertyNumber))
   if (!Number.isInteger(code) || code <= 0) return null
-  if (code >= 153) return 2026
+  if (code >= 207) return 2026
   return 2025
 }
 
-function normalizeKeihanPostDate(value, propertyNumber) {
+function normalizeNishikitaPostDate(value, propertyNumber) {
   const text = normalizeText(value)
   if (!text) return null
 
@@ -99,26 +105,26 @@ function normalizeKeihanPostDate(value, propertyNumber) {
 
   const normalized = text
     .replace(/\s+/g, '')
-    .replace(/年/g, '/')
-    .replace(/月/g, '/')
-    .replace(/日/g, '')
+    .replace(/\u5e74/g, '/')
+    .replace(/\u6708/g, '/')
+    .replace(/\u65e5/g, '')
     .replace(/\./g, '/')
     .replace(/-/g, '/')
 
   const monthDayMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})$/)
   if (!monthDayMatch) return text
 
-  const year = getKeihanYearFromPropertyNumber(propertyNumber)
+  const year = getNishikitaYearFromPropertyNumber(propertyNumber)
   if (!year) return text
 
   const [, month, day] = monthDayMatch
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
 }
 
-function toKeihanRecord(columns) {
+function toNishikitaRecord(columns) {
   return {
     memo: normalizeText(columns[0]),
-    post_date: normalizeKeihanPostDate(columns[1], columns[5]),
+    post_date: normalizeNishikitaPostDate(columns[1], columns[5]),
     category: normalizeText(columns[2]),
     property_name: normalizeText(columns[3]),
     room_number: normalizeText(columns[4]),
@@ -128,17 +134,17 @@ function toKeihanRecord(columns) {
     tiktok_wp: normalizeText(columns[8]),
     instagram_reserved: normalizeText(columns[9]),
     instagram_wp: normalizeText(columns[10]),
-    youtube_reserved: '',
-    youtube_wp: '',
+    youtube_reserved: normalizeText(columns[11]),
+    youtube_wp: normalizeText(columns[12]),
     threads_post_date: '',
-    post_text: normalizeText(columns[11]),
+    post_text: normalizeText(columns[13]),
   }
 }
 
 async function fetchSheetRecords() {
   const response = await fetch(SHEET_CSV_URL)
   if (!response.ok) {
-    throw new Error(`Googleスプレッドシートの取得に失敗しました: ${response.status}`)
+    throw new Error(`Failed to fetch Google Sheet CSV: ${response.status}`)
   }
 
   const csvText = new TextDecoder('utf-8').decode(await response.arrayBuffer())
@@ -146,7 +152,7 @@ async function fetchSheetRecords() {
 
   return rows
     .slice(1)
-    .map(toKeihanRecord)
+    .map(toNishikitaRecord)
     .filter((record) => /^\d+$/.test(record.property_number) && record.property_name)
 }
 
@@ -164,7 +170,7 @@ async function main() {
   const supabaseKey = env.VITE_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('.env または .env.local に Supabase の設定が見つかりません。')
+    throw new Error('Supabase settings were not found in .env or .env.local.')
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey)
@@ -172,11 +178,11 @@ async function main() {
   const nextMap = groupByPropertyNumber(sheetRecords)
 
   const { data: currentData, error: fetchError } = await supabase
-    .from('sns_keihan_karilun_properties')
+    .from(TABLE_NAME)
     .select('id, property_number')
 
   if (fetchError) {
-    throw new Error(`現在の京阪かりるんデータの読み込みに失敗しました: ${fetchError.message}`)
+    throw new Error(`Failed to read current Nishikita rows: ${fetchError.message}`)
   }
 
   const currentRows = currentData || []
@@ -202,28 +208,28 @@ async function main() {
     .map((row) => row.id)
 
   if (deleteIds.length > 0) {
-    const { error } = await supabase.from('sns_keihan_karilun_properties').delete().in('id', deleteIds)
+    const { error } = await supabase.from(TABLE_NAME).delete().in('id', deleteIds)
     if (error) {
-      throw new Error(`不要な京阪かりるんデータの削除に失敗しました: ${error.message}`)
+      throw new Error(`Failed to delete old Nishikita rows: ${error.message}`)
     }
   }
 
   for (const record of updates) {
     const { id, ...payload } = record
-    const { error } = await supabase.from('sns_keihan_karilun_properties').update(payload).eq('id', id)
+    const { error } = await supabase.from(TABLE_NAME).update(payload).eq('id', id)
     if (error) {
-      throw new Error(`京阪かりるんデータの更新に失敗しました (${record.property_number}): ${error.message}`)
+      throw new Error(`Failed to update Nishikita row ${record.property_number}: ${error.message}`)
     }
   }
 
   if (inserts.length > 0) {
-    const { error } = await supabase.from('sns_keihan_karilun_properties').insert(inserts)
+    const { error } = await supabase.from(TABLE_NAME).insert(inserts)
     if (error) {
-      throw new Error(`京阪かりるんデータの追加に失敗しました: ${error.message}`)
+      throw new Error(`Failed to insert Nishikita rows: ${error.message}`)
     }
   }
 
-  console.log(`完了: 対象 ${sheetRecords.length}件 / 更新 ${updates.length}件 / 追加 ${inserts.length}件 / 削除 ${deleteIds.length}件`)
+  console.log(`Done. source ${sheetRecords.length} / updated ${updates.length} / inserted ${inserts.length} / deleted ${deleteIds.length}`)
 }
 
 main().catch((error) => {

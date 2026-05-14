@@ -86,10 +86,8 @@ function getYoutubePropertyNumberCode(propertyNumber) {
 function getYoutubeYearFromPropertyNumber(propertyNumber) {
   const code = getYoutubePropertyNumberCode(propertyNumber)
   if (code === null) return null
-  if (code >= 545 && code <= 612) return 2026
-  if (code >= 201 && code <= 544) return 2025
-  if (code >= 1 && code <= 200) return 2024
-  return null
+  if (code >= 545) return 2026
+  return 2025
 }
 
 function normalizeYoutubePostDate(rawDate, propertyNumber) {

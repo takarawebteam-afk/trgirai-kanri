@@ -84,10 +84,8 @@ function getPropertyNumberCode(propertyNumber) {
 function getInstagramYearFromPropertyNumber(propertyNumber) {
   const code = getPropertyNumberCode(propertyNumber)
   if (code === null) return null
-  if (code >= 485 && code <= 598) return 2026
-  if (code >= 133 && code <= 484) return 2025
-  if (code >= 1 && code <= 132) return 2024
-  return null
+  if (code >= 485) return 2026
+  return 2025
 }
 
 function normalizeInstagramPostDate(rawDate, propertyNumber) {
