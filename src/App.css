@@ -3836,6 +3836,44 @@ button.secondary.small {
   box-sizing: border-box;
 }
 
+.progress-cell-link-view {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.progress-cell-link-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-inline-link {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.progress-cell-link-edit {
+  flex: 0 0 auto;
+  border: none;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.progress-cell-link-edit:hover {
+  background: #dbeafe;
+}
+
 .progress-editable-select {
   position: relative;
   min-width: 0;

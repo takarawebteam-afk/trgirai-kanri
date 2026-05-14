@@ -60,6 +60,7 @@ type ProgressTextCellInputProps = {
   value: string
   placeholder?: string
   className?: string
+  linkify?: boolean
   inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
   lang?: string
   autoCapitalize?: React.HTMLAttributes<HTMLInputElement>['autoCapitalize']
@@ -95,6 +96,7 @@ type SelectOptionGroup =
   | 'register_aos'
   | 'register_youtube'
   | 'acquisition_source'
+  | 'post_text'
 type SelectMenuState = {
   id: string
   field: keyof ProductionRecord
@@ -151,6 +153,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   register_wp: REGISTER_OPTIONS.map((option) => option.label),
   register_aos: REGISTER_OPTIONS.map((option) => option.label),
   register_youtube: REGISTER_OPTIONS.map((option) => option.label),
+  post_text: ['未設定', '作成中', '完了'],
   acquisition_source: ['リアプロ', 'イタンジ', 'レインズ', '管理会社HP', 'その他'],
 }
 
@@ -179,6 +182,7 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   register_aos: 'AOS登録',
   register_youtube: 'YouTube予約',
   acquisition_source: '取得先',
+  post_text: '投稿文',
 }
 const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
   floor_plan_order: '図面準備',
@@ -193,6 +197,7 @@ const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>
   audio_source: '音源',
   wp_registered: 'WP登録',
   youtube_reserved: 'YouTube予約',
+  post_text: '投稿文',
 }
 
 function normalizeSelectOptions(options: string[]) {
@@ -333,10 +338,37 @@ function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
   )
 }
 
+const URL_PATTERN = /(https?:\/\/[^\s]+|www\.[^\s]+)/g
+
+function getUrlParts(value: string) {
+  const parts: { text: string; isUrl: boolean }[] = []
+  let lastIndex = 0
+
+  value.replace(URL_PATTERN, (match, _url, offset) => {
+    if (offset > lastIndex) {
+      parts.push({ text: value.slice(lastIndex, offset), isUrl: false })
+    }
+    parts.push({ text: match, isUrl: true })
+    lastIndex = offset + match.length
+    return match
+  })
+
+  if (lastIndex < value.length) {
+    parts.push({ text: value.slice(lastIndex), isUrl: false })
+  }
+
+  return parts
+}
+
+function toHref(value: string) {
+  return value.startsWith('www.') ? `https://${value}` : value
+}
+
 function ProgressTextCellInput({
   value,
   placeholder = '',
   className = 'progress-cell-input',
+  linkify = true,
   inputMode,
   lang,
   autoCapitalize,
@@ -349,12 +381,23 @@ function ProgressTextCellInput({
   const [isSaving, setIsSaving] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const shouldCommitAfterCompositionRef = useRef(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (!isComposing && !isSaving && !isFocused) {
       setDraft(value)
     }
   }, [isComposing, isFocused, isSaving, value])
+
+  const urlParts = getUrlParts(draft)
+  const shouldShowLinkView = linkify && !isFocused && urlParts.some((part) => part.isUrl)
+
+  function startEditing() {
+    setIsFocused(true)
+    window.setTimeout(() => {
+      inputRef.current?.focus()
+    }, 0)
+  }
 
   async function commit(nextValue = draft) {
     if (isSaving || nextValue === value) return
@@ -368,7 +411,33 @@ function ProgressTextCellInput({
 
   return (
     <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      {shouldShowLinkView ? (
+        <div className="progress-cell-link-view" onClick={(e) => e.stopPropagation()}>
+          <span className="progress-cell-link-text">
+            {urlParts.map((part, index) =>
+              part.isUrl ? (
+                <a
+                  key={`${part.text}-${index}`}
+                  className="progress-inline-link"
+                  href={toHref(part.text)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {part.text}
+                </a>
+              ) : (
+                <span key={`${part.text}-${index}`}>{part.text}</span>
+              ),
+            )}
+          </span>
+          <button type="button" className="progress-cell-link-edit" onClick={startEditing}>
+            編集
+          </button>
+        </div>
+      ) : (
       <input
+        ref={inputRef}
         className={className}
         value={draft}
         placeholder={placeholder}
@@ -420,6 +489,7 @@ function ProgressTextCellInput({
         }}
         onClick={(e) => e.stopPropagation()}
       />
+      )}
     </div>
   )
 }
@@ -490,6 +560,7 @@ const PROGRESS_SHARED_COLUMN_WIDTHS = {
   acquisitionSource: 118,
   managementCompany: 166,
   audioSource: 160,
+  postText: 90,
 } as const
 
 const PROGRESS_INSTAGRAM_COLUMN_WIDTHS = {
@@ -1436,7 +1507,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 88 }} />
           <col style={{ width: 88 }} />
           <col style={{ width: 120 }} />
-          <col style={{ width: 180 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.postText }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 56 }} />
@@ -1504,7 +1575,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'afureko')}</td>
               <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
               <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'floor_plan_check')}</td>
-              <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
+              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'youtube_reserved')}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
@@ -1537,7 +1608,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 101 }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.memo }} />
           <col style={{ width: 98 }} />
-          <col style={{ width: 180 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.postText }} />
           <col style={{ width: 98 }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.audioSource }} />
           <col style={{ width: 56 }} />
@@ -1593,7 +1664,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
-              <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
+              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
               <td className="ptcell-group-4">{renderRegisterCell(record, 'wp_registered')}</td>
               <td className="ptcell-group-4">{renderTextCell(record, 'audio_source', '音源')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
@@ -1615,7 +1686,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 49 }} />
           <col style={{ width: 40 }} />
           <col style={{ width: 88 }} />
-          <col style={{ width: 180 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.postText }} />
           <col style={{ width: 296 }} />
           <col style={{ width: 56 }} />
           <col style={{ width: 72 }} />
@@ -1643,7 +1714,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
               <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'floor_plan_insert')}</td>
-              <td className="ptcell-group-4">{renderTextCell(record, 'post_text', '投稿文')}</td>
+              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
@@ -1925,7 +1996,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <>
         <label className="form-label">
           投稿文
-          <textarea value={form.post_text} onChange={(e) => setForm({ ...form, post_text: e.target.value })} />
+          <select value={form.post_text} onChange={(e) => setForm({ ...form, post_text: e.target.value })}>
+            <option value="">未設定</option>
+            {selectOptions.post_text.map((option) => <option key={option} value={option}>{option}</option>)}
+            {form.post_text && !selectOptions.post_text.includes(form.post_text) && (
+              <option value={form.post_text}>{form.post_text}</option>
+            )}
+          </select>
         </label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label className="form-label">
