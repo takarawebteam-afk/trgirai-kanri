@@ -219,8 +219,12 @@ type SnsPropertyTableName =
   | 'sns_yao_properties'
 
 type SnsPostingRule = {
+  id: string
   account_platform_key: string
-  day_of_week: number
+  rule_type: 'weekday' | 'interval'
+  day_of_week: number | null
+  interval_days: number | null
+  reference_date: string | null
 }
 
 type SnsMemoEditorState = {
@@ -1966,7 +1970,7 @@ function App() {
 
   async function saveSokanriRule(apKey: string, dayOfWeek: number, checked: boolean) {
     if (checked) {
-      await supabase.from('sns_posting_rules').upsert({ account_platform_key: apKey, day_of_week: dayOfWeek })
+      await supabase.from('sns_posting_rules').upsert({ account_platform_key: apKey, rule_type: 'weekday', day_of_week: dayOfWeek })
     } else {
       await supabase.from('sns_posting_rules').delete().eq('account_platform_key', apKey).eq('day_of_week', dayOfWeek)
     }
@@ -1974,11 +1978,57 @@ function App() {
     setSnsPostingRules((data || []) as SnsPostingRule[])
   }
 
+  async function saveIntervalRule(apKey: string, intervalDays: number, referenceDate: string) {
+    await supabase
+      .from('sns_posting_rules')
+      .delete()
+      .eq('account_platform_key', apKey)
+      .eq('rule_type', 'interval')
+
+    await supabase.from('sns_posting_rules').insert({
+      account_platform_key: apKey,
+      rule_type: 'interval',
+      interval_days: intervalDays,
+      reference_date: referenceDate,
+      day_of_week: null,
+    })
+
+    const { data } = await supabase.from('sns_posting_rules').select('*')
+    setSnsPostingRules((data || []) as SnsPostingRule[])
+  }
+
+  async function deleteIntervalRule(apKey: string) {
+    await supabase
+      .from('sns_posting_rules')
+      .delete()
+      .eq('account_platform_key', apKey)
+      .eq('rule_type', 'interval')
+
+    const { data } = await supabase.from('sns_posting_rules').select('*')
+    setSnsPostingRules((data || []) as SnsPostingRule[])
+  }
+
   function getSokanriCellStatus(apKey: string, date: Date): '✅' | '⚠️' | '─' {
     const dayOfWeek = date.getDay()
-    const hasRule = snsPostingRules.some((rule) => rule.account_platform_key === apKey && rule.day_of_week === dayOfWeek)
-    if (!hasRule) return '─'
     const dateStr = date.toISOString().slice(0, 10)
+
+    const hasWeekdayRule = snsPostingRules.some(
+      (rule) => rule.account_platform_key === apKey && rule.rule_type === 'weekday' && rule.day_of_week === dayOfWeek,
+    )
+
+    const intervalRule = snsPostingRules.find(
+      (rule) => rule.account_platform_key === apKey && rule.rule_type === 'interval' && rule.reference_date && rule.interval_days,
+    )
+    let hasIntervalRule = false
+    if (intervalRule?.reference_date && intervalRule.interval_days) {
+      const ref = new Date(intervalRule.reference_date)
+      const target = new Date(dateStr)
+      const diffDays = Math.round((target.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24))
+      hasIntervalRule = diffDays >= 0 && diffDays % intervalRule.interval_days === 0
+    }
+
+    if (!hasWeekdayRule && !hasIntervalRule) return '─'
+
     const done = (sokanriData[apKey] || []).includes(dateStr)
     return done ? '✅' : '⚠️'
   }
@@ -4973,31 +5023,87 @@ function App() {
                               <th>アカウント</th>
                               <th>媒体</th>
                               {DAY_LABELS.map((label, index) => <th key={index}>{label}</th>)}
+                              <th>間隔指定</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {SOKANRI_ROWS.map((row) => (
-                              <tr key={row.apKey} style={{ backgroundColor: row.accountColor }}>
-                                <td>{row.account}</td>
-                                <td>
-                                  <span className="sokanri-platform-badge" style={{ backgroundColor: PLATFORM_LABEL_STYLE[row.platform].bg, color: PLATFORM_LABEL_STYLE[row.platform].color }}>
-                                    {row.platform}
-                                  </span>
-                                </td>
-                                {[0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
-                                  const checked = snsPostingRules.some((rule) => rule.account_platform_key === row.apKey && rule.day_of_week === dayOfWeek)
-                                  return (
-                                    <td key={dayOfWeek} className="sokanri-settings-check">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={(event) => void saveSokanriRule(row.apKey, dayOfWeek, event.target.checked)}
-                                      />
-                                    </td>
-                                  )
-                                })}
-                              </tr>
-                            ))}
+                            {SOKANRI_ROWS.map((row) => {
+                              const intervalRule = snsPostingRules.find(
+                                (rule) => rule.account_platform_key === row.apKey && rule.rule_type === 'interval',
+                              )
+
+                              return (
+                                <tr key={row.apKey} style={{ backgroundColor: row.accountColor }}>
+                                  <td>{row.account}</td>
+                                  <td>
+                                    <span className="sokanri-platform-badge" style={{ backgroundColor: PLATFORM_LABEL_STYLE[row.platform].bg, color: PLATFORM_LABEL_STYLE[row.platform].color }}>
+                                      {row.platform}
+                                    </span>
+                                  </td>
+                                  {[0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
+                                    const checked = snsPostingRules.some(
+                                      (rule) => rule.account_platform_key === row.apKey && rule.rule_type === 'weekday' && rule.day_of_week === dayOfWeek,
+                                    )
+                                    return (
+                                      <td key={dayOfWeek} className="sokanri-settings-check">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={(event) => void saveSokanriRule(row.apKey, dayOfWeek, event.target.checked)}
+                                        />
+                                      </td>
+                                    )
+                                  })}
+                                  <td className="sokanri-settings-interval">
+                                    {intervalRule ? (
+                                      <div className="sokanri-interval-active">
+                                        <span className="sokanri-interval-badge">
+                                          {intervalRule.reference_date}〜 {intervalRule.interval_days}日ごと
+                                        </span>
+                                        <button
+                                          type="button"
+                                          className="sokanri-interval-delete"
+                                          onClick={() => void deleteIntervalRule(row.apKey)}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="sokanri-interval-form">
+                                        <input
+                                          type="date"
+                                          className="sokanri-interval-input-date"
+                                          defaultValue={new Date().toISOString().slice(0, 10)}
+                                          id={`interval-date-${row.apKey}`}
+                                        />
+                                        <input
+                                          type="number"
+                                          className="sokanri-interval-input-days"
+                                          defaultValue="3"
+                                          min="1"
+                                          max="30"
+                                          id={`interval-days-${row.apKey}`}
+                                        />
+                                        <span>日ごと</span>
+                                        <button
+                                          type="button"
+                                          className="sokanri-interval-save"
+                                          onClick={() => {
+                                            const dateEl = document.getElementById(`interval-date-${row.apKey}`) as HTMLInputElement | null
+                                            const daysEl = document.getElementById(`interval-days-${row.apKey}`) as HTMLInputElement | null
+                                            if (dateEl && daysEl && daysEl.value) {
+                                              void saveIntervalRule(row.apKey, parseInt(daysEl.value, 10), dateEl.value)
+                                            }
+                                          }}
+                                        >
+                                          設定
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
