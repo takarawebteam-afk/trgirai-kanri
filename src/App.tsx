@@ -391,6 +391,12 @@ const TEAM_MEMBERS = [
 
 const TEAM_MEMBER_OPTIONS = TEAM_MEMBERS.filter((member) => member.name !== 'WEBチーム')
 const MEMBER_NAME_BY_CALENDAR_ID = Object.fromEntries(TEAM_MEMBERS.map((member) => [member.calendarId, member.name])) as Record<string, string>
+const STOCK_ATTENDANCE_MEMBERS = [
+  { name: '泉', badge: '泉', calendarId: 'izumiyurina2322@gmail.com' },
+  { name: '坂本', badge: '坂', calendarId: 'takarabaito3@gmail.com' },
+  { name: '吉田', badge: '吉', calendarId: 'takarabaito1@gmail.com' },
+] as const
+const STOCK_HONMACHI_MEMBER = { name: '新居', badge: '新', calendarId: 'trg.yshini@gmail.com' } as const
 
 const DEFAULT_TASK_REPORT_CATEGORIES = [
   {
@@ -1559,6 +1565,8 @@ function App() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const [stockAttendanceMap, setStockAttendanceMap] = useState<Record<string, string[]>>({})
+  const [stockHonmachiDateMap, setStockHonmachiDateMap] = useState<Record<string, boolean>>({})
   const [weatherMap, setWeatherMap] = useState<Record<string, number>>({})
   const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
   const [bushoForm, setBushoForm] = useState(defaultBushoForm)
@@ -2753,6 +2761,100 @@ function App() {
     } catch { /* 天気取得失敗時は無視 */ }
   }
 
+  async function fetchStockAttendance(yearMonth: string) {
+    setStockAttendanceMap({})
+    setStockHonmachiDateMap({})
+
+    const token = getSavedToken()
+    if (!token) {
+      return
+    }
+
+    const [y, m] = yearMonth.split('-').map(Number)
+    const startDateText = `${y}-${String(m).padStart(2, '0')}-01`
+    const endDateText = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`
+    const monthLastDay = new Date(y, m, 0).getDate()
+    const dateTexts = Array.from({ length: monthLastDay }, (_, index) => (
+      `${y}-${String(m).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`
+    ))
+    const eventSummariesByMember: Record<string, Record<string, string[]>> = {}
+    const loadedCalendarIds = new Set<string>()
+    const formatJapanDate = (dateTime: string) => {
+      const parts = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(new Date(dateTime))
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+      return `${values.year}-${values.month}-${values.day}`
+    }
+
+    await Promise.all(
+      [...STOCK_ATTENDANCE_MEMBERS, STOCK_HONMACHI_MEMBER].map(async (member) => {
+        try {
+          const params = new URLSearchParams({
+            timeMin: `${startDateText}T00:00:00+09:00`,
+            timeMax: `${endDateText}T00:00:00+09:00`,
+            timeZone: 'Asia/Tokyo',
+            singleEvents: 'true',
+            orderBy: 'startTime',
+            maxResults: '2500',
+          })
+          const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?${params.toString()}`
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+          if (res.status === 401) {
+            clearToken()
+            return
+          }
+          if (!res.ok) return
+
+          const data = await res.json() as {
+            items?: { summary?: string; start?: { dateTime?: string; date?: string } }[]
+          }
+          loadedCalendarIds.add(member.calendarId)
+          const summariesByDate: Record<string, string[]> = {}
+          ;(data.items || []).forEach((event) => {
+            const dateText = event.start?.date
+              || (event.start?.dateTime ? formatJapanDate(event.start.dateTime) : '')
+            if (!dateText) return
+            if (!summariesByDate[dateText]) summariesByDate[dateText] = []
+            summariesByDate[dateText].push(event.summary || '')
+          })
+          eventSummariesByMember[member.calendarId] = summariesByDate
+        } catch {
+          eventSummariesByMember[member.calendarId] = {}
+        }
+      }),
+    )
+
+    const nextMap: Record<string, string[]> = {}
+    const nextHonmachiDateMap: Record<string, boolean> = {}
+    dateTexts.forEach((dateText) => {
+      const workingMembers: string[] = STOCK_ATTENDANCE_MEMBERS.filter((member) => {
+        if (!loadedCalendarIds.has(member.calendarId)) return false
+        const summaries = eventSummariesByMember[member.calendarId]?.[dateText] || []
+        const hasDayOff = summaries.some((summary) => summary.includes('公休'))
+        if (hasDayOff) return false
+        return true
+      }).map((member) => member.badge)
+
+      const honmachiSummaries = eventSummariesByMember[STOCK_HONMACHI_MEMBER.calendarId]?.[dateText] || []
+      const isHonmachiWorkDay = loadedCalendarIds.has(STOCK_HONMACHI_MEMBER.calendarId)
+        && honmachiSummaries.some((summary) => summary.includes('本町'))
+
+      if (isHonmachiWorkDay) {
+        workingMembers.push(STOCK_HONMACHI_MEMBER.badge)
+        nextHonmachiDateMap[dateText] = true
+      }
+
+      if (workingMembers.length > 0) nextMap[dateText] = workingMembers
+    })
+
+    setStockAttendanceMap(nextMap)
+    setStockHonmachiDateMap(nextHonmachiDateMap)
+  }
+
   useEffect(() => {
     const savedToken = getSavedToken()
     if (!savedToken) {
@@ -3751,6 +3853,11 @@ function App() {
   useEffect(() => {
     fetchWeather(stockCalendarMonth)
   }, [stockCalendarMonth])
+
+  useEffect(() => {
+    if (!currentUserEmail || activePage !== 'stock') return
+    fetchStockAttendance(stockCalendarMonth)
+  }, [currentUserEmail, activePage, stockCalendarMonth])
 
   const confirmAndDeleteRecord = async (
     tableName: string,
@@ -5405,27 +5512,41 @@ function App() {
                     {['日','月','火','水','木','金','土'].map(w => (
                       <div key={w} className="cal-weekday" style={{ color: w === '日' ? '#ef4444' : w === '土' ? '#3b82f6' : undefined }}>{w}</div>
                     ))}
-                    {cells.map((cell, i) => (
-                      <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
-                          {!cell.isOtherMonth && cell.date && weatherMap[cell.date] !== undefined && (
-                            <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天気: ${getWeatherEmoji(weatherMap[cell.date])}`}>
-                              {getWeatherEmoji(weatherMap[cell.date])}
-                            </span>
-                          )}
-                        </div>
-                        {cell.stocks.map(s => {
-                          const done = s.achieved_count >= s.required_count
-                          return (
-                            <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
-                              <span className="stock-badge-label">{s.label}</span>
-                              <span className="stock-badge-count">{s.achieved_count}/{s.required_count}件</span>
+                    {cells.map((cell, i) => {
+                      const attendanceBadges = cell.date
+                        ? (stockAttendanceMap[cell.date] || []).filter((badge) => badge !== '新' || stockHonmachiDateMap[cell.date])
+                        : []
+                      return (
+                        <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
+                          <div className="cal-cell-top">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <span className="cal-day-num" style={{ color: (i % 7 === 0) ? '#ef4444' : (i % 7 === 6) ? '#3b82f6' : undefined }}>{cell.day}</span>
+                              {!cell.isOtherMonth && cell.date && weatherMap[cell.date] !== undefined && (
+                                <span style={{ fontSize: '0.85rem', lineHeight: 1, userSelect: 'none' }} title={`天気: ${getWeatherEmoji(weatherMap[cell.date])}`}>
+                                  {getWeatherEmoji(weatherMap[cell.date])}
+                                </span>
+                              )}
                             </div>
-                          )
-                        })}
-                      </div>
-                    ))}
+                            {!cell.isOtherMonth && attendanceBadges.length > 0 && (
+                              <div className="stock-attendance-badges" title={`出勤: ${attendanceBadges.join('、')}`}>
+                                {attendanceBadges.map((badge) => (
+                                  <span key={badge} className={`stock-attendance-badge stock-attendance-badge-${badge}`}>{badge}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {cell.stocks.map(s => {
+                            const done = s.achieved_count >= s.required_count
+                            return (
+                              <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
+                                <span className="stock-badge-label">{s.label}</span>
+                                <span className="stock-badge-count">{s.achieved_count}/{s.required_count}件</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </section>

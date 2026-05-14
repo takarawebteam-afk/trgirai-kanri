@@ -3004,6 +3004,61 @@ button.secondary.small {
   color: #2563eb;
 }
 
+.cal-cell-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stock-attendance-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  max-width: 88px;
+}
+
+.stock-attendance-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stock-attendance-badge-新 {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.stock-attendance-badge-泉 {
+  background: #f3e8ff;
+  border-color: #a855f7;
+  color: #6b21a8;
+}
+
+.stock-attendance-badge-坂 {
+  background: #dbeafe;
+  border-color: #1d4ed8;
+  color: #1e3a8a;
+}
+
+.stock-attendance-badge-吉 {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
 .stock-badge {
   background: #dbeafe;
   color: #1e40af;
