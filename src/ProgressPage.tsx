@@ -964,6 +964,52 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
   }
 
+  async function saveInstagramPropertyFromProgress(record: ProductionRecord) {
+    const progressPropertyNumber = record.property_number.trim()
+    const propertyNumber = progressPropertyNumber || await getNextPropertyNumber('sns_instagram_properties')
+    const rowData = {
+      property_number: propertyNumber,
+      ...buildExtendedSnsPropertyData(record),
+      category: record.post_type || '',
+    }
+
+    if (progressPropertyNumber) {
+      const { data: existingRows, error: findError } = await supabase
+        .from('sns_instagram_properties')
+        .select('id')
+        .eq('property_number', progressPropertyNumber)
+        .limit(1)
+
+      if (findError) {
+        alert(`Instagram一覧の物件番号確認に失敗しました。\n${findError.message}`)
+        return false
+      }
+
+      const existingId = existingRows?.[0]?.id
+      if (existingId) {
+        const { error } = await supabase
+          .from('sns_instagram_properties')
+          .update(rowData)
+          .eq('id', existingId)
+
+        if (error) {
+          alert(`Instagram一覧への反映に失敗しました。\n${error.message}`)
+          return false
+        }
+
+        return true
+      }
+    }
+
+    const { error } = await supabase.from('sns_instagram_properties').insert([rowData])
+    if (error) {
+      alert(`Instagram一覧への反映に失敗しました。\n${error.message}`)
+      return false
+    }
+
+    return true
+  }
+
   async function promoteToSnsPropertySafe(record: ProductionRecord, trigger: 'post_completed' | 'youtube_reserved') {
     if (trigger === 'post_completed') {
       let tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | null = null
@@ -1013,21 +1059,27 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       if (tableName) {
         if (!window.confirm(`SNS物件管理の「${label}」へ反映しますか？`)) return
 
-        const insertData = {
-          property_number: await getNextPropertyNumber(tableName),
-          ...buildExtendedSnsPropertyData(record),
-          ...(tableName === 'sns_tiktok_properties'
-            ? { aos_registered: record.aos_registered || '' }
-            : { category: record.post_type || '' }),
-        }
+        if (tableName === 'sns_instagram_properties') {
+          const saved = await saveInstagramPropertyFromProgress(record)
+          if (!saved) return
+          if (target) onSnsPropertyPromoted?.(target)
+        } else {
+          const insertData = {
+            property_number: await getNextPropertyNumber(tableName),
+            ...buildExtendedSnsPropertyData(record),
+            ...(tableName === 'sns_tiktok_properties'
+              ? { aos_registered: record.aos_registered || '' }
+              : { category: record.post_type || '' }),
+          }
 
-        const { error } = await supabase.from(tableName).insert([insertData])
-        if (error) {
-          alert(`SNS物件管理への反映に失敗しました。\n${error.message}`)
-          return
-        }
+          const { error } = await supabase.from(tableName).insert([insertData])
+          if (error) {
+            alert(`SNS物件管理への反映に失敗しました。\n${error.message}`)
+            return
+          }
 
-        if (target) onSnsPropertyPromoted?.(target)
+          if (target) onSnsPropertyPromoted?.(target)
+        }
       } else if (!storeConfig) {
         return
       }
