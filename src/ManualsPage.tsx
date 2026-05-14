@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import Color from '@tiptap/extension-color'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -8,15 +8,36 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import { TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
-import { EditorContent, useEditor } from '@tiptap/react'
+import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
+import type { NodeViewProps } from '@tiptap/react'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
 import { supabase } from './supabase'
 
 type ManualPageRecord = {
   id: string
   title: string
   content: string
+  section_id: string | null
+  sort_order: number
   created_at?: string
   updated_at?: string
+}
+
+type ManualSectionRecord = {
+  id: string
+  name: string
+  sort_order: number
+  created_at?: string
 }
 
 type ManualCategoryRecord = {
@@ -41,6 +62,99 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const MANUAL_IMAGE_BUCKET = 'manual-images'
 const EMPTY_CONTENT = '<p></p>'
+const UNCATEGORIZED_SECTION_ID = '__uncategorized__'
+
+function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = (node.attrs.width as number) || 480
+
+    dragRef.current = { startX, startWidth }
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = moveEvent.clientX - dragRef.current.startX
+      const newWidth = Math.max(80, Math.min(920, dragRef.current.startWidth + delta))
+      updateAttributes({ width: Math.round(newWidth) })
+    }
+
+    const onMouseUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  return (
+    <NodeViewWrapper className="manual-image-wrapper">
+      <img
+        src={node.attrs.src as string}
+        width={(node.attrs.width as number) || 480}
+        style={{
+          display: 'block',
+          maxWidth: '100%',
+          borderRadius: '12px',
+          boxShadow: selected
+            ? '0 0 0 2px #3b8cf0, 0 10px 24px rgba(15,23,42,0.12)'
+            : '0 10px 24px rgba(15,23,42,0.12)',
+        }}
+        alt=""
+        draggable={false}
+      />
+      {selected && <div className="manual-image-resize-handle" onMouseDown={handleMouseDown} />}
+    </NodeViewWrapper>
+  )
+}
+
+function DraggableNoteItem({
+  page,
+  isSelected,
+  onSelect,
+}: {
+  page: ManualPageRecord
+  isSelected: boolean
+  onSelect: () => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: page.id })
+
+  return (
+    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.4 : 1 }}>
+      <button
+        type="button"
+        className={`manual-page-item ${isSelected ? 'active' : ''}`}
+        onClick={onSelect}
+      >
+        <span className="manual-drag-handle" {...listeners} {...attributes}>⠿</span>
+        <strong>{page.title || '無題'}</strong>
+      </button>
+    </div>
+  )
+}
+
+function DroppableSection({
+  sectionId,
+  children,
+}: {
+  sectionId: string
+  children: ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `drop:${sectionId}` })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`manual-section-notes manual-drop-zone${isOver ? ' manual-drop-zone-over' : ''}`}
+    >
+      {children}
+    </div>
+  )
+}
 
 const ManualImage = Image.extend({
   addAttributes() {
@@ -56,17 +170,25 @@ const ManualImage = Image.extend({
       },
     }
   },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView)
+  },
 })
 
 function ManualsPage() {
   const [pages, setPages] = useState<ManualPageRecord[]>([])
+  const [sections, setSections] = useState<ManualSectionRecord[]>([])
   const [categories, setCategories] = useState<ManualCategoryRecord[]>([])
   const [pageCategories, setPageCategories] = useState<ManualPageCategoryRecord[]>([])
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
   const [draft, setDraft] = useState<ManualPageDraft | null>(null)
   const [search, setSearch] = useState('')
-  const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([])
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [newSectionName, setNewSectionName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [activeCategoryFilters, setActiveCategoryFilters] = useState<string[]>([])
+  const [isCategoryFilterOpen, setIsCategoryFilterOpen] = useState(false)
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('未保存の変更はありません')
   const [loading, setLoading] = useState(true)
@@ -74,6 +196,12 @@ function ManualsPage() {
   const autosaveTimerRef = useRef<number | null>(null)
   const lastSavedSignatureRef = useRef('')
   const draftRef = useRef<ManualPageDraft | null>(null)
+  const handleImageUploadRef = useRef<((file: File) => Promise<void>) | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  )
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -94,6 +222,20 @@ function ManualsPage() {
       ManualImage,
     ],
     content: EMPTY_CONTENT,
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const imageFile = Array.from(event.clipboardData?.items ?? [])
+          .find((item) => item.type.startsWith('image/'))
+          ?.getAsFile()
+
+        if (imageFile && handleImageUploadRef.current) {
+          void handleImageUploadRef.current(imageFile)
+          return true
+        }
+
+        return false
+      },
+    },
     onUpdate: ({ editor: currentEditor }) => {
       setDraft((current) => {
         if (!current) return current
@@ -111,10 +253,11 @@ function ManualsPage() {
 
   const loadManualData = async () => {
     setLoading(true)
-    const [pagesResult, categoriesResult, junctionsResult] = await Promise.all([
-      supabase.from('manual_pages').select('id, title, content, created_at, updated_at').order('updated_at', { ascending: false }),
+    const [pagesResult, categoriesResult, junctionsResult, sectionsResult] = await Promise.all([
+      supabase.from('manual_pages').select('id, title, content, section_id, sort_order, created_at, updated_at').order('sort_order', { ascending: true }),
       supabase.from('manual_categories').select('id, name, created_at').order('name', { ascending: true }),
       supabase.from('manual_page_categories').select('page_id, category_id'),
+      supabase.from('manual_sections').select('id, name, sort_order, created_at').order('sort_order', { ascending: true }),
     ])
 
     if (pagesResult.error) {
@@ -132,11 +275,18 @@ function ManualsPage() {
       setSaveMessage(`カテゴリ紐付け取得に失敗しました: ${junctionsResult.error.message}`)
     }
 
+    if (sectionsResult.error) {
+      setSaveState('error')
+      setSaveMessage(`セクション取得に失敗しました: ${sectionsResult.error.message}`)
+    }
+
     const nextPages = (pagesResult.data ?? []) as ManualPageRecord[]
     const nextCategories = (categoriesResult.data ?? []) as ManualCategoryRecord[]
     const nextPageCategories = (junctionsResult.data ?? []) as ManualPageCategoryRecord[]
+    const nextSections = (sectionsResult.data ?? []) as ManualSectionRecord[]
 
     setPages(nextPages)
+    setSections(nextSections)
     setCategories(nextCategories)
     setPageCategories(nextPageCategories)
     setLoading(false)
@@ -153,6 +303,7 @@ function ManualsPage() {
     const channel = supabase
       .channel('manual-pages-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_pages' }, loadManualData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_sections' }, loadManualData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_categories' }, loadManualData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_page_categories' }, loadManualData)
       .subscribe()
@@ -207,14 +358,18 @@ function ManualsPage() {
 
     return pages.filter((page) => {
       const pageCategoryIds = pageCategories.filter((entry) => entry.page_id === page.id).map((entry) => entry.category_id)
-      const pageCategoryNames = pageCategoryIds.map((categoryId) => categoryNameMap[categoryId] || '')
-      const plainText = stripHtml(page.content || '').toLowerCase()
 
-      if (activeCategoryFilters.length > 0 && !activeCategoryFilters.every((filterId) => pageCategoryIds.includes(filterId))) {
+      if (
+        activeCategoryFilters.length > 0 &&
+        !activeCategoryFilters.every((id) => pageCategoryIds.includes(id))
+      ) {
         return false
       }
 
       if (!keyword) return true
+
+      const pageCategoryNames = pageCategoryIds.map((categoryId) => categoryNameMap[categoryId] || '')
+      const plainText = stripHtml(page.content || '').toLowerCase()
 
       return (
         page.title.toLowerCase().includes(keyword) ||
@@ -321,10 +476,15 @@ function ManualsPage() {
 
   const handleCreatePage = async () => {
     const id = crypto.randomUUID()
+    const maxOrder = pages
+      .filter((page) => (page.section_id ?? null) === null)
+      .reduce((max, page) => Math.max(max, page.sort_order), -1)
     const insertResult = await supabase.from('manual_pages').insert({
       id,
       title: '新しいページ',
       content: EMPTY_CONTENT,
+      section_id: null,
+      sort_order: maxOrder + 1,
       updated_at: new Date().toISOString(),
     })
 
@@ -388,6 +548,39 @@ function ManualsPage() {
     await loadManualData()
   }
 
+  const handleCreateSection = async () => {
+    const name = newSectionName.trim()
+    if (!name) return
+
+    const maxOrder = sections.reduce((max, section) => Math.max(max, section.sort_order), -1)
+    const insertResult = await supabase.from('manual_sections').insert({
+      id: crypto.randomUUID(),
+      name,
+      sort_order: maxOrder + 1,
+    })
+
+    if (insertResult.error) {
+      setSaveState('error')
+      setSaveMessage(`セクション作成に失敗しました: ${insertResult.error.message}`)
+      return
+    }
+
+    setNewSectionName('')
+    await loadManualData()
+  }
+
+  const handleDeleteSection = async (sectionId: string) => {
+    const deleteResult = await supabase.from('manual_sections').delete().eq('id', sectionId)
+
+    if (deleteResult.error) {
+      setSaveState('error')
+      setSaveMessage(`セクション削除に失敗しました: ${deleteResult.error.message}`)
+      return
+    }
+
+    await loadManualData()
+  }
+
   const toggleCategoryForDraft = (categoryId: string) => {
     updateDraft((current) => ({
       ...current,
@@ -397,12 +590,59 @@ function ManualsPage() {
     }))
   }
 
-  const toggleCategoryFilter = (categoryId: string) => {
-    setActiveCategoryFilters((current) =>
-      current.includes(categoryId)
-        ? current.filter((id) => id !== categoryId)
-        : [...current, categoryId],
-    )
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current)
+      if (next.has(sectionId)) next.delete(sectionId)
+      else next.add(sectionId)
+      return next
+    })
+  }
+
+  const moveNoteToSection = async (noteId: string, targetSectionId: string | null) => {
+    const sectionNotes = pages
+      .filter((page) => (page.section_id ?? null) === targetSectionId && page.id !== noteId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+
+    const newOrder = sectionNotes.length > 0
+      ? (sectionNotes[sectionNotes.length - 1].sort_order ?? 0) + 1
+      : 0
+
+    const updateResult = await supabase
+      .from('manual_pages')
+      .update({ section_id: targetSectionId, sort_order: newOrder })
+      .eq('id', noteId)
+
+    if (updateResult.error) {
+      setSaveState('error')
+      setSaveMessage(`ページ移動に失敗しました: ${updateResult.error.message}`)
+      return
+    }
+
+    await loadManualData()
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id))
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over) return
+
+    const noteId = String(active.id)
+    const overId = String(over.id)
+
+    if (overId.startsWith('drop:')) {
+      const targetSectionId = overId.replace('drop:', '')
+      const resolvedSectionId = targetSectionId === UNCATEGORIZED_SECTION_ID ? null : targetSectionId
+      const currentNote = pages.find((page) => page.id === noteId)
+      if (!currentNote) return
+      const currentSectionId = currentNote.section_id ?? null
+      if (currentSectionId === resolvedSectionId) return
+      await moveNoteToSection(noteId, resolvedSectionId)
+    }
   }
 
   const setLink = () => {
@@ -443,22 +683,15 @@ function ManualsPage() {
     editor.chain().focus().setImage({ src: data.publicUrl, width: 480 }).run()
   }
 
+  useEffect(() => {
+    handleImageUploadRef.current = handleImageUpload
+  })
+
   const handleImagePickerChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
     await handleImageUpload(file)
     event.target.value = ''
-  }
-
-  const handleEditorPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
-    const file = Array.from(event.clipboardData.items)
-      .find((item) => item.type.startsWith('image/'))
-      ?.getAsFile()
-
-    if (!file) return
-
-    event.preventDefault()
-    await handleImageUpload(file)
   }
 
   const insertTable = () => {
@@ -515,10 +748,10 @@ function ManualsPage() {
         <aside className="panel manuals-sidebar">
           <div className="panel-heading">
             <div>
-              <h2>ページ一覧</h2>
+              <h2>ノート一覧</h2>
               <p>{filteredPages.length}件表示 / 全{pages.length}件</p>
             </div>
-            <button type="button" className="primary" onClick={handleCreatePage}>ページ追加</button>
+            <button type="button" className="primary" onClick={handleCreatePage}>ノート追加</button>
           </div>
 
           <div className="manuals-search">
@@ -530,82 +763,200 @@ function ManualsPage() {
             />
           </div>
 
-          <div className="manuals-filter-block">
-            <div className="manuals-filter-header">
-              <strong>カテゴリフィルタ</strong>
-              {activeCategoryFilters.length > 0 && (
-                <button type="button" className="secondary" onClick={() => setActiveCategoryFilters([])}>
-                  クリア
-                </button>
-              )}
-            </div>
-
-            <div className="manual-tag-list">
-              {categories.length === 0 && <p className="empty-text">カテゴリがまだありません</p>}
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  className={`manual-chip ${activeCategoryFilters.includes(category.id) ? 'active' : ''}`}
-                  onClick={() => toggleCategoryFilter(category.id)}
-                >
-                  {category.name}
-                </button>
-              ))}
-            </div>
-
-            <div className="manual-category-create">
-              <input
-                type="text"
-                placeholder="新しいカテゴリ名"
-                value={newCategoryName}
-                onChange={(event) => setNewCategoryName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void handleCreateCategory()
-                  }
-                }}
-              />
-              <button type="button" className="secondary" onClick={handleCreateCategory}>追加</button>
-            </div>
+          <div className="manual-sidebar-add-row">
+            <input
+              type="text"
+              placeholder="新しいセクション名..."
+              value={newSectionName}
+              onChange={(event) => setNewSectionName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateSection()
+                }
+              }}
+            />
+            <button type="button" className="primary small manual-sidebar-add-button" onClick={handleCreateSection}>+ セクション</button>
           </div>
 
-          <div className="manual-page-list">
-            {loading && <p className="empty-text">読み込み中...</p>}
-            {!loading && filteredPages.length === 0 && <p className="empty-text">該当するページがありません</p>}
-            {filteredPages.map((page) => {
-              const pageCategoryIds = pageCategories.filter((entry) => entry.page_id === page.id).map((entry) => entry.category_id)
-              return (
-                <button
-                  key={page.id}
-                  type="button"
-                  className={`manual-page-item ${page.id === selectedPageId ? 'active' : ''}`}
-                  onClick={() => {
-                    void flushPendingSave()
-                    setSelectedPageId(page.id)
-                  }}
-                >
-                  <strong>{page.title || '無題'}</strong>
-                  <span>{stripHtml(page.content || '').slice(0, 56) || '本文はまだありません'}</span>
-                  <div className="manual-page-tags">
-                    {pageCategoryIds.slice(0, 3).map((categoryId) => (
-                      <span key={categoryId} className="manual-chip small">
-                        {categoryNameMap[categoryId]}
-                      </span>
+          <div className="manual-sidebar-add-row">
+            <input
+              type="text"
+              placeholder="新しいカテゴリ名..."
+              value={newCategoryName}
+              onChange={(event) => setNewCategoryName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreateCategory()
+                }
+              }}
+            />
+            <button type="button" className="primary small manual-sidebar-add-button" onClick={handleCreateCategory}>+ カテゴリ</button>
+          </div>
+
+          {categories.length > 0 && (
+            <div className="manual-category-filter">
+              <button
+                type="button"
+                className="manual-category-filter-toggle"
+                onClick={() => setIsCategoryFilterOpen((current) => !current)}
+              >
+                <span>{isCategoryFilterOpen ? '▼' : '▶'} カテゴリ検索</span>
+                {activeCategoryFilters.length > 0 && (
+                  <strong>{activeCategoryFilters.length}件選択中</strong>
+                )}
+              </button>
+              {isCategoryFilterOpen && (
+                <div className="manual-category-filter-body">
+                  {activeCategoryFilters.length > 0 && (
+                    <button
+                      type="button"
+                      className="manual-category-filter-clear"
+                      onClick={() => setActiveCategoryFilters([])}
+                    >
+                      クリア
+                    </button>
+                  )}
+                  <div className="manual-tag-list">
+                    {categories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        className={`manual-chip ${activeCategoryFilters.includes(category.id) ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveCategoryFilters((current) =>
+                            current.includes(category.id)
+                              ? current.filter((id) => id !== category.id)
+                              : [...current, category.id],
+                          )
+                        }}
+                      >
+                        {category.name}
+                      </button>
                     ))}
                   </div>
-                </button>
-              )
-            })}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="manual-page-list">
+              {loading && <p className="empty-text">読み込み中...</p>}
+
+              {sections.map((section) => {
+                const sectionNotes = filteredPages
+                  .filter((page) => page.section_id === section.id)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                const isCollapsed = collapsedSections.has(section.id)
+
+                return (
+                  <div key={section.id} className="manual-section">
+                    <div className="manual-section-header">
+                      <button
+                        type="button"
+                        className="manual-section-toggle"
+                        onClick={() => toggleSection(section.id)}
+                      >
+                        <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
+                        <span
+                          className="manual-section-name"
+                        >
+                          {section.name}
+                        </span>
+                        <span className="manual-section-count">{sectionNotes.length}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="manual-section-delete"
+                        onClick={() => void handleDeleteSection(section.id)}
+                        title="セクションを削除"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    {!isCollapsed && (
+                      <DroppableSection sectionId={section.id}>
+                        {sectionNotes.map((page) => (
+                          <DraggableNoteItem
+                            key={page.id}
+                            page={page}
+                            isSelected={page.id === selectedPageId}
+                            onSelect={() => {
+                              void flushPendingSave()
+                              setSelectedPageId(page.id)
+                            }}
+                          />
+                        ))}
+                        {sectionNotes.length === 0 && (
+                          <p className="empty-text manual-drop-hint">ここにドロップ</p>
+                        )}
+                      </DroppableSection>
+                    )}
+                  </div>
+                )
+              })}
+
+              {(() => {
+                const uncategorizedNotes = filteredPages
+                  .filter((page) => page.section_id === null || page.section_id === undefined)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                const isCollapsed = collapsedSections.has(UNCATEGORIZED_SECTION_ID)
+                if (uncategorizedNotes.length === 0 && sections.length > 0) return null
+
+                return (
+                  <div className="manual-section">
+                    <button
+                      type="button"
+                      className="manual-section-toggle"
+                      onClick={() => toggleSection(UNCATEGORIZED_SECTION_ID)}
+                    >
+                      <span className="manual-section-chevron">{isCollapsed ? '▶' : '▼'}</span>
+                      <span className="manual-section-name">未分類</span>
+                      <span className="manual-section-count">{uncategorizedNotes.length}</span>
+                    </button>
+                    {!isCollapsed && (
+                      <DroppableSection sectionId={UNCATEGORIZED_SECTION_ID}>
+                        {uncategorizedNotes.map((page) => (
+                          <DraggableNoteItem
+                            key={page.id}
+                            page={page}
+                            isSelected={page.id === selectedPageId}
+                            onSelect={() => {
+                              void flushPendingSave()
+                              setSelectedPageId(page.id)
+                            }}
+                          />
+                        ))}
+                        {uncategorizedNotes.length === 0 && (
+                          <p className="empty-text manual-drop-hint">ここにドロップ</p>
+                        )}
+                      </DroppableSection>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {!loading && filteredPages.length === 0 && <p className="empty-text">該当するノートがありません</p>}
+
+              <DragOverlay>
+                {activeId ? (
+                  <div className="manual-page-item manual-drag-overlay">
+                    <strong>{pages.find((page) => page.id === activeId)?.title || '無題'}</strong>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </div>
+          </DndContext>
         </aside>
 
         <div className="panel manuals-editor-panel">
           {!draft ? (
             <div className="manual-empty-state">
               <h2>ルール・マニュアル</h2>
-              <p>左の「ページ追加」から新しいマニュアルページを作成できます。</p>
+              <p>左の「ノート追加」から新しいマニュアルページを作成できます。</p>
             </div>
           ) : (
             <>
@@ -746,7 +1097,7 @@ function ManualsPage() {
                 </div>
               )}
 
-              <div className="manual-editor-surface" onPaste={handleEditorPaste}>
+              <div className="manual-editor-surface">
                 <EditorContent editor={editor} className="manual-rich-editor" />
               </div>
 
