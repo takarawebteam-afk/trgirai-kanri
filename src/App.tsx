@@ -414,6 +414,7 @@ const TASK_REPORT_WORK_MINUTES: Record<string, number> = {
 }
 const TASK_REPORT_NII_HONMACHI_MINUTES = 480
 const TASK_REPORT_NII_HONSHA_TO_HONMACHI_MINUTES = 300
+const TASK_REPORT_395_MINUTES = 360
 
 const DEFAULT_TASK_REPORT_CATEGORIES = [
   {
@@ -7497,6 +7498,9 @@ function getTaskReportWorkMinutes(memberName: string, summaries: string[]) {
   const normalizedSummaries = summaries.map((summary) => normalizeTaskReportText(summary))
   const hasDayOff = normalizedSummaries.some((summary) => summary.includes('公休'))
   if (hasDayOff) return 0
+
+  const has395Work = memberName !== '吉田' && normalizedSummaries.some((summary) => summary.includes('395') || summary.includes('３９５'))
+  if (has395Work) return TASK_REPORT_395_MINUTES
 
   if (memberName === STOCK_HONMACHI_MEMBER.name) {
     const hasHonshaToHonmachi = normalizedSummaries.some((summary) => summary.includes('本社→本町') || summary.includes('本社本町'))
