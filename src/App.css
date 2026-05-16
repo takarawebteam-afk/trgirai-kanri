@@ -5193,6 +5193,43 @@ button.secondary.small {
   margin: 0;
 }
 
+.sokanri-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sokanri-nav-btn {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sokanri-nav-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.sokanri-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sokanri-nav-today {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+  font-weight: 600;
+}
+
+.sokanri-nav-today:hover {
+  background: #dbeafe !important;
+}
+
 .sokanri-settings-btn {
   padding: 6px 14px;
   border: 1px solid #aaa;

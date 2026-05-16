@@ -1620,6 +1620,7 @@ function App() {
   const [sokanriData, setSokanriData] = useState<Record<string, string[]>>({})
   const [sokanriLoading, setSokanriLoading] = useState(false)
   const [sokanriSettingsOpen, setSokanriSettingsOpen] = useState(false)
+  const [sokanriWeekOffset, setSokanriWeekOffset] = useState(0)
 
   // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
@@ -1896,9 +1897,10 @@ function App() {
 
   const fetchSokanriData = useCallback(async () => {
     setSokanriLoading(true)
-    const today = new Date()
-    const todayStr = today.toISOString().slice(0, 10)
-    const end = new Date(today)
+    const base = new Date()
+    base.setDate(base.getDate() + sokanriWeekOffset * 7)
+    const todayStr = base.toISOString().slice(0, 10)
+    const end = new Date(base)
     end.setDate(end.getDate() + 6)
     const endStr = end.toISOString().slice(0, 10)
 
@@ -1976,7 +1978,7 @@ function App() {
 
     setSokanriData(result)
     setSokanriLoading(false)
-  }, [])
+  }, [sokanriWeekOffset])
 
   async function saveSokanriRule(apKey: string, dayOfWeek: number, checked: boolean) {
     if (checked) {
@@ -2045,7 +2047,7 @@ function App() {
 
   const sokanriDays = Array.from({ length: 7 }, (_, index) => {
     const date = new Date()
-    date.setDate(date.getDate() + index)
+    date.setDate(date.getDate() + sokanriWeekOffset * 7 + index)
     return date
   })
 
@@ -4963,6 +4965,32 @@ function App() {
               <section className="panel table-panel sokanri-panel">
                 <div className="sokanri-header">
                   <h2>総管理</h2>
+                  <div className="sokanri-week-nav">
+                    <button
+                      type="button"
+                      className="sokanri-nav-btn"
+                      onClick={() => setSokanriWeekOffset((prev) => prev - 1)}
+                    >
+                      ← 前の週
+                    </button>
+                    {sokanriWeekOffset < 0 && (
+                      <button
+                        type="button"
+                        className="sokanri-nav-btn sokanri-nav-today"
+                        onClick={() => setSokanriWeekOffset(0)}
+                      >
+                        今週へ戻る
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="sokanri-nav-btn"
+                      onClick={() => setSokanriWeekOffset((prev) => prev + 1)}
+                      disabled={sokanriWeekOffset >= 0}
+                    >
+                      次の週 →
+                    </button>
+                  </div>
                   <button type="button" className="sokanri-settings-btn" onClick={() => setSokanriSettingsOpen(true)}>
                     ⚙ 投稿ルール設定
                   </button>
