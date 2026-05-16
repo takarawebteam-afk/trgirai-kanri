@@ -3667,7 +3667,6 @@ button.secondary.small {
 .progress-page {
   display: grid;
   gap: 14px;
-  padding-bottom: 45vh;
 }
 
 .progress-toolbar {
@@ -3713,7 +3712,7 @@ button.secondary.small {
 }
 
 .progress-table-panel {
-  padding: 0;
+  padding: 0 0 45vh;
   overflow: visible;
   min-width: 0;
   width: calc(100% + 96px);
