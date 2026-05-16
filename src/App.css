@@ -3667,6 +3667,7 @@ button.secondary.small {
 .progress-page {
   display: grid;
   gap: 14px;
+  padding-bottom: 45vh;
 }
 
 .progress-toolbar {
