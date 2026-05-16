@@ -1129,7 +1129,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
           if (target) onSnsPropertyPromoted?.(target)
         }
-      } else if (!storeConfig) {
+      } else if (!storeConfig && !isRecruitmentMedia(record.media)) {
         return
       }
     }
