@@ -3765,13 +3765,15 @@ button.secondary.small {
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
-  padding-left: 16px;
+  padding-left: 0;
   padding-right: 12px;
   box-sizing: border-box;
 }
 
 .progress-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
   font-size: 0.78rem;
   min-width: 2920px;
   width: max-content;
@@ -3788,6 +3790,7 @@ button.secondary.small {
 .progress-table th {
   background: var(--blue-50);
   border: 1px solid var(--gray-200);
+  box-sizing: border-box;
   padding: 7px 10px;
   font-weight: 700;
   font-size: 0.72rem;
@@ -3801,6 +3804,7 @@ button.secondary.small {
 
 .progress-table td {
   border: 1px solid var(--gray-100);
+  box-sizing: border-box;
   padding: 1px 10px;
   vertical-align: middle;
   white-space: nowrap;
@@ -4340,11 +4344,11 @@ button.secondary.small {
 .progress-table-tiktok :is(th, td):nth-child(1) { left: 0; }
 .progress-table-tiktok :is(th, td):nth-child(2) { left: 115px; }
 .progress-table-tiktok :is(th, td):nth-child(3) { left: 230px; }
-.progress-table-tiktok :is(th, td):nth-child(4) { left: 270px; }
-.progress-table-tiktok :is(th, td):nth-child(5) { left: 358px; }
-.progress-table-tiktok :is(th, td):nth-child(6) { left: 398px; }
+.progress-table-tiktok :is(th, td):nth-child(4) { left: 318px; }
+.progress-table-tiktok :is(th, td):nth-child(5) { left: 414px; }
+.progress-table-tiktok :is(th, td):nth-child(6) { left: 470px; }
 .progress-table-tiktok :is(th, td):nth-child(7) {
-  left: 553px;
+  left: 640px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
@@ -4353,9 +4357,9 @@ button.secondary.small {
 .progress-table-instagram :is(th, td):nth-child(3) { left: 207px; }
 .progress-table-instagram :is(th, td):nth-child(4) { left: 328px; }
 .progress-table-instagram :is(th, td):nth-child(5) { left: 392px; }
-.progress-table-instagram :is(th, td):nth-child(6) { left: 432px; }
+.progress-table-instagram :is(th, td):nth-child(6) { left: 448px; }
 .progress-table-instagram :is(th, td):nth-child(7) {
-  left: 587px;
+  left: 618px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
@@ -4388,9 +4392,9 @@ button.secondary.small {
 .progress-table-simple :is(th, td):nth-child(1) { left: 0; }
 .progress-table-simple :is(th, td):nth-child(2) { left: 115px; }
 .progress-table-simple :is(th, td):nth-child(3) { left: 230px; }
-.progress-table-simple :is(th, td):nth-child(4) { left: 270px; }
+.progress-table-simple :is(th, td):nth-child(4) { left: 286px; }
 .progress-table-simple :is(th, td):nth-child(5) {
-  left: 310px;
+  left: 456px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 

@@ -1554,11 +1554,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <colgroup>
           <col style={{ width: 115 }} />
           <col style={{ width: 115 }} />
-          <col style={{ width: 40 }} />
           <col style={{ width: 88 }} />
-          <col style={{ width: 40 }} />
-          <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.propertyName }} />
-          <col style={{ width: 49 }} />
+          <col style={{ width: 96 }} />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 170 }} />
+          <col style={{ width: 64 }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.address }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.nearestStation }} />
@@ -1665,9 +1665,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 85 }} />
           <col style={{ width: 121 }} />
           <col style={{ width: 64 }} />
-          <col style={{ width: 40 }} />
-          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.propertyName }} />
-          <col style={{ width: 36 }} />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 170 }} />
+          <col style={{ width: 64 }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.address }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.area }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.nearestStation }} />
@@ -1753,7 +1753,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: 115 }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.propertyName }} />
-          <col style={{ width: 49 }} />
+          <col style={{ width: 64 }} />
           <col style={{ width: 40 }} />
           <col style={{ width: 88 }} />
           <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.postText }} />
@@ -1801,9 +1801,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <colgroup>
           <col style={{ width: 115 }} />
           <col style={{ width: 115 }} />
-          <col style={{ width: 40 }} />
-          <col style={{ width: 40 }} />
-          <col style={{ width: 49 }} />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 170 }} />
+          <col style={{ width: 64 }} />
           <col style={{ width: 232 }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 146 }} />
