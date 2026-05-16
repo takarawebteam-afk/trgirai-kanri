@@ -1614,6 +1614,7 @@ function App() {
   const [snsInstagramSheetSyncing, setSnsInstagramSheetSyncing] = useState(false)
   const [snsYoutubeSheetSyncing, setSnsYoutubeSheetSyncing] = useState(false)
   const [storeSnsSheetSyncing, setStoreSnsSheetSyncing] = useState<StoreSnsPropertyPlatform | null>(null)
+  const snsPropertySheetSyncTimers = useRef<Partial<Record<Exclude<SnsPropertyPlatform, 'sokanri' | 'recruitment'>, number>>>({})
   const [snsPostingRules, setSnsPostingRules] = useState<SnsPostingRule[]>([])
   const [sokanriData, setSokanriData] = useState<Record<string, string[]>>({})
   const [sokanriLoading, setSokanriLoading] = useState(false)
@@ -1876,17 +1877,21 @@ function App() {
   const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube' | StoreSnsPropertyPlatform) => {
     if (target === 'tiktok') {
       fetchTiktokProperties()
+      scheduleSnsPropertySheetSync(target)
       return
     }
     if (target === 'instagram') {
       fetchInstagramProperties()
+      scheduleSnsPropertySheetSync(target)
       return
     }
     if (storeSnsPropertyPlatforms.includes(target as StoreSnsPropertyPlatform)) {
       void fetchStoreSnsProperties(target as StoreSnsPropertyPlatform)
+      scheduleSnsPropertySheetSync(target as StoreSnsPropertyPlatform)
       return
     }
     fetchYoutubeProperties()
+    scheduleSnsPropertySheetSync(target)
   }, [fetchInstagramProperties, fetchStoreSnsProperties, fetchTiktokProperties, fetchYoutubeProperties])
 
   const isStoreSnsPropertyPlatform = useCallback((platform: SnsPropertyPlatform): platform is StoreSnsPropertyPlatform => {
@@ -2268,6 +2273,41 @@ function App() {
     )
   }
 
+  function getSnsPropertyPlatformByTable(tableName: SnsPropertyTableName) {
+    if (tableName === 'sns_tiktok_properties') return 'tiktok'
+    if (tableName === 'sns_instagram_properties') return 'instagram'
+    if (tableName === 'sns_youtube_properties') return 'youtube'
+
+    return (Object.keys(storeSnsPropertyTableMap) as StoreSnsPropertyPlatform[])
+      .find((platform) => storeSnsPropertyTableMap[platform] === tableName) || null
+  }
+
+  function scheduleSnsPropertySheetSync(platform: 'tiktok' | 'instagram' | 'youtube' | StoreSnsPropertyPlatform) {
+    const existingTimer = snsPropertySheetSyncTimers.current[platform]
+    if (existingTimer) {
+      window.clearTimeout(existingTimer)
+    }
+
+    snsPropertySheetSyncTimers.current[platform] = window.setTimeout(() => {
+      delete snsPropertySheetSyncTimers.current[platform]
+
+      if (platform === 'tiktok') {
+        void syncTiktokPropertiesToSheet({ silent: true })
+      } else if (platform === 'instagram') {
+        void syncInstagramPropertiesToSheet({ silent: true })
+      } else if (platform === 'youtube') {
+        void syncYoutubePropertiesToSheet({ silent: true })
+      } else {
+        void syncStoreSnsPropertiesToSheet(platform, { silent: true })
+      }
+    }, 3000)
+  }
+
+  function scheduleSnsPropertySheetSyncByTable(tableName: SnsPropertyTableName) {
+    const platform = getSnsPropertyPlatformByTable(tableName)
+    if (platform) scheduleSnsPropertySheetSync(platform)
+  }
+
   async function updateStoreSnsPropertyRow(
     platform: StoreSnsPropertyPlatform,
     id: string,
@@ -2289,12 +2329,15 @@ function App() {
       ...prev,
       [platform]: prev[platform].map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     }))
+    scheduleSnsPropertySheetSync(platform)
   }
 
-  async function syncStoreSnsPropertiesToSheet(platform: StoreSnsPropertyPlatform) {
+  async function syncStoreSnsPropertiesToSheet(platform: StoreSnsPropertyPlatform, options?: { silent?: boolean }) {
     const label = snsPropertyTabs.find((tab) => tab.key === platform)?.label || '店舗'
-    const confirmed = window.confirm(`${label}の一覧をスプレッドシートへ上書きしますか？`)
-    if (!confirmed) return
+    if (!options?.silent) {
+      const confirmed = window.confirm(`${label}の一覧をスプレッドシートへ上書きしますか？`)
+      if (!confirmed) return
+    }
 
     setStoreSnsSheetSyncing(platform)
     try {
@@ -2306,10 +2349,16 @@ function App() {
         throw new Error(data.message || '反映に失敗しました。')
       }
 
-      alert(`スプレッドシート「${data.sheetName || ''}」へ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      if (!options?.silent) {
+        alert(`スプレッドシート「${data.sheetName || ''}」へ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
-      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      if (options?.silent) {
+        console.error('スプレッドシート自動反映に失敗しました。', message)
+      } else {
+        alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      }
     } finally {
       setStoreSnsSheetSyncing(null)
     }
@@ -2344,7 +2393,7 @@ function App() {
               onClick={() => void syncStoreSnsPropertiesToSheet(platform)}
               disabled={storeSnsSheetSyncing === platform}
             >
-              {storeSnsSheetSyncing === platform ? '反映中...' : 'シート反映'}
+              {storeSnsSheetSyncing === platform ? '反映中...' : '今すぐ反映'}
             </button>
             <button type="button" className="primary" onClick={() => openSnsPropertyCreate(platform)}>新規登録</button>
           </div>
@@ -2412,7 +2461,7 @@ function App() {
                   <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
                   <td className="sns-col-actions">
                     <div className="row-actions">
-                      <button className="danger" onClick={() => confirmAndDeleteRecord(tableName, r.id, () => fetchStoreSnsProperties(platform), 'このレコードを削除しますか？')}>削除</button>
+                      <button className="danger" onClick={() => confirmAndDeleteRecord(tableName, r.id, () => fetchStoreSnsProperties(platform), 'このレコードを削除しますか？', () => scheduleSnsPropertySheetSync(platform))}>削除</button>
                     </div>
                   </td>
                 </tr>
@@ -2614,6 +2663,7 @@ function App() {
     }
 
     setter((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)))
+    scheduleSnsPropertySheetSyncByTable(tableName)
   }
 
   function renderSnsTextInput(
@@ -2702,6 +2752,7 @@ function App() {
           ...prev,
           [platform]: prev[platform].map((item) => (item.id === snsMemoEditor.id ? { ...item, memo: nextValue } : item)),
         }))
+        scheduleSnsPropertySheetSync(platform)
       }
     }
 
@@ -2741,11 +2792,14 @@ function App() {
       ...prev,
       [platform]: prev[platform].map((item) => (item.id === id ? { ...item, document_url: value } : item)),
     }))
+    scheduleSnsPropertySheetSync(platform)
   }
 
-  async function syncTiktokPropertiesToSheet() {
-    const confirmed = window.confirm('Karilun｜TikTokの一覧をスプレッドシート「TikTok(K000)」へ上書きしますか？')
-    if (!confirmed) return
+  async function syncTiktokPropertiesToSheet(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      const confirmed = window.confirm('Karilun｜TikTokの一覧をスプレッドシート「TikTok(K000)」へ上書きしますか？')
+      if (!confirmed) return
+    }
 
     setSnsTiktokSheetSyncing(true)
     try {
@@ -2756,18 +2810,26 @@ function App() {
         throw new Error(data.message || '反映に失敗しました。')
       }
 
-      alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      if (!options?.silent) {
+        alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
-      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      if (options?.silent) {
+        console.error('スプレッドシート自動反映に失敗しました。', message)
+      } else {
+        alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      }
     } finally {
       setSnsTiktokSheetSyncing(false)
     }
   }
 
-  async function syncInstagramPropertiesToSheet() {
-    const confirmed = window.confirm('Karilun｜Instagramの一覧をスプレッドシート「INSTA(G000)」へ上書きしますか？')
-    if (!confirmed) return
+  async function syncInstagramPropertiesToSheet(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      const confirmed = window.confirm('Karilun｜Instagramの一覧をスプレッドシート「INSTA(G000)」へ上書きしますか？')
+      if (!confirmed) return
+    }
 
     setSnsInstagramSheetSyncing(true)
     try {
@@ -2778,18 +2840,26 @@ function App() {
         throw new Error(data.message || '反映に失敗しました。')
       }
 
-      alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      if (!options?.silent) {
+        alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
-      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      if (options?.silent) {
+        console.error('スプレッドシート自動反映に失敗しました。', message)
+      } else {
+        alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      }
     } finally {
       setSnsInstagramSheetSyncing(false)
     }
   }
 
-  async function syncYoutubePropertiesToSheet() {
-    const confirmed = window.confirm('Karilun｜YouTubeの一覧をスプレッドシート「YouTube(R/Y000)」へ上書きしますか？')
-    if (!confirmed) return
+  async function syncYoutubePropertiesToSheet(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      const confirmed = window.confirm('Karilun｜YouTubeの一覧をスプレッドシート「YouTube(R/Y000)」へ上書きしますか？')
+      if (!confirmed) return
+    }
 
     setSnsYoutubeSheetSyncing(true)
     try {
@@ -2800,10 +2870,16 @@ function App() {
         throw new Error(data.message || '反映に失敗しました。')
       }
 
-      alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      if (!options?.silent) {
+        alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
-      alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      if (options?.silent) {
+        console.error('スプレッドシート自動反映に失敗しました。', message)
+      } else {
+        alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      }
     } finally {
       setSnsYoutubeSheetSyncing(false)
     }
@@ -3095,6 +3171,14 @@ function App() {
     }
 
     void applyLoginAccess(savedToken)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      Object.values(snsPropertySheetSyncTimers.current).forEach((timer) => {
+        if (timer) window.clearTimeout(timer)
+      })
+    }
   }, [])
 
   useEffect(() => {
@@ -3787,6 +3871,7 @@ function App() {
         setSnsPropertyPage((prev) => ({ ...prev, tiktok: 1 }))
         setSnsPropertyTotalCount((prev) => ({ ...prev, tiktok: prev.tiktok + 1 }))
         setTiktokProperties((prev) => [data as TiktokPropertyRecord, ...prev])
+        scheduleSnsPropertySheetSync('tiktok')
       } else if (snsPropertyCreatePlatform === 'instagram') {
         const { data, error } = await supabase
           .from('sns_instagram_properties')
@@ -3798,6 +3883,7 @@ function App() {
         setSnsPropertyPage((prev) => ({ ...prev, instagram: 1 }))
         setSnsPropertyTotalCount((prev) => ({ ...prev, instagram: prev.instagram + 1 }))
         setInstagramProperties((prev) => [data as InstagramPropertyRecord, ...prev])
+        scheduleSnsPropertySheetSync('instagram')
       } else if (snsPropertyCreatePlatform === 'youtube') {
         const { data, error } = await supabase
           .from('sns_youtube_properties')
@@ -3809,6 +3895,7 @@ function App() {
         setSnsPropertyPage((prev) => ({ ...prev, youtube: 1 }))
         setSnsPropertyTotalCount((prev) => ({ ...prev, youtube: prev.youtube + 1 }))
         setYoutubeProperties((prev) => [data as YoutubePropertyRecord, ...prev])
+        scheduleSnsPropertySheetSync('youtube')
       } else if (isStoreSnsPropertyPlatform(snsPropertyCreatePlatform)) {
         const platform = snsPropertyCreatePlatform
         const { data, error } = await supabase
@@ -3824,6 +3911,7 @@ function App() {
           ...prev,
           [platform]: [data as StoreSnsPropertyRecord, ...prev[platform]],
         }))
+        scheduleSnsPropertySheetSync(platform)
       }
 
       closeSnsPropertyCreate()
@@ -4099,13 +4187,15 @@ function App() {
     tableName: string,
     id: string,
     refresh: () => void,
-    message = '本当に削除しますか？'
+    message = '本当に削除しますか？',
+    afterDelete?: () => void | Promise<void>,
   ) => {
     const confirmed = window.confirm(message)
     if (!confirmed) return
 
     await supabase.from(tableName).delete().eq('id', id)
     refresh()
+    await afterDelete?.()
   }
 
   // 反響管理ハンドラー
@@ -5180,7 +5270,7 @@ function App() {
                       onClick={() => void syncTiktokPropertiesToSheet()}
                       disabled={snsTiktokSheetSyncing}
                     >
-                      {snsTiktokSheetSyncing ? '反映中...' : 'シート反映'}
+                      {snsTiktokSheetSyncing ? '反映中...' : '今すぐ反映'}
                     </button>
                     <button type="button" className="primary" onClick={() => openSnsPropertyCreate('tiktok')}>新規登録</button>
                   </div>
@@ -5231,7 +5321,7 @@ function App() {
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'contact', value, setTiktokProperties))}</td>
                             <td className="sns-col-actions">
                               <div className="row-actions">
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_tiktok_properties', r.id, fetchTiktokProperties, 'このレコードを削除しますか？')}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_tiktok_properties', r.id, fetchTiktokProperties, 'このレコードを削除しますか？', () => scheduleSnsPropertySheetSync('tiktok'))}>削除</button>
                               </div>
                             </td>
                           </tr>
@@ -5264,7 +5354,7 @@ function App() {
                       onClick={() => void syncInstagramPropertiesToSheet()}
                       disabled={snsInstagramSheetSyncing}
                     >
-                      {snsInstagramSheetSyncing ? '反映中...' : 'シート反映'}
+                      {snsInstagramSheetSyncing ? '反映中...' : '今すぐ反映'}
                     </button>
                     <button type="button" className="primary" onClick={() => openSnsPropertyCreate('instagram')}>新規登録</button>
                   </div>
@@ -5308,7 +5398,7 @@ function App() {
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'contact', value, setInstagramProperties))}</td>
                             <td className="sns-col-actions">
                               <div className="row-actions">
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_instagram_properties', r.id, fetchInstagramProperties, 'このレコードを削除しますか？')}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_instagram_properties', r.id, fetchInstagramProperties, 'このレコードを削除しますか？', () => scheduleSnsPropertySheetSync('instagram'))}>削除</button>
                               </div>
                             </td>
                           </tr>
@@ -5341,7 +5431,7 @@ function App() {
                       onClick={() => void syncYoutubePropertiesToSheet()}
                       disabled={snsYoutubeSheetSyncing}
                     >
-                      {snsYoutubeSheetSyncing ? '反映中...' : 'シート反映'}
+                      {snsYoutubeSheetSyncing ? '反映中...' : '今すぐ反映'}
                     </button>
                     <button type="button" className="primary" onClick={() => openSnsPropertyCreate('youtube')}>新規登録</button>
                   </div>
@@ -5379,7 +5469,7 @@ function App() {
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'contact', value, setYoutubeProperties))}</td>
                             <td className="sns-col-actions">
                               <div className="row-actions">
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_youtube_properties', r.id, fetchYoutubeProperties, 'このレコードを削除しますか？')}>削除</button>
+                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_youtube_properties', r.id, fetchYoutubeProperties, 'このレコードを削除しますか？', () => scheduleSnsPropertySheetSync('youtube'))}>削除</button>
                               </div>
                             </td>
                           </tr>
