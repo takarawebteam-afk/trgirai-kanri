@@ -3989,7 +3989,7 @@ function App() {
           {renderSnsPropertyCreateInput('物件名', 'property_name', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('住所', 'address', tiktokPropertyForm, setTiktokPropertyForm)}
-          {renderSnsPropertyCreateSelect('取得先', 'acquisition_source', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
+          {renderSnsPropertyCreateSelect('資料取得先', 'acquisition_source', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
           {renderSnsPropertyCreateInput('管理会社', 'management_company', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('連絡先', 'contact', tiktokPropertyForm, setTiktokPropertyForm)}
         </>
@@ -4012,7 +4012,7 @@ function App() {
           {renderSnsPropertyCreateInput('物件名', 'property_name', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('住所', 'address', instagramPropertyForm, setInstagramPropertyForm)}
-          {renderSnsPropertyCreateSelect('取得先', 'acquisition_source', instagramPropertyForm, setInstagramPropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
+          {renderSnsPropertyCreateSelect('資料取得先', 'acquisition_source', instagramPropertyForm, setInstagramPropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
           {renderSnsPropertyCreateInput('管理会社', 'management_company', instagramPropertyForm, setInstagramPropertyForm)}
           {renderSnsPropertyCreateInput('連絡先', 'contact', instagramPropertyForm, setInstagramPropertyForm)}
         </>
@@ -4030,7 +4030,7 @@ function App() {
           {renderSnsPropertyCreateInput('物件名', 'property_name', youtubePropertyForm, setYoutubePropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', youtubePropertyForm, setYoutubePropertyForm)}
           {renderSnsPropertyCreateInput('住所', 'address', youtubePropertyForm, setYoutubePropertyForm)}
-          {renderSnsPropertyCreateSelect('取得先', 'acquisition_source', youtubePropertyForm, setYoutubePropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
+          {renderSnsPropertyCreateSelect('資料取得先', 'acquisition_source', youtubePropertyForm, setYoutubePropertyForm, getSnsPropertySelectOptions('acquisition_source'))}
           {renderSnsPropertyCreateInput('管理会社', 'management_company', youtubePropertyForm, setYoutubePropertyForm)}
           {renderSnsPropertyCreateInput('連絡先', 'contact', youtubePropertyForm, setYoutubePropertyForm)}
         </>
@@ -5290,7 +5290,7 @@ function App() {
                         <th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
-                        <th className="sns-col-address">住所</th><th className="sns-col-source">取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-source">資料取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5317,7 +5317,7 @@ function App() {
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'property_name', value, setTiktokProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'room_number', value, setTiktokProperties))}</td>
                             <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'address', value, setTiktokProperties))}</td>
-                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'acquisition_source', value, setTiktokProperties), () => openSnsPropertyOptionEditor('acquisition_source', '取得先'))}</td>
+                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'acquisition_source', value, setTiktokProperties), () => openSnsPropertyOptionEditor('acquisition_source', '資料取得先'))}</td>
                             <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'management_company', value, setTiktokProperties))}</td>
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'contact', value, setTiktokProperties))}</td>
                             <td className="sns-col-actions">
@@ -5367,7 +5367,7 @@ function App() {
                         <th className="sns-col-memo">メモ</th><th className="sns-col-check"><SnsPropertyHeader title="WP登録" /></th><th className="sns-col-plan">種別</th><th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
-                        <th className="sns-col-address">住所</th><th className="sns-col-source">取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-source">資料取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5394,7 +5394,7 @@ function App() {
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'property_name', value, setInstagramProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'room_number', value, setInstagramProperties))}</td>
                             <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'address', value, setInstagramProperties))}</td>
-                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'acquisition_source', value, setInstagramProperties), () => openSnsPropertyOptionEditor('acquisition_source', '取得先'))}</td>
+                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'acquisition_source', value, setInstagramProperties), () => openSnsPropertyOptionEditor('acquisition_source', '資料取得先'))}</td>
                             <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'management_company', value, setInstagramProperties))}</td>
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'contact', value, setInstagramProperties))}</td>
                             <td className="sns-col-actions">
@@ -5443,7 +5443,7 @@ function App() {
                       <tr>
                         <th className="sns-col-memo">メモ</th><th className="sns-col-check"><SnsPropertyHeader title="WP登録" /></th><th className="sns-col-date">投稿日</th><th className="sns-col-code">物件番号</th>
                         <th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
-                        <th className="sns-col-address">住所</th><th className="sns-col-source">取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
+                        <th className="sns-col-address">住所</th><th className="sns-col-source">資料取得先</th><th className="sns-col-company">管理会社</th><th className="sns-col-contact">連絡先</th><th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5465,7 +5465,7 @@ function App() {
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_name', value, setYoutubeProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'room_number', value, setYoutubeProperties))}</td>
                             <td className="sns-col-address">{renderSnsTextInput(`${r.id}:address`, r.address, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'address', value, setYoutubeProperties))}</td>
-                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'acquisition_source', value, setYoutubeProperties), () => openSnsPropertyOptionEditor('acquisition_source', '取得先'))}</td>
+                            <td className="sns-col-source">{renderSnsSelect(r.acquisition_source, getSnsPropertySelectOptions('acquisition_source'), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'acquisition_source', value, setYoutubeProperties), () => openSnsPropertyOptionEditor('acquisition_source', '資料取得先'))}</td>
                             <td className="sns-col-company">{renderSnsTextInput(`${r.id}:management_company`, r.management_company, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'management_company', value, setYoutubeProperties))}</td>
                             <td className="sns-col-contact">{renderSnsTextInput(`${r.id}:contact`, r.contact, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'contact', value, setYoutubeProperties))}</td>
                             <td className="sns-col-actions">

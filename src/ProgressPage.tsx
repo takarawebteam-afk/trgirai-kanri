@@ -169,7 +169,7 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   instagram_post_type: '遞ｮ蛻･',
   register_wp: 'WP逋ｻ骭ｲ',
   register_aos: 'AOS逋ｻ骭ｲ',
-  acquisition_source: '取得先',
+  acquisition_source: '資料取得先',
   register_youtube: 'YouTube莠育ｴ・,
 }
 */
@@ -182,7 +182,7 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   register_wp: 'WP登録',
   register_aos: 'AOS登録',
   register_youtube: 'YouTube予約',
-  acquisition_source: '取得先',
+  acquisition_source: '資料取得先',
   post_text: '投稿文',
 }
 const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
@@ -1597,7 +1597,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">最寄り駅</th>
             <th className="ptcol-group-2">間取り</th>
             <th className="ptcol-group-2">家賃</th>
-            <th className="ptcol-group-2">取得先</th>
+            <th className="ptcol-group-2">資料取得先</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
             <th className="ptcol-group-2">図面準備</th>
@@ -1632,7 +1632,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'nearest_station', '最寄り駅')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'floor_plan', '間取り')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
-              <td className="ptcell-group-2">{renderSelectCell(record, 'acquisition_source', 'acquisition_source', '取得先', '', undefined, true, false)}</td>
+              <td className="ptcell-group-2">{renderSelectCell(record, 'acquisition_source', 'acquisition_source', '資料取得先', '', undefined, true, false)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-2">{renderIndependentProcessCell(record, 'floor_plan_order')}</td>
@@ -1698,7 +1698,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-2">最寄り駅</th>
             <th className="ptcol-group-2">間取り</th>
             <th className="ptcol-group-2">家賃</th>
-            <th className="ptcol-group-2">取得先</th>
+            <th className="ptcol-group-2">資料取得先</th>
             <th className="ptcol-group-2">管理会社</th>
             <th className="ptcol-group-2">連絡先</th>
             <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
@@ -1729,7 +1729,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-2">{renderTextCell(record, 'nearest_station', '最寄り駅')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'floor_plan', '間取り')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'rent', '家賃')}</td>
-              <td className="ptcell-group-2">{renderSelectCell(record, 'acquisition_source', 'acquisition_source', '取得先', '', undefined, true, false)}</td>
+              <td className="ptcell-group-2">{renderSelectCell(record, 'acquisition_source', 'acquisition_source', '資料取得先', '', undefined, true, false)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'management_company', '管理会社')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'contact_info', '連絡先')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
@@ -1925,7 +1925,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               />
             </label>
             <label className="form-label">
-              取得先
+              資料取得先
               <select value={form.acquisition_source} onChange={(e) => setForm({ ...form, acquisition_source: e.target.value })}>
                 <option value="">未設定</option>
                 {selectOptions.acquisition_source.map((option) => (
@@ -2313,7 +2313,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                     <span>最寄り駅: {record.nearest_station || '未入力'}</span>
                     <span>間取り: {record.floor_plan || '未入力'}</span>
                     <span>家賃: {record.rent || '未入力'}</span>
-                    <span>取得先: {record.acquisition_source || '未入力'}</span>
+                    <span>資料取得先: {record.acquisition_source || '未入力'}</span>
                     <span>管理会社: {record.management_company || '未入力'}</span>
                     <span>連絡先: {record.contact_info || '未入力'}</span>
                   </div>
