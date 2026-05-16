@@ -3890,7 +3890,20 @@ function App() {
   }
 
   async function getNextSnsPropertyNumber(platform: SnsPropertyPlatform) {
-    if (platform === 'recruitment') return ''
+    if (platform === 'recruitment') {
+      const { data, error } = await supabase
+        .from('sns_recruitment_properties')
+        .select('property_number')
+
+      if (error) throw error
+
+      const maxValue = (data || []).reduce((max, row) => {
+        const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+        return Number.isFinite(value) ? Math.max(max, value) : max
+      }, 0)
+
+      return String(maxValue + 1)
+    }
 
     if (platform === 'tiktok' || platform === 'instagram' || platform === 'youtube') {
       const tableName =
@@ -3934,7 +3947,8 @@ function App() {
   async function openSnsPropertyCreate(platform: SnsPropertyPlatform) {
     try {
       if (platform === 'recruitment') {
-        setRecruitmentSnsPropertyForm(defaultRecruitmentSnsPropertyForm)
+        const nextPropertyNumber = await getNextSnsPropertyNumber(platform)
+        setRecruitmentSnsPropertyForm({ ...defaultRecruitmentSnsPropertyForm, property_number: nextPropertyNumber })
         setSnsPropertyCreatePlatform(platform)
         return
       }
@@ -4033,9 +4047,10 @@ function App() {
         }))
         scheduleSnsPropertySheetSync(platform)
       } else if (snsPropertyCreatePlatform === 'recruitment') {
+        const propertyNumber = recruitmentSnsPropertyForm.property_number || await getNextSnsPropertyNumber('recruitment')
         const { data, error } = await supabase
           .from('sns_recruitment_properties')
-          .insert([prepareSnsPropertyPayload(recruitmentSnsPropertyForm)])
+          .insert([prepareSnsPropertyPayload({ ...recruitmentSnsPropertyForm, property_number: propertyNumber })])
           .select()
           .single()
         if (error || !data) throw new Error(error?.message || 'データを作成できませんでした。')
@@ -4201,7 +4216,6 @@ function App() {
           {renderSnsPropertyCreateInput('投稿予定日', 'post_date', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, { type: 'date' })}
           {renderSnsPropertyCreateSelect('投稿種類', 'category', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, ['リール', 'フィード'])}
           {renderSnsPropertyCreateInput('タイトル', 'title', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm)}
-          {renderSnsPropertyCreateInput('番号', 'property_number', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm)}
           {renderSnsPropertyCreateSelect('投稿予約', 'post_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('post_reserved'))}
           {renderSnsPropertyCreateSelect('YouTube予約', 'youtube_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('youtube_reserved'))}
         </>

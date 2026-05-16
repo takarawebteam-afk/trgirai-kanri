@@ -868,6 +868,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return String(maxValue + 1)
   }
 
+  async function getNextRecruitmentPropertyNumber() {
+    const { data } = await supabase
+      .from('sns_recruitment_properties')
+      .select('property_number')
+
+    const maxValue = (data || []).reduce((max, row) => {
+      const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+      return Number.isFinite(value) ? Math.max(max, value) : max
+    }, 0)
+
+    return String(maxValue + 1)
+  }
+
   async function promoteToSnsProperty(record: ProductionRecord, trigger: 'post_completed' | 'youtube_reserved') {
     if (trigger === 'post_completed') {
       let tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | null = null
@@ -1042,7 +1055,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           post_date: record.scheduled_post_date || null,
           category: record.post_type || '',
           title: record.property_name || '',
-          property_number: record.property_number || '',
+          property_number: await getNextRecruitmentPropertyNumber(),
           post_reserved: '',
           youtube_reserved: '',
         }
@@ -1840,11 +1853,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <table className="progress-table progress-table-recruitment">
         <colgroup>
           <col style={{ width: 135 }} />
-          <col style={{ width: 58 }} />
+          <col style={{ width: 42 }} />
           <col style={{ width: 135 }} />
           <col style={{ width: 112 }} />
           <col style={{ width: 220 }} />
-          <col style={{ width: 84 }} />
           <col style={{ width: 296 }} />
           <col style={{ width: 90 }} />
           <col style={{ width: 88 }} />
@@ -1861,7 +1873,6 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-1">撮影予定日</th>
             <th className="ptcol-group-2">投稿種類</th>
             <th className="ptcol-group-2">タイトル</th>
-            <th className="ptcol-group-2">番号</th>
             <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
             <th className="ptcol-group-3">動画尺</th>
             <th className="ptcol-group-3">文字入れ</th>
@@ -1880,7 +1891,6 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-2">{renderRecruitmentPostTypeCell(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', 'タイトル')}</td>
-              <td className="ptcell-group-2">{renderTextCell(record, 'property_number', '番号')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
               <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
               <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
@@ -1999,10 +2009,6 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <label className="form-label">
             タイトル
             <input {...getProgressFormInputProps('property_name')} value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
-          </label>
-          <label className="form-label">
-            番号
-            <input value={form.property_number} onChange={(e) => setForm({ ...form, property_number: e.target.value })} />
           </label>
           <label className="form-label">
             メモ
@@ -2531,12 +2537,6 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   {isRecruitmentMedia(form.media) ? 'タイトル' : '物件名'}
                   <input {...getProgressFormInputProps('property_name')} value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
                 </label>
-                {isRecruitmentMedia(form.media) && (
-                  <label className="form-label">
-                    番号
-                    <input value={form.property_number} onChange={(e) => setForm({ ...form, property_number: e.target.value })} />
-                  </label>
-                )}
                 {!isRecruitmentMedia(form.media) && (
                   <label className="form-label">
                     号室
