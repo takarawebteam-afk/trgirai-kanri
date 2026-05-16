@@ -888,21 +888,18 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
   if (!rawDate) return ''
 
   const propertyYear = getSnsPropertyYearFromPropertyNumber(propertyNumber, storePlatform)
-  const applyPropertyYear = (year: string, month: string, day: string) => {
-    const fixedYear = propertyYear || Number(year)
-    return `${fixedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-  }
 
   const isoDateMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (isoDateMatch) {
-    const [, year, month, day] = isoDateMatch
-    return applyPropertyYear(year, month, day)
+    // ISO形式は年が明示されているのでそのまま信頼する
+    return rawDate
   }
 
   const slashDateMatch = rawDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
   if (slashDateMatch) {
     const [, year, month, day] = slashDateMatch
-    return applyPropertyYear(year, month, day)
+    // YYYY/MM/DD形式も年が明示されているので propertyYear で上書きしない
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
   const normalized = rawDate
