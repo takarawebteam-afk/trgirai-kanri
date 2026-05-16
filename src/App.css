@@ -3624,7 +3624,7 @@ button.secondary.small {
 
 .progress-summary {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -3634,7 +3634,7 @@ button.secondary.small {
   border: 1px solid rgba(13, 42, 110, 0.08);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  padding: 10px 18px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
