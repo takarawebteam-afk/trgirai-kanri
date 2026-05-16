@@ -891,15 +891,18 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
 
   const isoDateMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (isoDateMatch) {
-    // ISO形式は年が明示されているのでそのまま信頼する
-    return rawDate
+    const [, year, month, day] = isoDateMatch
+    const storedYear = Number(year)
+    const fixedYear = propertyYear && storedYear < propertyYear ? propertyYear : storedYear
+    return `${fixedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
   const slashDateMatch = rawDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
   if (slashDateMatch) {
     const [, year, month, day] = slashDateMatch
-    // YYYY/MM/DD形式も年が明示されているので propertyYear で上書きしない
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    const storedYear = Number(year)
+    const fixedYear = propertyYear && storedYear < propertyYear ? propertyYear : storedYear
+    return `${fixedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
   const normalized = rawDate
@@ -1937,12 +1940,23 @@ function App() {
       threads: 'threads_post_date',
     }
 
+    const prevYearTodayStr = `${Number(todayStr.slice(0, 4)) - 1}${todayStr.slice(4)}`
+    const prevYearEndStr = `${Number(endStr.slice(0, 4)) - 1}${endStr.slice(4)}`
+
     for (const { accountKey, table, platforms } of storeMap) {
-      const { data: rows } = await supabase
-        .from(table)
-        .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
-        .gte('post_date', todayStr)
-        .lte('post_date', endStr)
+      const [{ data: rowsCurrent }, { data: rowsPrev }] = await Promise.all([
+        supabase
+          .from(table)
+          .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
+          .gte('post_date', todayStr)
+          .lte('post_date', endStr),
+        supabase
+          .from(table)
+          .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
+          .gte('post_date', prevYearTodayStr)
+          .lte('post_date', prevYearEndStr),
+      ])
+      const rows = [...(rowsCurrent || []), ...(rowsPrev || [])]
 
       const typedRows = (rows || []) as {
         post_date?: string | null
@@ -1959,7 +1973,7 @@ function App() {
         const byDate: Record<string, typeof typedRows> = {}
         for (const row of typedRows) {
           const date = normalizeSnsPropertyPostDate(row.post_date, row.property_number, accountKey as StoreSnsPropertyPlatform).slice(0, 10)
-          if (!date) continue
+          if (!date || date < todayStr || date > endStr) continue
           if (!byDate[date]) byDate[date] = []
           byDate[date].push(row)
         }
