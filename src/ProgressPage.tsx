@@ -808,6 +808,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     !record.post_completed && !!record.scheduled_post_date && record.scheduled_post_date < today
 
   const delayedCount = records.filter(isDelayed).length
+  const stockedRecords = records.filter((record) => record.property_name.trim())
 
   const groupedRecords = useMemo(() => {
     return MEDIA_OPTIONS
@@ -2269,12 +2270,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <div className="progress-summary">
         <div className="progress-stat">
           <span className="progress-stat-label">全件数</span>
-          <strong className="progress-stat-value">{records.length}</strong>
+          <strong className="progress-stat-value">{stockedRecords.length}</strong>
         </div>
         {MEDIA_OPTIONS.map((media, index) => (
           <div key={media} className="progress-stat">
             <span className="progress-stat-label">{SUMMARY_LABELS[index] || media}</span>
-            <strong className="progress-stat-value">{records.filter((record) => getMediaDisplayName(record.media) === media).length}</strong>
+            <strong className="progress-stat-value">{stockedRecords.filter((record) => getMediaDisplayName(record.media) === media).length}</strong>
           </div>
         ))}
         <div className="progress-stat progress-stat--delay">
