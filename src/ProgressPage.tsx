@@ -10,7 +10,7 @@ type StoreProgressTableName =
   | 'sns_nagase_properties'
   | 'sns_nishikita_properties'
   | 'sns_yao_properties'
-type PromoteTarget = 'tiktok' | 'instagram' | 'youtube' | StorePromoteTarget
+type PromoteTarget = 'tiktok' | 'instagram' | 'youtube' | 'recruitment' | StorePromoteTarget
 
 interface ProductionRecord {
   id: string
@@ -92,6 +92,7 @@ type SelectOptionGroup =
   | 'duration'
   | 'audio'
   | 'instagram_post_type'
+  | 'recruitment_post_type'
   | 'register'
   | 'register_wp'
   | 'register_aos'
@@ -124,6 +125,7 @@ const REGISTER_OPTIONS = [
 ]
 
 const INSTAGRAM_POST_TYPE_OPTIONS = ['動画', '画像'] as const
+const RECRUITMENT_POST_TYPE_OPTIONS = ['リール', 'フィード'] as const
 const ACQUISITION_SOURCE_OPTIONS = ['SUUMO', 'HOME’S', 'at home', '自社', 'その他'] as const
 const DEFAULT_PROCESS_OPTIONS: string[] = [...PROCESS_STATUSES]
 void ACQUISITION_SOURCE_OPTIONS
@@ -144,6 +146,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   audio: ['未登録', '候補あり', '登録済'],
   register: ['未登録', '登録済'],
   instagram_post_type: [...INSTAGRAM_POST_TYPE_OPTIONS],
+  recruitment_post_type: [...RECRUITMENT_POST_TYPE_OPTIONS],
   process_floor_plan_order: [...DEFAULT_PROCESS_OPTIONS],
   process_material_processing: [...DEFAULT_PROCESS_OPTIONS],
   process_floor_plan_insert: [...DEFAULT_PROCESS_OPTIONS],
@@ -516,9 +519,10 @@ const MEDIA_OPTIONS = [
   '長瀬｜近大一人暮らし',
   '西北｜関学一人暮らし',
   '八尾｜アパマン八尾',
+  '採用',
 ]
 
-const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾']
+const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾', '採用']
 
 const STORE_PROGRESS_CONFIGS: {
   target: StorePromoteTarget
@@ -645,6 +649,7 @@ function getMediaDisplayName(media: string) {
   if (matched) return matched
   if (normalized.includes('tiktok')) return 'Karilun｜TikTok'
   if (normalized.includes('instagram')) return 'Karilun｜Instagram'
+  if (normalized.includes('採用') || normalized.includes('recruit')) return '採用'
   return media || '未設定'
 }
 
@@ -656,9 +661,20 @@ function isInstagramMedia(media: string) {
   return normalizeMediaName(getMediaDisplayName(media)).includes('instagram')
 }
 
+function isRecruitmentMedia(media: string) {
+  return getMediaDisplayName(media) === '採用'
+}
+
 function getStoreProgressConfig(media: string) {
   const normalized = normalizeMediaName(getMediaDisplayName(media))
   return STORE_PROGRESS_CONFIGS.find((config) => normalized.includes(normalizeMediaName(config.matchText))) || null
+}
+
+function getWeekdayLabel(dateText: string) {
+  if (!dateText) return ''
+  const date = new Date(`${dateText}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  return ['日', '月', '火', '水', '木', '金', '土'][date.getDay()]
 }
 
 function toRegisteredLabel(value: boolean) {
@@ -1018,7 +1034,27 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
       const storeConfig = getStoreProgressConfig(record.media)
 
-      if (storeConfig) {
+      if (isRecruitmentMedia(record.media)) {
+        if (!window.confirm('SNS物件管理の「採用」へ反映しますか？')) return
+
+        const insertData = {
+          memo: record.memo || '',
+          post_date: record.scheduled_post_date || null,
+          category: record.post_type || '',
+          title: record.property_name || '',
+          property_number: record.property_number || '',
+          post_reserved: '',
+          youtube_reserved: '',
+        }
+
+        const { error } = await supabase.from('sns_recruitment_properties').insert([insertData])
+        if (error) {
+          alert(`採用一覧への反映に失敗しました。\n${error.message}`)
+          return
+        }
+
+        onSnsPropertyPromoted?.('recruitment')
+      } else if (storeConfig) {
         if (!window.confirm(`SNS物件管理の「${storeConfig.label}」へ反映しますか？`)) return
 
         const insertData = {
@@ -1327,7 +1363,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     setForm((prev) => ({
       ...prev,
       media,
-      post_type: isInstagramMedia(media) ? prev.post_type : '',
+      post_type: isInstagramMedia(media) || isRecruitmentMedia(media) ? prev.post_type : '',
     }))
   }
 
@@ -1399,6 +1435,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderPostTypeCell(record: ProductionRecord) {
     return renderSelectCell(record, 'post_type', 'instagram_post_type', '種別', '', undefined, false, false)
+  }
+
+  function renderRecruitmentPostTypeCell(record: ProductionRecord) {
+    return renderSelectCell(record, 'post_type', 'recruitment_post_type', '投稿種類', '', undefined, false, false)
   }
 
   function renderSelectCell(
@@ -1795,6 +1835,67 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
+  function renderRecruitmentTable(mediaRecords: ProductionRecord[]) {
+    return (
+      <table className="progress-table progress-table-recruitment">
+        <colgroup>
+          <col style={{ width: 135 }} />
+          <col style={{ width: 58 }} />
+          <col style={{ width: 135 }} />
+          <col style={{ width: 112 }} />
+          <col style={{ width: 220 }} />
+          <col style={{ width: 84 }} />
+          <col style={{ width: 296 }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 88 }} />
+          <col style={{ width: 88 }} />
+          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.postText }} />
+          <col style={{ width: 98 }} />
+          <col style={{ width: 56 }} />
+          <col style={{ width: 72 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="ptcol-group-1">投稿予定日</th>
+            <th className="ptcol-group-1">曜日</th>
+            <th className="ptcol-group-1">撮影予定日</th>
+            <th className="ptcol-group-2">投稿種類</th>
+            <th className="ptcol-group-2">タイトル</th>
+            <th className="ptcol-group-2">番号</th>
+            <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
+            <th className="ptcol-group-3">動画尺</th>
+            <th className="ptcol-group-3">文字入れ</th>
+            <th className="ptcol-group-3">仕上げ</th>
+            <th className="ptcol-group-4">投稿文</th>
+            <th className="ptcol-group-4">完成品保存</th>
+            <th className="ptcol-group-5">完了</th>
+            <th className="ptcol-group-5">削除</th>
+          </tr>
+        </thead>
+        <tbody>
+          {mediaRecords.map((record) => (
+            <tr key={record.id} className="row-hoverable">
+              <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
+              <td className="ptcell-group-1">{getWeekdayLabel(record.scheduled_post_date)}</td>
+              <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
+              <td className="ptcell-group-2">{renderRecruitmentPostTypeCell(record)}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'property_name', 'タイトル')}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'property_number', '番号')}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
+              <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
+              <td className="ptcell-group-3">{renderSelectCell(record, 'floor_plan_check', getProcessGroupByField('floor_plan_check'), '仕上げ')}</td>
+              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
+              <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
+              <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
+              <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
   function renderSimpleTable(mediaRecords: ProductionRecord[]) {
     return (
       <table className="progress-table progress-table-simple">
@@ -1863,6 +1964,54 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   void renderSimpleTable
 
   function renderFormBody() {
+    if (formTab === 'basic' && isRecruitmentMedia(form.media)) {
+      return (
+        <>
+          <label className="form-label">
+            媒体
+            <select value={form.media} onChange={(e) => handleMediaChange(e.target.value)}>
+              {MEDIA_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <label className="form-label">
+              投稿予定日
+              <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />
+            </label>
+            <label className="form-label">
+              撮影予定日
+              <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
+            </label>
+          </div>
+          <label className="form-label">
+            投稿種類
+            <select value={form.post_type} onChange={(e) => setForm({ ...form, post_type: e.target.value })}>
+              <option value="">選んでください</option>
+              {RECRUITMENT_POST_TYPE_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-label">
+            タイトル
+            <input {...getProgressFormInputProps('property_name')} value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
+          </label>
+          <label className="form-label">
+            番号
+            <input value={form.property_number} onChange={(e) => setForm({ ...form, property_number: e.target.value })} />
+          </label>
+          <label className="form-label">
+            メモ
+            <textarea {...getProgressFormInputProps('memo')} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
+          </label>
+        </>
+      )
+    }
+
     if (formTab === 'basic') {
       return (
         <>
@@ -2156,6 +2305,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                     </tr>
                   </tbody>
                 </table>
+              ) : isRecruitmentMedia(media) ? (
+                renderRecruitmentTable(mediaRecords)
               ) : isTikTokMedia(media) ? (
                 renderTikTokTable(mediaRecords)
               ) : isInstagramMedia(media) ? (
@@ -2357,8 +2508,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                     </select>
                   </label>
                 )}
+                {isRecruitmentMedia(form.media) && (
+                  <label className="form-label">
+                    投稿種類
+                    <select value={form.post_type} onChange={(e) => setForm({ ...form, post_type: e.target.value })}>
+                      <option value="">選んでください</option>
+                      {RECRUITMENT_POST_TYPE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="form-label">
-                  素材保存日
+                  {isRecruitmentMedia(form.media) ? '撮影予定日' : '素材保存日'}
                   <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
                 </label>
                 <label className="form-label">
@@ -2366,13 +2528,21 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />
                 </label>
                 <label className="form-label">
-                  物件名
+                  {isRecruitmentMedia(form.media) ? 'タイトル' : '物件名'}
                   <input {...getProgressFormInputProps('property_name')} value={form.property_name} onChange={(e) => setForm({ ...form, property_name: e.target.value })} />
                 </label>
-                <label className="form-label">
-                  号室
-                  <input {...getProgressFormInputProps('room_number')} value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
-                </label>
+                {isRecruitmentMedia(form.media) && (
+                  <label className="form-label">
+                    番号
+                    <input value={form.property_number} onChange={(e) => setForm({ ...form, property_number: e.target.value })} />
+                  </label>
+                )}
+                {!isRecruitmentMedia(form.media) && (
+                  <label className="form-label">
+                    号室
+                    <input {...getProgressFormInputProps('room_number')} value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} />
+                  </label>
+                )}
                 <div className="form-actions" style={{ marginTop: 10 }}>
                   <button type="submit" className="primary">保存する</button>
                   <button type="button" className="secondary" onClick={closeModal}>キャンセル</button>

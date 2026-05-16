@@ -3783,6 +3783,10 @@ button.secondary.small {
   min-width: 0;
 }
 
+.progress-table-recruitment {
+  min-width: 0;
+}
+
 .progress-table-keihan {
   min-width: 0;
 }
@@ -4141,6 +4145,12 @@ button.secondary.small {
   width: 296px;
 }
 
+.progress-table-recruitment th:nth-child(6),
+.progress-table-recruitment td:nth-child(6) {
+  min-width: 296px;
+  width: 296px;
+}
+
 .progress-copy-button:hover {
   background: #dbeafe;
 }
@@ -4336,8 +4346,17 @@ button.secondary.small {
   z-index: 4;
 }
 
+.progress-table-recruitment :is(th, td):nth-child(-n + 5) {
+  position: sticky;
+  z-index: 4;
+}
+
 .progress-table-tiktok th:nth-child(-n + 7),
 .progress-table-instagram th:nth-child(-n + 7) {
+  z-index: 6;
+}
+
+.progress-table-recruitment th:nth-child(-n + 5) {
   z-index: 6;
 }
 
@@ -4422,6 +4441,37 @@ button.secondary.small {
 .progress-table-instagram :is(th, td):nth-child(6) { left: 495px; }
 .progress-table-instagram :is(th, td):nth-child(7) {
   left: 695px;
+  box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
+}
+
+.progress-table-recruitment :is(th, td):nth-child(1),
+.progress-table-recruitment :is(th, td):nth-child(3) {
+  width: 135px;
+  min-width: 135px;
+}
+
+.progress-table-recruitment :is(th, td):nth-child(2) {
+  width: 42px;
+  min-width: 42px;
+  text-align: center;
+}
+
+.progress-table-recruitment :is(th, td):nth-child(4) {
+  width: 112px;
+  min-width: 112px;
+}
+
+.progress-table-recruitment :is(th, td):nth-child(5) {
+  width: 220px;
+  min-width: 220px;
+}
+
+.progress-table-recruitment :is(th, td):nth-child(1) { left: 0; }
+.progress-table-recruitment :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-recruitment :is(th, td):nth-child(3) { left: 177px; }
+.progress-table-recruitment :is(th, td):nth-child(4) { left: 312px; }
+.progress-table-recruitment :is(th, td):nth-child(5) {
+  left: 424px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
@@ -5653,6 +5703,25 @@ button.secondary.small {
 .sns-property-table td {
   min-width: 80px;
   white-space: nowrap;
+}
+
+.table-wrap table.sns-property-table-recruitment {
+  width: max-content;
+}
+
+.sns-property-table-recruitment th.sns-col-weekday,
+.sns-property-table-recruitment td.sns-col-weekday {
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  text-align: center;
+}
+
+.sns-property-table-recruitment th.sns-col-code,
+.sns-property-table-recruitment td.sns-col-code {
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
 }
 
 .sns-property-table th.sns-col-memo,

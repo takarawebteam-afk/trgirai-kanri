@@ -212,6 +212,7 @@ type SnsPropertyTableName =
   | 'sns_tiktok_properties'
   | 'sns_instagram_properties'
   | 'sns_youtube_properties'
+  | 'sns_recruitment_properties'
   | 'sns_keihan_karilun_properties'
   | 'sns_nishinomiya_karilun_properties'
   | 'sns_nagase_properties'
@@ -309,6 +310,18 @@ type StoreSnsPropertyRecord = {
   youtube_wp: string
   threads_post_date: string
   post_text: string
+}
+
+type RecruitmentSnsPropertyRecord = {
+  id: string
+  created_at?: string
+  memo: string
+  post_date: string
+  category: string
+  title: string
+  property_number: string
+  post_reserved: string
+  youtube_reserved: string
 }
 
 type SnsPropertyTab = {
@@ -635,6 +648,16 @@ const defaultStoreSnsPropertyForm: Omit<StoreSnsPropertyRecord, 'id' | 'created_
   post_text: '',
 }
 
+const defaultRecruitmentSnsPropertyForm: Omit<RecruitmentSnsPropertyRecord, 'id' | 'created_at'> = {
+  memo: '',
+  post_date: '',
+  category: '',
+  title: '',
+  property_number: '',
+  post_reserved: '',
+  youtube_reserved: '',
+}
+
 const snsPropertyTabs: SnsPropertyTab[] = [
   { key: 'sokanri', label: '総管理', title: '総管理', status: 'ready' },
   { key: 'tiktok', label: 'TikTok', title: 'Karilun｜TikTok 物件管理', status: 'ready' },
@@ -645,7 +668,7 @@ const snsPropertyTabs: SnsPropertyTab[] = [
   { key: 'nagase', label: '長瀬店', title: '長瀬店 物件管理', status: 'ready' },
   { key: 'nishikita', label: '西北店', title: '西北店 物件管理', status: 'ready' },
   { key: 'yao', label: '八尾店', title: '八尾店 物件管理', status: 'ready' },
-  { key: 'recruitment', label: '採用', title: '採用 物件管理', status: 'placeholder' },
+  { key: 'recruitment', label: '採用', title: '採用 物件管理', status: 'ready' },
 ]
 
 const SOKANRI_ROWS = [
@@ -677,6 +700,13 @@ const PLATFORM_LABEL_STYLE: Record<string, { bg: string; color: string }> = {
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
+function getWeekdayLabel(dateText: string) {
+  if (!dateText) return ''
+  const date = new Date(`${dateText}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  return DAY_LABELS[date.getDay()]
+}
+
 const storeSnsPropertyPlatforms: StoreSnsPropertyPlatform[] = [
   'keihan-karilun',
   'nishinomiya-karilun',
@@ -705,6 +735,7 @@ type SnsPropertySelectField =
   | 'youtube_wp'
   | 'threads_post_date'
   | 'post_text'
+  | 'post_reserved'
 
 type SnsPropertyOptionEditorState = {
   field: SnsPropertySelectField
@@ -785,6 +816,7 @@ const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
   youtube_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
   threads_post_date: [],
   post_text: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_POST_TEXT_OPTIONS]),
+  post_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
 }
 const SNS_PROPERTY_PAGE_SIZE = 30
 const SNS_PROPERTY_CATEGORY_OPTIONS = ['動画', '画像'] as const
@@ -1515,6 +1547,7 @@ function App() {
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
   const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
   const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
+  const [recruitmentSnsProperties, setRecruitmentSnsProperties] = useState<RecruitmentSnsPropertyRecord[]>([])
   const [storeSnsProperties, setStoreSnsProperties] = useState<Record<StoreSnsPropertyPlatform, StoreSnsPropertyRecord[]>>({
     'keihan-karilun': [],
     'nishinomiya-karilun': [],
@@ -1603,6 +1636,10 @@ function App() {
       ...SNS_PROPERTY_DEFAULT_OPTIONS.post_text,
       ...(getStoredSnsPropertyOptions('post_text') || []),
     ]),
+    post_reserved: normalizeSnsPropertyOptions([
+      ...SNS_PROPERTY_DEFAULT_OPTIONS.post_reserved,
+      ...(getStoredSnsPropertyOptions('post_reserved') || []),
+    ]),
   }))
   const [snsPropertyOptionEditor, setSnsPropertyOptionEditor] = useState<SnsPropertyOptionEditorState | null>(null)
   const [snsPropertyCreatePlatform, setSnsPropertyCreatePlatform] = useState<SnsPropertyPlatform | null>(null)
@@ -1611,6 +1648,7 @@ function App() {
   const [instagramPropertyForm, setInstagramPropertyForm] = useState(defaultInstagramPropertyForm)
   const [youtubePropertyForm, setYoutubePropertyForm] = useState(defaultYoutubePropertyForm)
   const [storeSnsPropertyForm, setStoreSnsPropertyForm] = useState(defaultStoreSnsPropertyForm)
+  const [recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm] = useState(defaultRecruitmentSnsPropertyForm)
   const [snsTiktokSheetSyncing, setSnsTiktokSheetSyncing] = useState(false)
   const [snsInstagramSheetSyncing, setSnsInstagramSheetSyncing] = useState(false)
   const [snsYoutubeSheetSyncing, setSnsYoutubeSheetSyncing] = useState(false)
@@ -1863,6 +1901,38 @@ function App() {
     await fetchSnsPropertyPage('sns_youtube_properties', 'youtube', snsPropertyPage.youtube, snsPropertySearch.youtube, setYoutubeProperties)
   }, [snsPropertyPage.youtube, snsPropertySearch.youtube])
 
+  const fetchRecruitmentSnsProperties = useCallback(async () => {
+    const normalizedSearch = snsPropertySearch.recruitment.trim()
+    const pageInfo = buildSnsPropertyPageInfo(Number.MAX_SAFE_INTEGER, snsPropertyPage.recruitment)
+    let query = supabase
+      .from('sns_recruitment_properties')
+      .select('*', { count: 'exact' })
+      .order('post_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
+
+    if (normalizedSearch) {
+      query = query.or(`title.ilike.%${normalizedSearch}%,property_number.ilike.%${normalizedSearch}%`)
+    }
+
+    const { data, count, error } = await query.range(
+      (pageInfo.currentPage - 1) * SNS_PROPERTY_PAGE_SIZE,
+      pageInfo.currentPage * SNS_PROPERTY_PAGE_SIZE - 1,
+    )
+
+    if (error) {
+      alert(`採用一覧の読込に失敗しました。\n\n${error.message}`)
+      return
+    }
+
+    const totalCount = count ?? 0
+    const nextPageInfo = buildSnsPropertyPageInfo(totalCount, snsPropertyPage.recruitment)
+    setSnsPropertyTotalCount((prev) => ({ ...prev, recruitment: totalCount }))
+    if (nextPageInfo.currentPage !== snsPropertyPage.recruitment) {
+      setSnsPropertyPage((prev) => ({ ...prev, recruitment: nextPageInfo.currentPage }))
+    }
+    setRecruitmentSnsProperties((data || []) as RecruitmentSnsPropertyRecord[])
+  }, [snsPropertyPage.recruitment, snsPropertySearch.recruitment])
+
   const fetchStoreSnsProperties = useCallback(async (platform: StoreSnsPropertyPlatform) => {
     await fetchSnsPropertyPage(
       storeSnsPropertyTableMap[platform],
@@ -1875,7 +1945,7 @@ function App() {
     )
   }, [snsPropertyPage, snsPropertySearch])
 
-  const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube' | StoreSnsPropertyPlatform) => {
+  const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube' | 'recruitment' | StoreSnsPropertyPlatform) => {
     if (target === 'tiktok') {
       fetchTiktokProperties()
       scheduleSnsPropertySheetSync(target)
@@ -1891,9 +1961,13 @@ function App() {
       scheduleSnsPropertySheetSync(target as StoreSnsPropertyPlatform)
       return
     }
+    if (target === 'recruitment') {
+      void fetchRecruitmentSnsProperties()
+      return
+    }
     fetchYoutubeProperties()
     scheduleSnsPropertySheetSync(target)
-  }, [fetchInstagramProperties, fetchStoreSnsProperties, fetchTiktokProperties, fetchYoutubeProperties])
+  }, [fetchInstagramProperties, fetchRecruitmentSnsProperties, fetchStoreSnsProperties, fetchTiktokProperties, fetchYoutubeProperties])
 
   const isStoreSnsPropertyPlatform = useCallback((platform: SnsPropertyPlatform): platform is StoreSnsPropertyPlatform => {
     return storeSnsPropertyPlatforms.includes(platform as StoreSnsPropertyPlatform)
@@ -2214,6 +2288,10 @@ function App() {
       const value = item[field as keyof StoreSnsPropertyRecord]
       return typeof value === 'string' ? value : ''
     }))
+    const recruitmentValues = recruitmentSnsProperties.map((item) => {
+      const value = item[field as keyof RecruitmentSnsPropertyRecord]
+      return typeof value === 'string' ? value : ''
+    })
 
     const recordValues = field === 'wp_registered'
       ? [
@@ -2223,14 +2301,18 @@ function App() {
         ]
       : field === 'aos_registered'
         ? tiktokProperties.map((item) => item.aos_registered)
-        : storeValues
+        : field === 'post_reserved'
+          ? recruitmentValues
+          : field === 'youtube_reserved'
+            ? [...storeValues, ...recruitmentValues]
+            : storeValues
 
     return normalizeSnsPropertyOptions([
       ...SNS_PROPERTY_DEFAULT_OPTIONS[field],
       ...snsPropertyOptions[field],
       ...recordValues,
     ])
-  }, [instagramProperties, snsPropertyOptions, storeSnsProperties, tiktokProperties, youtubeProperties])
+  }, [instagramProperties, recruitmentSnsProperties, snsPropertyOptions, storeSnsProperties, tiktokProperties, youtubeProperties])
 
   const activeSnsPropertyTotalCount = snsPropertyTotalCount[activeSnsPropertyPlatform]
   const activeSnsPropertyCurrentPage = snsPropertyPage[activeSnsPropertyPlatform]
@@ -2278,6 +2360,7 @@ function App() {
     if (tableName === 'sns_tiktok_properties') return 'tiktok'
     if (tableName === 'sns_instagram_properties') return 'instagram'
     if (tableName === 'sns_youtube_properties') return 'youtube'
+    if (tableName === 'sns_recruitment_properties') return 'recruitment'
 
     return (Object.keys(storeSnsPropertyTableMap) as StoreSnsPropertyPlatform[])
       .find((platform) => storeSnsPropertyTableMap[platform] === tableName) || null
@@ -2306,7 +2389,27 @@ function App() {
 
   function scheduleSnsPropertySheetSyncByTable(tableName: SnsPropertyTableName) {
     const platform = getSnsPropertyPlatformByTable(tableName)
-    if (platform) scheduleSnsPropertySheetSync(platform)
+    if (platform && platform !== 'recruitment') scheduleSnsPropertySheetSync(platform)
+  }
+
+  async function updateRecruitmentSnsPropertyRow(
+    id: string,
+    field: keyof Omit<RecruitmentSnsPropertyRecord, 'id' | 'created_at'>,
+    value: string,
+  ) {
+    const payload = field === 'post_date'
+      ? { [field]: value || null }
+      : { [field]: value }
+    const { error } = await supabase.from('sns_recruitment_properties').update(payload).eq('id', id)
+
+    if (error) {
+      alert(`保存に失敗しました。\n\n${error.message}`)
+      return
+    }
+
+    setRecruitmentSnsProperties((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    )
   }
 
   async function updateStoreSnsPropertyRow(
@@ -2537,6 +2640,10 @@ function App() {
       return FIXED_ACQUISITION_SOURCE_OPTIONS
     }
 
+    if (field !== 'wp_registered' && field !== 'aos_registered') {
+      return []
+    }
+
     const tableTargets = field === 'wp_registered'
       ? [
           'sns_tiktok_properties',
@@ -2734,6 +2841,8 @@ function App() {
       await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setInstagramProperties)
     } else if (snsMemoEditor.tableName === 'sns_youtube_properties') {
       await updateSnsPropertyRow(snsMemoEditor.tableName, snsMemoEditor.id, 'memo', nextValue, setYoutubeProperties)
+    } else if (snsMemoEditor.tableName === 'sns_recruitment_properties') {
+      await updateRecruitmentSnsPropertyRow(snsMemoEditor.id, 'memo', nextValue)
     } else {
       const platform = (Object.keys(storeSnsPropertyTableMap) as StoreSnsPropertyPlatform[])
         .find((key) => storeSnsPropertyTableMap[key] === snsMemoEditor.tableName)
@@ -3226,6 +3335,10 @@ function App() {
       void fetchYoutubeProperties()
       return
     }
+    if (activeSnsPropertyPlatform === 'recruitment') {
+      void fetchRecruitmentSnsProperties()
+      return
+    }
     if (isStoreSnsPropertyPlatform(activeSnsPropertyPlatform)) {
       void fetchStoreSnsProperties(activeSnsPropertyPlatform)
     }
@@ -3234,6 +3347,7 @@ function App() {
     activeSnsPropertyPlatform,
     currentUserEmail,
     fetchSokanriData,
+    fetchRecruitmentSnsProperties,
     fetchStoreSnsProperties,
     fetchInstagramProperties,
     fetchTiktokProperties,
@@ -3818,9 +3932,13 @@ function App() {
   }
 
   async function openSnsPropertyCreate(platform: SnsPropertyPlatform) {
-    if (platform === 'recruitment') return
-
     try {
+      if (platform === 'recruitment') {
+        setRecruitmentSnsPropertyForm(defaultRecruitmentSnsPropertyForm)
+        setSnsPropertyCreatePlatform(platform)
+        return
+      }
+
       const nextPropertyNumber = await getNextSnsPropertyNumber(platform)
 
       if (platform === 'tiktok') {
@@ -3846,6 +3964,7 @@ function App() {
     setInstagramPropertyForm(defaultInstagramPropertyForm)
     setYoutubePropertyForm(defaultYoutubePropertyForm)
     setStoreSnsPropertyForm(defaultStoreSnsPropertyForm)
+    setRecruitmentSnsPropertyForm(defaultRecruitmentSnsPropertyForm)
   }
 
   function prepareSnsPropertyPayload<T extends { post_date: string }>(form: T) {
@@ -3857,7 +3976,7 @@ function App() {
 
   async function saveSnsPropertyCreate(event: React.FormEvent) {
     event.preventDefault()
-    if (!snsPropertyCreatePlatform || snsPropertyCreatePlatform === 'recruitment') return
+    if (!snsPropertyCreatePlatform) return
 
     setSnsPropertyCreateSaving(true)
     try {
@@ -3913,6 +4032,17 @@ function App() {
           [platform]: [data as StoreSnsPropertyRecord, ...prev[platform]],
         }))
         scheduleSnsPropertySheetSync(platform)
+      } else if (snsPropertyCreatePlatform === 'recruitment') {
+        const { data, error } = await supabase
+          .from('sns_recruitment_properties')
+          .insert([prepareSnsPropertyPayload(recruitmentSnsPropertyForm)])
+          .select()
+          .single()
+        if (error || !data) throw new Error(error?.message || 'データを作成できませんでした。')
+        setSnsPropertySearch((prev) => ({ ...prev, recruitment: '' }))
+        setSnsPropertyPage((prev) => ({ ...prev, recruitment: 1 }))
+        setSnsPropertyTotalCount((prev) => ({ ...prev, recruitment: prev.recruitment + 1 }))
+        setRecruitmentSnsProperties((prev) => [data as RecruitmentSnsPropertyRecord, ...prev])
       }
 
       closeSnsPropertyCreate()
@@ -4060,6 +4190,20 @@ function App() {
           {!isKeihanKarilun && renderSnsPropertyCreateSelect('YouTube WP', 'youtube_wp', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('youtube_wp'))}
           {!hidesThreadsPostDate && renderSnsPropertyCreateSelect('threads投稿日', 'threads_post_date', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('threads_post_date'))}
           {renderSnsPropertyCreateSelect('投稿文', 'post_text', storeSnsPropertyForm, setStoreSnsPropertyForm, getSnsPropertySelectOptions('post_text'))}
+        </>
+      )
+    }
+
+    if (snsPropertyCreatePlatform === 'recruitment') {
+      return (
+        <>
+          {renderSnsPropertyCreateInput('メモ', 'memo', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, { textarea: true })}
+          {renderSnsPropertyCreateInput('投稿予定日', 'post_date', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, { type: 'date' })}
+          {renderSnsPropertyCreateSelect('投稿種類', 'category', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, ['リール', 'フィード'])}
+          {renderSnsPropertyCreateInput('タイトル', 'title', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm)}
+          {renderSnsPropertyCreateInput('番号', 'property_number', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm)}
+          {renderSnsPropertyCreateSelect('投稿予約', 'post_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('post_reserved'))}
+          {renderSnsPropertyCreateSelect('YouTube予約', 'youtube_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('youtube_reserved'))}
         </>
       )
     }
@@ -5491,10 +5635,59 @@ function App() {
                   <div>
                     <h2>採用 物件管理</h2>
                   </div>
+                  <div className="sns-property-toolbar">
+                    <input
+                      className="sns-property-search-input"
+                      value={snsPropertySearch.recruitment}
+                      onChange={(e) => updateSnsPropertySearch('recruitment', e.target.value)}
+                      placeholder="タイトル・番号で検索"
+                    />
+                    {snsPropertySearch.recruitment && (
+                      <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('recruitment', '')}>×</button>
+                    )}
+                    <button type="button" className="primary" onClick={() => openSnsPropertyCreate('recruitment')}>新規登録</button>
+                  </div>
                 </div>
-                <div className="empty-state">
-                  <p>採用タブはまだ一覧をつないでいません。</p>
+                <div className="table-wrap sns-property-table-wrap">
+                  <table className="compact-list-table sns-property-table sns-property-table-recruitment">
+                    <thead>
+                      <tr>
+                        <th className="sns-col-memo">メモ</th>
+                        <th className="sns-col-date">投稿予定日</th>
+                        <th className="sns-col-weekday">曜日</th>
+                        <th className="sns-col-plan">投稿種類</th>
+                        <th className="sns-col-property-name">タイトル</th>
+                        <th className="sns-col-code">番号</th>
+                        <th className="sns-col-check">投稿予約</th>
+                        <th className="sns-col-check">YouTube予約</th>
+                        <th className="sns-col-actions">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recruitmentSnsProperties.length === 0 && (
+                        <tr><td colSpan={9} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                      )}
+                      {recruitmentSnsProperties.map((r) => (
+                        <tr key={r.id} className="row-hoverable">
+                          <td className="sns-col-memo">{renderSnsMemoCell('sns_recruitment_properties', r.id, r.memo)}</td>
+                          <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, ''), (value) => updateRecruitmentSnsPropertyRow(r.id, 'post_date', value), { type: 'date' })}</td>
+                          <td className="sns-col-weekday">{getWeekdayLabel(r.post_date)}</td>
+                          <td className="sns-col-plan">{renderSnsSelect(r.category, ['リール', 'フィード'], (value) => updateRecruitmentSnsPropertyRow(r.id, 'category', value))}</td>
+                          <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:title`, r.title, (value) => updateRecruitmentSnsPropertyRow(r.id, 'title', value))}</td>
+                          <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateRecruitmentSnsPropertyRow(r.id, 'property_number', value))}</td>
+                          <td className="sns-col-check">{renderSnsSelect(r.post_reserved, getSnsPropertySelectOptions('post_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'post_reserved', value), () => openSnsPropertyOptionEditor('post_reserved', '投稿予約'))}</td>
+                          <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'youtube_reserved', value), () => openSnsPropertyOptionEditor('youtube_reserved', 'YouTube予約'))}</td>
+                          <td className="sns-col-actions">
+                            <div className="row-actions">
+                              <button className="danger" onClick={() => confirmAndDeleteRecord('sns_recruitment_properties', r.id, fetchRecruitmentSnsProperties, 'このレコードを削除しますか？')}>削除</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+                {renderSnsPropertyPagination()}
               </section>
             )}
           </>
