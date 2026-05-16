@@ -791,6 +791,13 @@ const DEFAULT_STORE_SNS_STATUS_OPTIONS = [
   '写真無',
   '〇',
 ] as const
+const DEFAULT_STORE_SNS_MAIN_STATUS_OPTIONS = [
+  '〇-泉',
+  '〇-坂',
+  '〇-吉',
+  '準備中',
+  '×',
+] as const
 const DEFAULT_STORE_SNS_POST_TEXT_OPTIONS = [
   '2重ﾁｪｯｸOK泉',
   '2重ﾁｪｯｸOK坂',
@@ -808,13 +815,13 @@ const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
   wp_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_WP_OPTIONS]),
   aos_registered: normalizeSnsPropertyOptions([...DEFAULT_SNS_AOS_OPTIONS]),
   acquisition_source: FIXED_ACQUISITION_SOURCE_OPTIONS,
-  tiktok_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
-  tiktok_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
-  instagram_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
-  instagram_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
+  tiktok_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_MAIN_STATUS_OPTIONS]),
+  tiktok_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_MAIN_STATUS_OPTIONS]),
+  instagram_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_MAIN_STATUS_OPTIONS]),
+  instagram_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_MAIN_STATUS_OPTIONS]),
   youtube_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
   youtube_wp: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
-  threads_post_date: [],
+  threads_post_date: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_MAIN_STATUS_OPTIONS]),
   post_text: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_POST_TEXT_OPTIONS]),
   post_reserved: normalizeSnsPropertyOptions([...DEFAULT_STORE_SNS_STATUS_OPTIONS]),
 }
@@ -1155,12 +1162,25 @@ function SnsPropertyOptionEditorModal({
 
 function SnsPropertyHeader({
   title,
+  onEdit,
 }: {
   title: string
+  onEdit?: () => void
 }) {
   return (
     <div className="sns-property-header-cell">
       <span>{title}</span>
+      {onEdit && (
+        <button
+          type="button"
+          className="sns-property-header-edit-button"
+          title={`${title}の候補を編集`}
+          aria-label={`${title}の候補を編集`}
+          onClick={onEdit}
+        >
+          編集
+        </button>
+      )}
     </div>
   )
 }
@@ -2513,18 +2533,36 @@ function App() {
                 <th className="sns-col-room">号室</th>
                 <th className="sns-col-code">番号</th>
                 <th className="sns-col-link">資料</th>
-                <th className="sns-col-check">Tiktok予約</th>
-                <th className="sns-col-check">TiktokWP</th>
-                <th className="sns-col-check">INSTA予約</th>
-                <th className="sns-col-check">INSTA WP</th>
+                <th className="sns-col-check">
+                  <SnsPropertyHeader title="Tiktok予約" onEdit={() => openSnsPropertyOptionEditor('tiktok_reserved', 'Tiktok予約')} />
+                </th>
+                <th className="sns-col-check">
+                  <SnsPropertyHeader title="TiktokWP" onEdit={() => openSnsPropertyOptionEditor('tiktok_wp', 'TiktokWP')} />
+                </th>
+                <th className="sns-col-check">
+                  <SnsPropertyHeader title="INSTA予約" onEdit={() => openSnsPropertyOptionEditor('instagram_reserved', 'INSTA予約')} />
+                </th>
+                <th className="sns-col-check">
+                  <SnsPropertyHeader title="INSTA WP" onEdit={() => openSnsPropertyOptionEditor('instagram_wp', 'INSTA WP')} />
+                </th>
                 {!isKeihanKarilun && (
                   <>
-                    <th className="sns-col-check">YouTube予約</th>
-                    <th className="sns-col-check">YouTube WP</th>
+                    <th className="sns-col-check">
+                      <SnsPropertyHeader title="YouTube予約" onEdit={() => openSnsPropertyOptionEditor('youtube_reserved', 'YouTube予約')} />
+                    </th>
+                    <th className="sns-col-check">
+                      <SnsPropertyHeader title="YouTube WP" onEdit={() => openSnsPropertyOptionEditor('youtube_wp', 'YouTube WP')} />
+                    </th>
                   </>
                 )}
-                {!hidesThreadsPostDate && <th className="sns-col-date">threads投稿日</th>}
-                <th className="sns-col-post-text">投稿文</th>
+                {!hidesThreadsPostDate && (
+                  <th className="sns-col-date">
+                    <SnsPropertyHeader title="threads投稿日" onEdit={() => openSnsPropertyOptionEditor('threads_post_date', 'threads投稿日')} />
+                  </th>
+                )}
+                <th className="sns-col-post-text">
+                  <SnsPropertyHeader title="投稿文" onEdit={() => openSnsPropertyOptionEditor('post_text', '投稿文')} />
+                </th>
                 <th className="sns-col-actions">操作</th>
               </tr>
             </thead>
@@ -2549,20 +2587,20 @@ function App() {
                       🔗
                     </button>
                   </td>
-                  <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_reserved', value))}</td>
-                  <td className="sns-col-check">{renderSnsSelect(r.tiktok_wp, getSnsPropertySelectOptions('tiktok_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value))}</td>
-                  <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_reserved', value))}</td>
-                  <td className="sns-col-check">{renderSnsSelect(r.instagram_wp, getSnsPropertySelectOptions('instagram_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_wp', value))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_reserved', value), () => openSnsPropertyOptionEditor('tiktok_reserved', 'Tiktok予約'))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.tiktok_wp, getSnsPropertySelectOptions('tiktok_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value), () => openSnsPropertyOptionEditor('tiktok_wp', 'TiktokWP'))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_reserved', value), () => openSnsPropertyOptionEditor('instagram_reserved', 'INSTA予約'))}</td>
+                  <td className="sns-col-check">{renderSnsSelect(r.instagram_wp, getSnsPropertySelectOptions('instagram_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'instagram_wp', value), () => openSnsPropertyOptionEditor('instagram_wp', 'INSTA WP'))}</td>
                   {!isKeihanKarilun && (
                     <>
-                      <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value))}</td>
-                      <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value))}</td>
+                      <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_reserved', value), () => openSnsPropertyOptionEditor('youtube_reserved', 'YouTube予約'))}</td>
+                      <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value), () => openSnsPropertyOptionEditor('youtube_wp', 'YouTube WP'))}</td>
                     </>
                   )}
                   {!hidesThreadsPostDate && (
-                    <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value))}</td>
+                    <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value), () => openSnsPropertyOptionEditor('threads_post_date', 'threads投稿日'))}</td>
                   )}
-                  <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value))}</td>
+                  <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value), () => openSnsPropertyOptionEditor('post_text', '投稿文'))}</td>
                   <td className="sns-col-actions">
                     <div className="row-actions">
                       <button className="danger" onClick={() => confirmAndDeleteRecord(tableName, r.id, () => fetchStoreSnsProperties(platform), 'このレコードを削除しますか？', () => scheduleSnsPropertySheetSync(platform))}>削除</button>
