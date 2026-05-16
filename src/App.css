@@ -4341,25 +4341,87 @@ button.secondary.small {
   z-index: 6;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(1) { left: 0; }
-.progress-table-tiktok :is(th, td):nth-child(2) { left: 115px; }
-.progress-table-tiktok :is(th, td):nth-child(3) { left: 230px; }
-.progress-table-tiktok :is(th, td):nth-child(4) { left: 318px; }
-.progress-table-tiktok :is(th, td):nth-child(5) { left: 414px; }
-.progress-table-tiktok :is(th, td):nth-child(6) { left: 470px; }
+.progress-table-tiktok :is(th, td):nth-child(1),
+.progress-table-tiktok :is(th, td):nth-child(2) {
+  width: 135px;
+  min-width: 135px;
+}
+
+.progress-table-tiktok :is(th, td):nth-child(3) {
+  width: 102px;
+  min-width: 102px;
+}
+
+.progress-table-tiktok :is(th, td):nth-child(4) {
+  width: 112px;
+  min-width: 112px;
+}
+
+.progress-table-tiktok :is(th, td):nth-child(5) {
+  width: 64px;
+  min-width: 64px;
+}
+
+.progress-table-tiktok :is(th, td):nth-child(6) {
+  width: 200px;
+  min-width: 200px;
+}
+
 .progress-table-tiktok :is(th, td):nth-child(7) {
-  left: 640px;
+  width: 74px;
+  min-width: 74px;
+}
+
+.progress-table-tiktok :is(th, td):nth-child(1) { left: 0; }
+.progress-table-tiktok :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-tiktok :is(th, td):nth-child(3) { left: 270px; }
+.progress-table-tiktok :is(th, td):nth-child(4) { left: 372px; }
+.progress-table-tiktok :is(th, td):nth-child(5) { left: 484px; }
+.progress-table-tiktok :is(th, td):nth-child(6) { left: 548px; }
+.progress-table-tiktok :is(th, td):nth-child(7) {
+  left: 748px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
-.progress-table-instagram :is(th, td):nth-child(1) { left: 0; }
-.progress-table-instagram :is(th, td):nth-child(2) { left: 122px; }
-.progress-table-instagram :is(th, td):nth-child(3) { left: 207px; }
-.progress-table-instagram :is(th, td):nth-child(4) { left: 328px; }
-.progress-table-instagram :is(th, td):nth-child(5) { left: 392px; }
-.progress-table-instagram :is(th, td):nth-child(6) { left: 448px; }
+.progress-table-instagram :is(th, td):nth-child(1) {
+  width: 135px;
+  min-width: 135px;
+}
+
+.progress-table-instagram :is(th, td):nth-child(2) {
+  width: 92px;
+  min-width: 92px;
+}
+
+.progress-table-instagram :is(th, td):nth-child(3) {
+  width: 130px;
+  min-width: 130px;
+}
+
+.progress-table-instagram :is(th, td):nth-child(4),
 .progress-table-instagram :is(th, td):nth-child(7) {
-  left: 618px;
+  width: 74px;
+  min-width: 74px;
+}
+
+.progress-table-instagram :is(th, td):nth-child(5) {
+  width: 64px;
+  min-width: 64px;
+}
+
+.progress-table-instagram :is(th, td):nth-child(6) {
+  width: 200px;
+  min-width: 200px;
+}
+
+.progress-table-instagram :is(th, td):nth-child(1) { left: 0; }
+.progress-table-instagram :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-instagram :is(th, td):nth-child(3) { left: 227px; }
+.progress-table-instagram :is(th, td):nth-child(4) { left: 357px; }
+.progress-table-instagram :is(th, td):nth-child(5) { left: 431px; }
+.progress-table-instagram :is(th, td):nth-child(6) { left: 495px; }
+.progress-table-instagram :is(th, td):nth-child(7) {
+  left: 695px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
@@ -4372,11 +4434,31 @@ button.secondary.small {
   z-index: 6;
 }
 
-.progress-table-keihan :is(th, td):nth-child(1) { left: 0; }
-.progress-table-keihan :is(th, td):nth-child(2) { left: 115px; }
-.progress-table-keihan :is(th, td):nth-child(3) { left: 198px; }
+.progress-table-keihan :is(th, td):nth-child(1) {
+  width: 135px;
+  min-width: 135px;
+}
+
+.progress-table-keihan :is(th, td):nth-child(2) {
+  width: 83px;
+  min-width: 83px;
+}
+
+.progress-table-keihan :is(th, td):nth-child(3) {
+  width: 200px;
+  min-width: 200px;
+}
+
 .progress-table-keihan :is(th, td):nth-child(4) {
-  left: 353px;
+  width: 74px;
+  min-width: 74px;
+}
+
+.progress-table-keihan :is(th, td):nth-child(1) { left: 0; }
+.progress-table-keihan :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-keihan :is(th, td):nth-child(3) { left: 218px; }
+.progress-table-keihan :is(th, td):nth-child(4) {
+  left: 418px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
@@ -4389,12 +4471,33 @@ button.secondary.small {
   z-index: 6;
 }
 
-.progress-table-simple :is(th, td):nth-child(1) { left: 0; }
-.progress-table-simple :is(th, td):nth-child(2) { left: 115px; }
-.progress-table-simple :is(th, td):nth-child(3) { left: 230px; }
-.progress-table-simple :is(th, td):nth-child(4) { left: 286px; }
+.progress-table-simple :is(th, td):nth-child(1),
+.progress-table-simple :is(th, td):nth-child(2) {
+  width: 135px;
+  min-width: 135px;
+}
+
+.progress-table-simple :is(th, td):nth-child(3) {
+  width: 64px;
+  min-width: 64px;
+}
+
+.progress-table-simple :is(th, td):nth-child(4) {
+  width: 200px;
+  min-width: 200px;
+}
+
 .progress-table-simple :is(th, td):nth-child(5) {
-  left: 456px;
+  width: 74px;
+  min-width: 74px;
+}
+
+.progress-table-simple :is(th, td):nth-child(1) { left: 0; }
+.progress-table-simple :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-simple :is(th, td):nth-child(3) { left: 270px; }
+.progress-table-simple :is(th, td):nth-child(4) { left: 334px; }
+.progress-table-simple :is(th, td):nth-child(5) {
+  left: 534px;
   box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
 }
 
