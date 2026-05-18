@@ -763,7 +763,8 @@ function ManualsPage() {
   const isInTable = editor?.isActive('table') ?? false
 
   return (
-    <section className={`note-page${sidebarOpen ? '' : ' sidebar-closed'}`}>
+    <div className="note-page-wrapper">
+      <section className={`note-page${sidebarOpen ? '' : ' sidebar-closed'}`}>
       <aside className="note-sidebar">
         <div className="note-sidebar-head">
           <strong>Note</strong>
@@ -1059,9 +1060,10 @@ function ManualsPage() {
             <EditorContent editor={editor} className="note-editor" />
           </div>
         )}
-        <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
       </main>
-    </section>
+      </section>
+      <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
+    </div>
   )
 }
 
