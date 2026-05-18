@@ -296,6 +296,12 @@
   font-size: 13px;
 }
 
+.note-unsaved-badge {
+  font-size: 10px;
+  color: #f59e0b;
+  font-weight: 700;
+}
+
 .note-drag-handle {
   color: #9ca3af;
   cursor: grab;
@@ -377,6 +383,9 @@
 
 .note-fab {
   position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   right: 24px;
   bottom: 24px;
   z-index: 15;
@@ -387,8 +396,8 @@
   background: #2563eb;
   color: #ffffff;
   cursor: pointer;
-  font-size: 30px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 300;
   line-height: 1;
   box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
 }

@@ -198,11 +198,13 @@ const CustomHighlight = Highlight.extend({
 function SortableNoteItem({
   note,
   selected,
+  isPending,
   onSelect,
   onDelete,
 }: {
   note: NoteRecord
   selected: boolean
+  isPending: boolean
   onSelect: () => void
   onDelete: () => void
 }) {
@@ -221,7 +223,10 @@ function SortableNoteItem({
     <div ref={setNodeRef} style={style} className="note-list-row">
       <button type="button" className={`note-list-item${selected ? ' is-selected' : ''}`} onClick={onSelect}>
         <span className="note-drag-handle" {...attributes} {...listeners}>⋮⋮</span>
-        <span className="note-list-title">{note.title || '無題ノート'}</span>
+        <span className="note-list-title">
+          {note.title || '無題ノート'}
+          {isPending && <span className="note-unsaved-badge"> 未保存</span>}
+        </span>
       </button>
       <button type="button" className="note-icon-button note-delete-button" onClick={onDelete} aria-label="ノートを削除">
         ×
@@ -255,6 +260,7 @@ function DroppableNoteGroup({
 
 function ManualsPage() {
   const [notes, setNotes] = useState<NoteRecord[]>([])
+  const [pendingNote, setPendingNote] = useState<NoteRecord | null>(null)
   const [sections, setSections] = useState<SectionRecord[]>([])
   const [tags, setTags] = useState<TagRecord[]>([])
   const [noteTags, setNoteTags] = useState<NoteTagRecord[]>([])
@@ -385,8 +391,8 @@ function ManualsPage() {
   }, [])
 
   const selectedNote = useMemo(
-    () => notes.find((note) => note.id === selectedNoteId) ?? null,
-    [notes, selectedNoteId],
+    () => pendingNote?.id === selectedNoteId ? pendingNote : notes.find((note) => note.id === selectedNoteId) ?? null,
+    [notes, pendingNote, selectedNoteId],
   )
 
   const selectedNoteTagIds = useMemo(
@@ -430,13 +436,17 @@ function ManualsPage() {
 
   const filteredNotes = useMemo(() => {
     const keyword = searchText.trim().toLowerCase()
-    return notes.filter((note) => {
+    const base = notes.filter((note) => {
       const currentTagIds = noteTagMap.get(note.id) ?? []
       const hasSelectedTag = selectedFilterTagIds.length === 0 || selectedFilterTagIds.some((tagId) => currentTagIds.includes(tagId))
       const matchesTitle = keyword.length === 0 || (note.title || '').toLowerCase().includes(keyword)
       return hasSelectedTag && matchesTitle
     })
-  }, [noteTagMap, notes, searchText, selectedFilterTagIds])
+    if (pendingNote) {
+      return [pendingNote, ...base]
+    }
+    return base
+  }, [noteTagMap, notes, pendingNote, searchText, selectedFilterTagIds])
 
   const notesBySection = useMemo(() => {
     const map = new Map<string, NoteRecord[]>()
@@ -482,13 +492,19 @@ function ManualsPage() {
     }
 
     lastSavedSignatureRef.current = noteSignature(target)
-    setNotes((current) => current.map((note) => (note.id === target.id ? { ...note, ...payload } : note)))
+    setNotes((current) => {
+      const isNew = !current.some((note) => note.id === target.id)
+      return isNew
+        ? [...current, { ...target, ...payload }]
+        : current.map((note) => (note.id === target.id ? { ...note, ...payload } : note))
+    })
     setNoteTags((current) => [
       ...current.filter((entry) => entry.page_id !== target.id),
       ...target.tagIds.map((categoryId) => ({ page_id: target.id, category_id: categoryId })),
     ])
+    if (pendingNote?.id === target.id) setPendingNote(null)
     setTimedStatus('saved', '保存済み ✓')
-  }, [setTimedStatus])
+  }, [pendingNote?.id, setTimedStatus])
 
   const flushSave = useCallback(async () => {
     const currentDraft = draftRef.current
@@ -515,29 +531,34 @@ function ManualsPage() {
 
   const createNote = async () => {
     await flushSave()
+    if (pendingNote) {
+      setSelectedNoteId(pendingNote.id)
+      return
+    }
+
     const id = crypto.randomUUID()
-    const sectionId = null
     const maxOrder = notes
-      .filter((note) => note.section_id === sectionId)
+      .filter((note) => note.section_id === null)
       .reduce((max, note) => Math.max(max, note.sort_order), -1)
     const newNote: NoteRecord = {
       id,
-      title: '無題ノート',
+      title: '',
       content: EMPTY_CONTENT,
-      section_id: sectionId,
+      section_id: null,
       sort_order: maxOrder + 1,
       updated_at: new Date().toISOString(),
     }
-    const result = await supabase.from('manual_pages').insert(newNote)
-    if (result.error) {
-      setTimedStatus('error', 'ノート作成に失敗しました')
-      return
-    }
-    setNotes((current) => [...current, newNote])
+    setPendingNote(newNote)
     setSelectedNoteId(id)
   }
 
   const deleteNote = async (noteId: string) => {
+    if (noteId === pendingNote?.id) {
+      setPendingNote(null)
+      setSelectedNoteId(notes[0]?.id ?? null)
+      return
+    }
+
     if (selectedNoteId === noteId) {
       setSelectedNoteId(null)
       setDraft(null)
@@ -819,6 +840,7 @@ function ManualsPage() {
                           key={note.id}
                           note={note}
                           selected={note.id === selectedNoteId}
+                          isPending={note.id === pendingNote?.id}
                           onSelect={() => void handleSelectNote(note.id)}
                           onDelete={() => void deleteNote(note.id)}
                         />
@@ -844,6 +866,7 @@ function ManualsPage() {
                       key={note.id}
                       note={note}
                       selected={note.id === selectedNoteId}
+                      isPending={note.id === pendingNote?.id}
                       onSelect={() => void handleSelectNote(note.id)}
                       onDelete={() => void deleteNote(note.id)}
                     />
