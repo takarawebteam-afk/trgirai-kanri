@@ -19,6 +19,7 @@ import Color from '@tiptap/extension-color'
 import Highlight from '@tiptap/extension-highlight'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
+import { mergeAttributes } from '@tiptap/core'
 import { Table } from '@tiptap/extension-table'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
@@ -165,6 +166,35 @@ const ResizableImage = Image.extend({
   },
 })
 
+const CustomHighlight = Highlight.extend({
+  renderHTML({ HTMLAttributes }) {
+    const color = (HTMLAttributes as Record<string, string>).color ?? '#fef08a'
+    const restAttrs = { ...(HTMLAttributes as Record<string, unknown>) }
+    delete restAttrs.style
+    return [
+      'mark',
+      mergeAttributes(restAttrs, {
+        style: `background: linear-gradient(transparent 62%, ${color} 62%); color: inherit;`,
+        'data-hc': color,
+      }),
+      0,
+    ]
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'mark',
+        getAttrs: (el) => ({
+          color:
+            (el as HTMLElement).getAttribute('data-hc') ??
+            (el as HTMLElement).style.backgroundColor ??
+            null,
+        }),
+      },
+    ]
+  },
+})
+
 function SortableNoteItem({
   note,
   selected,
@@ -272,7 +302,7 @@ function ManualsPage() {
       StarterKit,
       TextStyle,
       Color,
-      Highlight.configure({ multicolor: true }),
+      CustomHighlight.configure({ multicolor: true }),
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Link.configure({ openOnClick: false, autolink: true }),
@@ -296,6 +326,10 @@ function ManualsPage() {
     },
     onUpdate: ({ editor: currentEditor }) => {
       setDraft((current) => (current ? { ...current, content: currentEditor.getHTML() } : current))
+    },
+    onSelectionUpdate: ({ editor: currentEditor }) => {
+      const colorAtCursor = currentEditor.getAttributes('textStyle').color as string | undefined
+      setActiveColor(colorAtCursor ?? '#111827')
     },
   })
 
@@ -699,6 +733,7 @@ function ManualsPage() {
   const activeDragNote = notes.find((note) => note.id === activeDragId)
   const selectedTags = tags.filter((tag) => Boolean(draft?.tagIds.includes(tag.id)))
   const availableTags = tags.filter((tag) => !draft?.tagIds.includes(tag.id))
+  const isInTable = editor?.isActive('table') ?? false
 
   return (
     <section className={`note-page${sidebarOpen ? '' : ' sidebar-closed'}`}>
@@ -732,6 +767,10 @@ function ManualsPage() {
                 <button type="button" className="note-chip-x" onClick={() => void deleteTag(tag.id)} aria-label="タグを削除">×</button>
               </span>
             ))}
+          </div>
+          <div className="note-section-add">
+            <input value={newSectionName} onChange={(event) => setNewSectionName(event.target.value)} onKeyDown={handleSectionInputKeyDown} placeholder="セクション名" />
+            <button type="button" className="note-secondary-button" onClick={() => void createSection()}>+ セクション</button>
           </div>
         </div>
 
@@ -820,13 +859,6 @@ function ManualsPage() {
           </DragOverlay>
         </DndContext>
 
-        <div className="note-sidebar-actions">
-          <button type="button" className="note-primary-button" onClick={() => void createNote()}>+ 新規ノート</button>
-          <div className="note-section-add">
-            <input value={newSectionName} onChange={(event) => setNewSectionName(event.target.value)} onKeyDown={handleSectionInputKeyDown} placeholder="セクション名" />
-            <button type="button" className="note-secondary-button" onClick={() => void createSection()}>+ セクション</button>
-          </div>
-        </div>
       </aside>
 
       <main className="note-main">
@@ -873,12 +905,13 @@ function ManualsPage() {
             </div>
 
             <div className="note-toolbar">
-              <button type="button" className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}><strong>B</strong></button>
-              <button type="button" className={editor?.isActive('underline') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button>
+              <button type="button" title="太字 (Bold)" className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}><strong>B</strong></button>
+              <button type="button" title="下線 (Underline)" className={editor?.isActive('underline') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button>
 
               <div className="note-toolbar-menu">
                 <button
                   type="button"
+                  title="文字の色"
                   aria-label="文字色"
                   onClick={() => {
                     setColorPickerOpen((current) => !current)
@@ -911,6 +944,7 @@ function ManualsPage() {
               <div className="note-toolbar-menu">
                 <button
                   type="button"
+                  title="マーカー (ハイライト)"
                   onClick={() => {
                     setMarkerPickerOpen((current) => !current)
                     setColorPickerOpen(false)
@@ -935,11 +969,12 @@ function ManualsPage() {
                 </div>
               </div>
 
-              <button type="button" className={editor?.isActive('bulletList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
-              <button type="button" className={editor?.isActive('orderedList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>1.</button>
+              <button type="button" title="箇条書き" className={editor?.isActive('bulletList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
+              <button type="button" title="番号付きリスト" className={editor?.isActive('orderedList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>1.</button>
               <div className="note-toolbar-menu">
                 <button
                   type="button"
+                  title="表を挿入"
                   onClick={() => {
                     setTablePickerOpen((current) => !current)
                     setColorPickerOpen(false)
@@ -973,11 +1008,22 @@ function ManualsPage() {
                   </div>
                 )}
               </div>
-              <button type="button" onClick={() => editor?.chain().focus().setTextAlign('left').run()}>←</button>
-              <button type="button" onClick={() => editor?.chain().focus().setTextAlign('center').run()}>↔</button>
-              <button type="button" onClick={() => editor?.chain().focus().setTextAlign('right').run()}>→</button>
-              <button type="button" onClick={() => fileInputRef.current?.click()}>🖼 画像</button>
-              <button type="button" className="note-save-button" onClick={() => { if (draft) void saveDraft(draft) }}>保存</button>
+              {isInTable && (
+                <span className="note-toolbar-table-ops">
+                  <button type="button" title="行を上に追加" onClick={() => editor?.chain().focus().addRowBefore().run()}>↑行</button>
+                  <button type="button" title="行を下に追加" onClick={() => editor?.chain().focus().addRowAfter().run()}>↓行</button>
+                  <button type="button" title="この行を削除" onClick={() => editor?.chain().focus().deleteRow().run()}>行×</button>
+                  <button type="button" title="列を左に追加" onClick={() => editor?.chain().focus().addColumnBefore().run()}>←列</button>
+                  <button type="button" title="列を右に追加" onClick={() => editor?.chain().focus().addColumnAfter().run()}>→列</button>
+                  <button type="button" title="この列を削除" onClick={() => editor?.chain().focus().deleteColumn().run()}>列×</button>
+                  <button type="button" title="表を削除" className="note-toolbar-danger" onClick={() => editor?.chain().focus().deleteTable().run()}>表削除</button>
+                </span>
+              )}
+              <button type="button" title="左寄せ" onClick={() => editor?.chain().focus().setTextAlign('left').run()}>←</button>
+              <button type="button" title="中央寄せ" onClick={() => editor?.chain().focus().setTextAlign('center').run()}>↔</button>
+              <button type="button" title="右寄せ" onClick={() => editor?.chain().focus().setTextAlign('right').run()}>→</button>
+              <button type="button" title="画像を挿入" onClick={() => fileInputRef.current?.click()}>🖼 画像</button>
+              <button type="button" title="保存 (自動保存も有効)" className="note-save-button" onClick={() => { if (draft) void saveDraft(draft) }}>保存</button>
               <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleImageFileChange} />
             </div>
 

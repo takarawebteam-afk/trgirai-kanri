@@ -17,7 +17,7 @@
 
 .note-sidebar {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 12px;
   width: 260px;
   min-width: 260px;
@@ -39,7 +39,6 @@
 .note-sidebar-head,
 .note-title-row,
 .note-section-head,
-.note-sidebar-actions,
 .note-section-add,
 .note-editor-tags,
 .note-toolbar,
@@ -317,13 +316,6 @@
   font-size: 12px;
 }
 
-.note-sidebar-actions {
-  align-items: stretch;
-  flex-direction: column;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-}
-
 .note-primary-button,
 .note-secondary-button,
 .note-save-button {
@@ -354,6 +346,7 @@
 }
 
 .note-section-add input {
+  flex: 1;
   height: 34px;
   padding: 0 9px;
   border: 1px solid #d1d5db;
@@ -383,7 +376,7 @@
 }
 
 .note-fab {
-  position: absolute;
+  position: fixed;
   right: 24px;
   bottom: 24px;
   z-index: 15;
@@ -513,6 +506,7 @@
 }
 
 .note-toolbar > button,
+.note-toolbar-table-ops > button,
 .note-toolbar-menu > button {
   min-width: 34px;
   height: 32px;
@@ -527,11 +521,26 @@
 }
 
 .note-toolbar > button:hover,
+.note-toolbar-table-ops > button:hover,
 .note-toolbar-menu > button:hover,
 .note-toolbar > button.is-active {
   border-color: #93c5fd;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.note-toolbar-table-ops {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid #e5e7eb;
+  margin-left: 4px;
+}
+
+.note-toolbar-danger {
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
 }
 
 .note-toolbar-menu .note-toolbar-popover {
