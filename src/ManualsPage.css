@@ -483,7 +483,7 @@
   top: calc(100% + 6px);
   left: 0;
   display: grid;
-  min-width: 150px;
+  min-width: 160px;
   padding: 6px;
   border: 1px solid #d1d5db;
   border-radius: 7px;

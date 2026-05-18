@@ -25,7 +25,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import TextAlign from '@tiptap/extension-text-align'
-import { TextStyle } from '@tiptap/extension-text-style'
+import { FontSize, TextStyle } from '@tiptap/extension-text-style'
 import Underline from '@tiptap/extension-underline'
 import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, type NodeViewProps } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -76,6 +76,15 @@ const AUTOSAVE_DELAY = 1500
 const IMAGE_MIN_WIDTH = 80
 const IMAGE_MAX_WIDTH = 920
 const DEFAULT_IMAGE_WIDTH = 480
+
+const FONT_SIZES = [
+  { label: '極小', value: '11px' },
+  { label: '小', value: '13px' },
+  { label: '標準', value: '15px' },
+  { label: '大', value: '18px' },
+  { label: '特大', value: '22px' },
+  { label: '見出し', value: '28px' },
+] as const
 
 const TEXT_COLORS = [
   { label: '黒', value: '#111827' },
@@ -275,6 +284,7 @@ function ManualsPage() {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingSectionName, setEditingSectionName] = useState('')
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
+  const [fontSizeOpen, setFontSizeOpen] = useState(false)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [markerPickerOpen, setMarkerPickerOpen] = useState(false)
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
@@ -308,6 +318,7 @@ function ManualsPage() {
       StarterKit,
       TextStyle,
       Color,
+      FontSize.configure({ types: ['textStyle'] }),
       CustomHighlight.configure({ multicolor: true }),
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -379,6 +390,7 @@ function ManualsPage() {
     const handleDocumentMouseDown = (event: MouseEvent) => {
       const target = event.target
       if (target instanceof Element && target.closest('.note-toolbar-menu, .note-tag-menu-wrap')) return
+      setFontSizeOpen(false)
       setColorPickerOpen(false)
       setMarkerPickerOpen(false)
       setTablePickerOpen(false)
@@ -935,6 +947,44 @@ function ManualsPage() {
             </div>
 
             <div className="note-toolbar">
+              <div className="note-toolbar-menu">
+                <button
+                  type="button"
+                  title="文字サイズ"
+                  onClick={() => {
+                    setFontSizeOpen((v) => !v)
+                    setColorPickerOpen(false)
+                    setMarkerPickerOpen(false)
+                    setTablePickerOpen(false)
+                  }}
+                >
+                  文字サイズ
+                </button>
+                <div className={`note-toolbar-popover${fontSizeOpen ? ' is-open' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editor?.chain().focus().unsetFontSize().run()
+                      setFontSizeOpen(false)
+                    }}
+                  >
+                    デフォルト
+                  </button>
+                  {FONT_SIZES.map((fs) => (
+                    <button
+                      key={fs.value}
+                      type="button"
+                      style={{ fontSize: fs.value }}
+                      onClick={() => {
+                        editor?.chain().focus().setFontSize(fs.value).run()
+                        setFontSizeOpen(false)
+                      }}
+                    >
+                      {fs.label}（{fs.value}）
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button type="button" title="太字 (Bold)" className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}><strong>B</strong></button>
               <button type="button" title="下線 (Underline)" className={editor?.isActive('underline') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button>
 
