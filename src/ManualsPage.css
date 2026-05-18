@@ -1,3 +1,7 @@
+.note-page-wrapper {
+  position: relative;
+}
+
 .note-page {
   position: relative;
   display: grid;
