@@ -4555,7 +4555,7 @@ function App() {
   }
 
   const googleLogin = useGoogleLogin({
-    scope: 'openid email profile https://www.googleapis.com/auth/calendar.readonly',
+    scope: 'openid email profile',
     prompt: 'select_account',
     onSuccess: async (res) => {
       await applyLoginAccess(res.access_token, {
