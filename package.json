@@ -22,7 +22,6 @@
     "@react-oauth/google": "^0.13.4",
     "@supabase/supabase-js": "^2.101.1",
     "@tiptap/extension-color": "^3.22.2",
-    "@tiptap/extension-font-size": "^3.0.0-next.3",
     "@tiptap/extension-highlight": "^3.22.2",
     "@tiptap/extension-image": "^3.22.2",
     "@tiptap/extension-link": "^3.22.2",
