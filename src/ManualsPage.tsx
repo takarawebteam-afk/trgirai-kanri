@@ -553,6 +553,12 @@ function ManualsPage() {
   }
 
   const deleteNote = async (noteId: string) => {
+    const title = pendingNote?.id === noteId
+      ? '無題ノート（未保存）'
+      : (notes.find((note) => note.id === noteId)?.title || '無題ノート')
+    const ok = window.confirm(`「${title}」を削除しますか？`)
+    if (!ok) return
+
     if (noteId === pendingNote?.id) {
       setPendingNote(null)
       setSelectedNoteId(notes[0]?.id ?? null)
@@ -781,7 +787,7 @@ function ManualsPage() {
             />
             <button type="button" className="note-secondary-button" onClick={() => void createTag()}>追加</button>
           </div>
-          <div className="note-chip-list">
+          <div className="note-chip-list note-tag-filter-chips">
             {tags.map((tag) => (
               <span key={tag.id} className={`note-chip${selectedFilterTagIds.includes(tag.id) ? ' is-active' : ''}`}>
                 <button type="button" onClick={() => toggleFilterTag(tag.id)}>{tag.name}</button>
@@ -1053,8 +1059,8 @@ function ManualsPage() {
             <EditorContent editor={editor} className="note-editor" />
           </div>
         )}
+        <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
       </main>
-      <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
     </section>
   )
 }

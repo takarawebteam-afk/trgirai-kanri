@@ -117,6 +117,12 @@
   flex-wrap: wrap;
 }
 
+.note-tag-filter-chips {
+  max-height: 72px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
 .note-chip {
   display: inline-flex;
   align-items: center;
@@ -362,6 +368,7 @@
 }
 
 .note-main {
+  position: relative;
   min-width: 0;
   overflow: auto;
   background: #ffffff;
@@ -382,7 +389,7 @@
 }
 
 .note-fab {
-  position: fixed;
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
