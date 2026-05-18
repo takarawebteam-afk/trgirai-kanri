@@ -77,15 +77,6 @@ const IMAGE_MIN_WIDTH = 80
 const IMAGE_MAX_WIDTH = 920
 const DEFAULT_IMAGE_WIDTH = 480
 
-const FONT_SIZES = [
-  { label: '極小', value: '11px' },
-  { label: '小', value: '13px' },
-  { label: '標準', value: '15px' },
-  { label: '大', value: '18px' },
-  { label: '特大', value: '22px' },
-  { label: '見出し', value: '28px' },
-] as const
-
 const TEXT_COLORS = [
   { label: '黒', value: '#111827' },
   { label: '赤', value: '#dc2626' },
@@ -284,7 +275,7 @@ function ManualsPage() {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingSectionName, setEditingSectionName] = useState('')
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
-  const [fontSizeOpen, setFontSizeOpen] = useState(false)
+  const [fontSize, setFontSize] = useState(15)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [markerPickerOpen, setMarkerPickerOpen] = useState(false)
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
@@ -350,6 +341,12 @@ function ManualsPage() {
     },
   })
 
+  const applyFontSize = useCallback((size: number) => {
+    const clamped = Math.min(72, Math.max(8, size))
+    setFontSize(clamped)
+    editor?.chain().focus().setFontSize(`${clamped}px`).run()
+  }, [editor])
+
   const loadData = useCallback(async () => {
     setLoading(true)
     const [notesResult, sectionsResult, tagsResult, noteTagsResult] = await Promise.all([
@@ -390,7 +387,6 @@ function ManualsPage() {
     const handleDocumentMouseDown = (event: MouseEvent) => {
       const target = event.target
       if (target instanceof Element && target.closest('.note-toolbar-menu, .note-tag-menu-wrap')) return
-      setFontSizeOpen(false)
       setColorPickerOpen(false)
       setMarkerPickerOpen(false)
       setTablePickerOpen(false)
@@ -947,44 +943,33 @@ function ManualsPage() {
             </div>
 
             <div className="note-toolbar">
-              <div className="note-toolbar-menu">
+              <span className="note-font-size-ctrl">
                 <button
                   type="button"
-                  title="文字サイズ"
-                  onClick={() => {
-                    setFontSizeOpen((v) => !v)
-                    setColorPickerOpen(false)
-                    setMarkerPickerOpen(false)
-                    setTablePickerOpen(false)
-                  }}
+                  title="文字サイズを縮小"
+                  onClick={() => applyFontSize(fontSize - 1)}
                 >
-                  文字サイズ
+                  −
                 </button>
-                <div className={`note-toolbar-popover${fontSizeOpen ? ' is-open' : ''}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      editor?.chain().focus().unsetFontSize().run()
-                      setFontSizeOpen(false)
-                    }}
-                  >
-                    デフォルト
-                  </button>
-                  {FONT_SIZES.map((fs) => (
-                    <button
-                      key={fs.value}
-                      type="button"
-                      style={{ fontSize: fs.value }}
-                      onClick={() => {
-                        editor?.chain().focus().setFontSize(fs.value).run()
-                        setFontSizeOpen(false)
-                      }}
-                    >
-                      {fs.label}（{fs.value}）
-                    </button>
-                  ))}
-                </div>
-              </div>
+                <input
+                  type="number"
+                  className="note-font-size-input"
+                  value={fontSize}
+                  min={8}
+                  max={72}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10)
+                    if (!isNaN(v)) applyFontSize(v)
+                  }}
+                />
+                <button
+                  type="button"
+                  title="文字サイズを拡大"
+                  onClick={() => applyFontSize(fontSize + 1)}
+                >
+                  +
+                </button>
+              </span>
               <button type="button" title="太字 (Bold)" className={editor?.isActive('bold') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBold().run()}><strong>B</strong></button>
               <button type="button" title="下線 (Underline)" className={editor?.isActive('underline') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button>
 

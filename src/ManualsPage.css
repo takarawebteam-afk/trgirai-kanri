@@ -549,6 +549,50 @@
   color: #1d4ed8;
 }
 
+.note-font-size-ctrl {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.note-font-size-ctrl button {
+  min-width: 28px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.note-font-size-ctrl button:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.note-font-size-input {
+  width: 36px;
+  height: 32px;
+  border: none;
+  border-left: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+  text-align: center;
+  font: inherit;
+  font-size: 13px;
+  color: #111827;
+  -moz-appearance: textfield;
+  outline: none;
+}
+
+.note-font-size-input::-webkit-inner-spin-button,
+.note-font-size-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
 .note-toolbar-table-ops {
   display: flex;
   align-items: center;
