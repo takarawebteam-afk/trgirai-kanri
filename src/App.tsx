@@ -428,6 +428,8 @@ const TASK_REPORT_WORK_MINUTES: Record<string, number> = {
 const TASK_REPORT_NII_HONMACHI_MINUTES = 480
 const TASK_REPORT_NII_HONSHA_TO_HONMACHI_MINUTES = 300
 const TASK_REPORT_395_MINUTES = 360
+const TASK_REPORT_DAY_OFF_KEYWORDS = ['公休', '欠勤', '有給', '上期公休', '下期公休']
+type TaskReportCalendarEvent = { summary: string; isAllDay: boolean }
 
 const DEFAULT_TASK_REPORT_CATEGORIES = [
   {
@@ -3232,7 +3234,7 @@ function App() {
     const dateTexts = Array.from({ length: monthLastDay }, (_, index) => (
       `${y}-${String(m).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`
     ))
-    const eventSummariesByMember: Record<string, Record<string, string[]>> = {}
+    const eventsByMember: Record<string, Record<string, TaskReportCalendarEvent[]>> = {}
     const loadedCalendarIds = new Set<string>()
     const formatJapanDate = (dateTime: string) => {
       const parts = new Intl.DateTimeFormat('ja-JP', {
@@ -3268,17 +3270,17 @@ function App() {
             items?: { summary?: string; start?: { dateTime?: string; date?: string } }[]
           }
           loadedCalendarIds.add(member.calendarId)
-          const summariesByDate: Record<string, string[]> = {}
+          const eventsByDate: Record<string, TaskReportCalendarEvent[]> = {}
           ;(data.items || []).forEach((event) => {
             const dateText = event.start?.date
               || (event.start?.dateTime ? formatJapanDate(event.start.dateTime) : '')
             if (!dateText) return
-            if (!summariesByDate[dateText]) summariesByDate[dateText] = []
-            summariesByDate[dateText].push(event.summary || '')
+            if (!eventsByDate[dateText]) eventsByDate[dateText] = []
+            eventsByDate[dateText].push({ summary: event.summary || '', isAllDay: !!event.start?.date })
           })
-          eventSummariesByMember[member.calendarId] = summariesByDate
+          eventsByMember[member.calendarId] = eventsByDate
         } catch {
-          eventSummariesByMember[member.calendarId] = {}
+          eventsByMember[member.calendarId] = {}
         }
       }),
     )
@@ -3288,15 +3290,14 @@ function App() {
     dateTexts.forEach((dateText) => {
       const workingMembers: string[] = STOCK_ATTENDANCE_MEMBERS.filter((member) => {
         if (!loadedCalendarIds.has(member.calendarId)) return false
-        const summaries = eventSummariesByMember[member.calendarId]?.[dateText] || []
-        const hasDayOff = summaries.some((summary) => summary.includes('公休'))
-        if (hasDayOff) return false
+        const events = eventsByMember[member.calendarId]?.[dateText] || []
+        if (hasTaskReportDayOff(events)) return false
         return true
       }).map((member) => member.badge)
 
-      const honmachiSummaries = eventSummariesByMember[STOCK_HONMACHI_MEMBER.calendarId]?.[dateText] || []
+      const honmachiEvents = eventsByMember[STOCK_HONMACHI_MEMBER.calendarId]?.[dateText] || []
       const isHonmachiWorkDay = loadedCalendarIds.has(STOCK_HONMACHI_MEMBER.calendarId)
-        && honmachiSummaries.some((summary) => summary.includes('本町'))
+        && honmachiEvents.some((event) => event.summary.includes('本町'))
 
       if (isHonmachiWorkDay) {
         workingMembers.push(STOCK_HONMACHI_MEMBER.badge)
@@ -7662,6 +7663,15 @@ function normalizeTaskReportText(value: string) {
   return value.toLowerCase().replace(/\s+/g, '')
 }
 
+function hasTaskReportDayOff(events: TaskReportCalendarEvent[]) {
+  const normalizedKeywords = TASK_REPORT_DAY_OFF_KEYWORDS.map((keyword) => normalizeTaskReportText(keyword))
+  return events.some((event) => {
+    if (!event.isAllDay) return false
+    const normalizedSummary = normalizeTaskReportText(event.summary)
+    return normalizedKeywords.some((keyword) => normalizedSummary.includes(keyword))
+  })
+}
+
 function sortTaskReportCategories(categories: TaskReportCategoryMaster[]) {
   return [...categories].sort((a, b) => {
     if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
@@ -7739,10 +7749,9 @@ function getTaskReportMonthKeys(startDate: string, endDate: string) {
   return months
 }
 
-function getTaskReportWorkMinutes(memberName: string, summaries: string[]) {
-  const normalizedSummaries = summaries.map((summary) => normalizeTaskReportText(summary))
-  const hasDayOff = normalizedSummaries.some((summary) => summary.includes('公休'))
-  if (hasDayOff) return 0
+function getTaskReportWorkMinutes(memberName: string, events: TaskReportCalendarEvent[]) {
+  const normalizedSummaries = events.map((event) => normalizeTaskReportText(event.summary))
+  if (hasTaskReportDayOff(events)) return 0
 
   const has395Work = memberName !== '吉田' && normalizedSummaries.some((summary) => summary.includes('395') || summary.includes('３９５'))
   if (has395Work) return TASK_REPORT_395_MINUTES
@@ -7916,7 +7925,7 @@ function TaskReportPanel() {
     const dateTexts = Array.from({ length: monthLastDay }, (_, index) => (
       `${year}-${String(month).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`
     ))
-    const summariesByMember: Record<string, Record<string, string[]>> = {}
+    const eventsByMember: Record<string, Record<string, TaskReportCalendarEvent[]>> = {}
     const loadedCalendarIds = new Set<string>()
     const formatJapanDate = (dateTime: string) => {
       const parts = new Intl.DateTimeFormat('ja-JP', {
@@ -7952,17 +7961,17 @@ function TaskReportPanel() {
             items?: { summary?: string; start?: { dateTime?: string; date?: string } }[]
           }
           loadedCalendarIds.add(member.calendarId)
-          const summariesByDate: Record<string, string[]> = {}
+          const eventsByDate: Record<string, TaskReportCalendarEvent[]> = {}
           ;(data.items || []).forEach((event) => {
             const dateText = event.start?.date
               || (event.start?.dateTime ? formatJapanDate(event.start.dateTime) : '')
             if (!dateText) return
-            if (!summariesByDate[dateText]) summariesByDate[dateText] = []
-            summariesByDate[dateText].push(event.summary || '')
+            if (!eventsByDate[dateText]) eventsByDate[dateText] = []
+            eventsByDate[dateText].push({ summary: event.summary || '', isAllDay: !!event.start?.date })
           })
-          summariesByMember[member.calendarId] = summariesByDate
+          eventsByMember[member.calendarId] = eventsByDate
         } catch {
-          summariesByMember[member.calendarId] = {}
+          eventsByMember[member.calendarId] = {}
         }
       }),
     )
@@ -7971,9 +7980,9 @@ function TaskReportPanel() {
     dateTexts.forEach((dateText) => {
       const dayMinutes: Record<string, number> = {}
       TEAM_MEMBER_OPTIONS.forEach((member) => {
-        const summaries = summariesByMember[member.calendarId]?.[dateText] || []
+        const events = eventsByMember[member.calendarId]?.[dateText] || []
         dayMinutes[member.name] = loadedCalendarIds.has(member.calendarId)
-          ? getTaskReportWorkMinutes(member.name, summaries)
+          ? getTaskReportWorkMinutes(member.name, events)
           : 0
       })
       nextWorkMinutesByDate[dateText] = dayMinutes
