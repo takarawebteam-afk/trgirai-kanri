@@ -142,7 +142,7 @@ function ResizableImageView({ node, selected, updateAttributes }: NodeViewProps)
   }
 
   return (
-    <NodeViewWrapper className={`note-image-box${selected ? ' is-selected' : ''}`}>
+    <NodeViewWrapper className={`note-image-box${selected ? ' is-selected' : ''}`} style={{ position: 'relative', display: 'inline-block' }}>
       <img src={String(node.attrs.src)} width={width} alt="" draggable={false} />
       <div className="note-image-handle" onMouseDown={handleMouseDown} />
     </NodeViewWrapper>
@@ -234,12 +234,16 @@ function ManualsPage() {
   const [selectedFilterTagIds, setSelectedFilterTagIds] = useState<string[]>([])
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<string>>(new Set())
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [tagInputOpen, setTagInputOpen] = useState(false)
   const [newTagName, setNewTagName] = useState('')
   const [newSectionName, setNewSectionName] = useState('')
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingSectionName, setEditingSectionName] = useState('')
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const [markerPickerOpen, setMarkerPickerOpen] = useState(false)
+  const [tablePickerOpen, setTablePickerOpen] = useState(false)
+  const [tableHover, setTableHover] = useState<{ rows: number; cols: number } | null>(null)
+  const [activeColor, setActiveColor] = useState('#111827')
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveMessage, setSaveMessage] = useState('')
@@ -330,6 +334,21 @@ function ManualsPage() {
   useEffect(() => {
     draftRef.current = draft
   }, [draft])
+
+  useEffect(() => {
+    const handleDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('.note-toolbar-menu, .note-tag-menu-wrap')) return
+      setColorPickerOpen(false)
+      setMarkerPickerOpen(false)
+      setTablePickerOpen(false)
+      setTableHover(null)
+      setTagMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handleDocumentMouseDown)
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown)
+  }, [])
 
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
@@ -509,7 +528,6 @@ function ManualsPage() {
     const existingTag = tags.find((tag) => tag.name.toLowerCase() === name.toLowerCase())
     if (existingTag) {
       setNewTagName('')
-      setTagInputOpen(false)
       return
     }
     const newTag: TagRecord = { id: crypto.randomUUID(), name }
@@ -520,7 +538,6 @@ function ManualsPage() {
     }
     setTags((current) => [...current, newTag].sort((a, b) => a.name.localeCompare(b.name, 'ja')))
     setNewTagName('')
-    setTagInputOpen(false)
   }
 
   const deleteTag = async (tagId: string) => {
@@ -685,12 +702,6 @@ function ManualsPage() {
 
   return (
     <section className={`note-page${sidebarOpen ? '' : ' sidebar-closed'}`}>
-      {!sidebarOpen && (
-        <button type="button" className="note-sidebar-open" onClick={() => setSidebarOpen(true)}>
-          ◀ 開く
-        </button>
-      )}
-
       <aside className="note-sidebar">
         <div className="note-sidebar-head">
           <strong>Note</strong>
@@ -704,6 +715,16 @@ function ManualsPage() {
 
         <div className="note-filter-block">
           <div className="note-block-title">タグフィルター</div>
+          <div className="note-tag-create-row">
+            <input
+              className="note-new-chip-input"
+              value={newTagName}
+              onChange={(event) => setNewTagName(event.target.value)}
+              onKeyDown={handleTagInputKeyDown}
+              placeholder="新しいタグ名"
+            />
+            <button type="button" className="note-secondary-button" onClick={() => void createTag()}>追加</button>
+          </div>
           <div className="note-chip-list">
             {tags.map((tag) => (
               <span key={tag.id} className={`note-chip${selectedFilterTagIds.includes(tag.id) ? ' is-active' : ''}`}>
@@ -711,19 +732,6 @@ function ManualsPage() {
                 <button type="button" className="note-chip-x" onClick={() => void deleteTag(tag.id)} aria-label="タグを削除">×</button>
               </span>
             ))}
-            {tagInputOpen ? (
-              <input
-                className="note-new-chip-input"
-                value={newTagName}
-                onChange={(event) => setNewTagName(event.target.value)}
-                onKeyDown={handleTagInputKeyDown}
-                onBlur={() => void createTag()}
-                autoFocus
-                placeholder="タグ名"
-              />
-            ) : (
-              <button type="button" className="note-add-chip" onClick={() => setTagInputOpen(true)}>+ タグ追加</button>
-            )}
           </div>
         </div>
 
@@ -822,6 +830,11 @@ function ManualsPage() {
       </aside>
 
       <main className="note-main">
+        {!sidebarOpen && (
+          <button type="button" className="note-main-open-btn" onClick={() => setSidebarOpen(true)}>
+            ◀ ノート一覧
+          </button>
+        )}
         {!draft ? (
           <div className="note-empty-editor">
             <h2>ノートを選んでください</h2>
@@ -864,22 +877,59 @@ function ManualsPage() {
               <button type="button" className={editor?.isActive('underline') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button>
 
               <div className="note-toolbar-menu">
-                <button type="button">🎨</button>
-                <div className="note-toolbar-popover">
+                <button
+                  type="button"
+                  aria-label="文字色"
+                  onClick={() => {
+                    setColorPickerOpen((current) => !current)
+                    setMarkerPickerOpen(false)
+                    setTablePickerOpen(false)
+                  }}
+                >
+                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', lineHeight: 1 }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '13px', color: activeColor }}>A</span>
+                    <span style={{ width: '14px', height: '3px', background: activeColor, borderRadius: '1px' }} />
+                  </span>
+                </button>
+                <div className={`note-toolbar-popover${colorPickerOpen ? ' is-open' : ''}`}>
                   {TEXT_COLORS.map((color) => (
-                    <button key={color.value} type="button" onClick={() => editor?.chain().focus().setColor(color.value).run()}>
-                      <span style={{ background: color.value }} />{color.label}
+                    <button
+                      key={color.value}
+                      type="button"
+                      onClick={() => {
+                        setActiveColor(color.value)
+                        editor?.chain().focus().setColor(color.value).run()
+                        setColorPickerOpen(false)
+                      }}
+                    >
+                      <span className="note-color-swatch" style={{ background: color.value }} />{color.label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="note-toolbar-menu">
-                <button type="button">マーカー</button>
-                <div className="note-toolbar-popover">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMarkerPickerOpen((current) => !current)
+                    setColorPickerOpen(false)
+                    setTablePickerOpen(false)
+                  }}
+                >
+                  🖊 マーカー
+                </button>
+                <div className={`note-toolbar-popover${markerPickerOpen ? ' is-open' : ''}`}>
                   {HIGHLIGHT_COLORS.map((color) => (
-                    <button key={color.value} type="button" onClick={() => editor?.chain().focus().setHighlight({ color: color.value }).run()}>
-                      <span style={{ background: color.value }} />{color.label}
+                    <button
+                      key={color.value}
+                      type="button"
+                      onClick={() => {
+                        editor?.chain().focus().setHighlight({ color: color.value }).run()
+                        setMarkerPickerOpen(false)
+                      }}
+                    >
+                      <span className="note-color-swatch" style={{ background: color.value }} />{color.label}
                     </button>
                   ))}
                 </div>
@@ -887,12 +937,47 @@ function ManualsPage() {
 
               <button type="button" className={editor?.isActive('bulletList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
               <button type="button" className={editor?.isActive('orderedList') ? 'is-active' : ''} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>1.</button>
-              <button type="button" onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>◫</button>
+              <div className="note-toolbar-menu">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTablePickerOpen((current) => !current)
+                    setColorPickerOpen(false)
+                    setMarkerPickerOpen(false)
+                  }}
+                >
+                  ◫
+                </button>
+                {tablePickerOpen && (
+                  <div className="note-table-picker">
+                    <div className="note-table-grid">
+                      {Array.from({ length: 8 }, (_, rowIndex) =>
+                        Array.from({ length: 8 }, (_, colIndex) => (
+                          <div
+                            key={`${rowIndex}-${colIndex}`}
+                            className={`note-table-cell${tableHover && rowIndex < tableHover.rows && colIndex < tableHover.cols ? ' is-hover' : ''}`}
+                            onMouseEnter={() => setTableHover({ rows: rowIndex + 1, cols: colIndex + 1 })}
+                            onClick={() => {
+                              const size = tableHover ?? { rows: rowIndex + 1, cols: colIndex + 1 }
+                              editor?.chain().focus().insertTable({ rows: size.rows, cols: size.cols, withHeaderRow: true }).run()
+                              setTablePickerOpen(false)
+                              setTableHover(null)
+                            }}
+                          />
+                        ))
+                      )}
+                    </div>
+                    <div className="note-table-picker-label">
+                      {tableHover ? `${tableHover.rows}行 × ${tableHover.cols}列` : '表のサイズを選択'}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={() => editor?.chain().focus().setTextAlign('left').run()}>←</button>
               <button type="button" onClick={() => editor?.chain().focus().setTextAlign('center').run()}>↔</button>
               <button type="button" onClick={() => editor?.chain().focus().setTextAlign('right').run()}>→</button>
-              <button type="button" onClick={() => fileInputRef.current?.click()}>🖼</button>
-              <button type="button" className="note-save-button" onClick={() => void flushSave()}>保存</button>
+              <button type="button" onClick={() => fileInputRef.current?.click()}>🖼 画像</button>
+              <button type="button" className="note-save-button" onClick={() => { if (draft) void saveDraft(draft) }}>保存</button>
               <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleImageFileChange} />
             </div>
 
@@ -900,6 +985,7 @@ function ManualsPage() {
           </div>
         )}
       </main>
+      <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
     </section>
   )
 }
