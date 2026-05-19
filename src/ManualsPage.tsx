@@ -674,6 +674,7 @@ function ManualsPage({
 
   useEffect(() => {
     if (!draft) return
+    if (pendingNote?.id === draft.id) return
     if (noteSignature(draft) === lastSavedSignatureRef.current) return
     setTimedStatus('saving', '保存中...')
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
@@ -684,7 +685,7 @@ function ManualsPage({
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
     }
-  }, [draft, saveDraft, setTimedStatus])
+  }, [draft, pendingNote?.id, saveDraft, setTimedStatus])
 
   const createNote = async () => {
     await flushSave()
