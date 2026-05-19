@@ -58,6 +58,17 @@ type NoteTagRecord = {
   category_id: string
 }
 
+type NoteAccessRecord = {
+  page_id: string
+  email: string
+}
+
+type AllowedAccountOption = {
+  id: string
+  email: string
+  is_master?: boolean
+}
+
 type NoteDraft = {
   id: string
   title: string
@@ -65,6 +76,8 @@ type NoteDraft = {
   section_id: string | null
   sort_order: number
   tagIds: string[]
+  accessMode: 'all' | 'selected'
+  allowedEmails: string[]
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -76,6 +89,10 @@ const AUTOSAVE_DELAY = 1500
 const IMAGE_MIN_WIDTH = 80
 const IMAGE_MAX_WIDTH = 920
 const DEFAULT_IMAGE_WIDTH = 480
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
+}
 
 const TEXT_COLORS = [
   { label: '黒', value: '#111827' },
@@ -112,6 +129,8 @@ function noteSignature(draft: NoteDraft) {
     section_id: draft.section_id,
     sort_order: draft.sort_order,
     tagIds: [...draft.tagIds].sort(),
+    accessMode: draft.accessMode,
+    allowedEmails: [...draft.allowedEmails].map(normalizeEmail).sort(),
   })
 }
 
@@ -258,12 +277,19 @@ function DroppableNoteGroup({
   )
 }
 
-function ManualsPage() {
+function ManualsPage({
+  currentUserEmail,
+  allowedAccounts,
+}: {
+  currentUserEmail: string | null
+  allowedAccounts: AllowedAccountOption[]
+}) {
   const [notes, setNotes] = useState<NoteRecord[]>([])
   const [pendingNote, setPendingNote] = useState<NoteRecord | null>(null)
   const [sections, setSections] = useState<SectionRecord[]>([])
   const [tags, setTags] = useState<TagRecord[]>([])
   const [noteTags, setNoteTags] = useState<NoteTagRecord[]>([])
+  const [noteAccess, setNoteAccess] = useState<NoteAccessRecord[]>([])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [draft, setDraft] = useState<NoteDraft | null>(null)
   const [searchText, setSearchText] = useState('')
@@ -275,6 +301,7 @@ function ManualsPage() {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingSectionName, setEditingSectionName] = useState('')
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
+  const [accessMenuOpen, setAccessMenuOpen] = useState(false)
   const [fontSize, setFontSize] = useState(15)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [markerPickerOpen, setMarkerPickerOpen] = useState(false)
@@ -347,13 +374,21 @@ function ManualsPage() {
     editor?.chain().focus().setFontSize(`${clamped}px`).run()
   }, [editor])
 
+  const allowedAccountEmails = useMemo(
+    () => allowedAccounts.map((account) => normalizeEmail(account.email)).filter(Boolean),
+    [allowedAccounts],
+  )
+
+  const normalizedCurrentUserEmail = normalizeEmail(currentUserEmail ?? '')
+
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [notesResult, sectionsResult, tagsResult, noteTagsResult] = await Promise.all([
+    const [notesResult, sectionsResult, tagsResult, noteTagsResult, noteAccessResult] = await Promise.all([
       supabase.from('manual_pages').select('id, title, content, section_id, sort_order, created_at, updated_at').order('sort_order', { ascending: true }),
       supabase.from('manual_sections').select('id, name, sort_order').order('sort_order', { ascending: true }),
       supabase.from('manual_categories').select('id, name').order('name', { ascending: true }),
       supabase.from('manual_page_categories').select('page_id, category_id'),
+      supabase.from('manual_page_allowed_accounts').select('page_id, email'),
     ])
 
     if (notesResult.error || sectionsResult.error || tagsResult.error || noteTagsResult.error) {
@@ -367,6 +402,12 @@ function ManualsPage() {
     setSections((sectionsResult.data ?? []) as SectionRecord[])
     setTags((tagsResult.data ?? []) as TagRecord[])
     setNoteTags((noteTagsResult.data ?? []) as NoteTagRecord[])
+    if (noteAccessResult.error) {
+      console.warn('ノート閲覧設定を読み込めませんでした。', noteAccessResult.error.message)
+      setNoteAccess([])
+    } else {
+      setNoteAccess((noteAccessResult.data ?? []) as NoteAccessRecord[])
+    }
     setSelectedNoteId((current) => (current && nextNotes.some((note) => note.id === current) ? current : nextNotes[0]?.id ?? null))
     setLoading(false)
   }, [setTimedStatus])
@@ -386,26 +427,58 @@ function ManualsPage() {
   useEffect(() => {
     const handleDocumentMouseDown = (event: MouseEvent) => {
       const target = event.target
-      if (target instanceof Element && target.closest('.note-toolbar-menu, .note-tag-menu-wrap')) return
+      if (target instanceof Element && target.closest('.note-toolbar-menu, .note-tag-menu-wrap, .note-access-menu-wrap')) return
       setColorPickerOpen(false)
       setMarkerPickerOpen(false)
       setTablePickerOpen(false)
       setTableHover(null)
       setTagMenuOpen(false)
+      setAccessMenuOpen(false)
     }
 
     document.addEventListener('mousedown', handleDocumentMouseDown)
     return () => document.removeEventListener('mousedown', handleDocumentMouseDown)
   }, [])
 
-  const selectedNote = useMemo(
-    () => pendingNote?.id === selectedNoteId ? pendingNote : notes.find((note) => note.id === selectedNoteId) ?? null,
-    [notes, pendingNote, selectedNoteId],
+  const noteAccessMap = useMemo(() => {
+    const map = new Map<string, string[]>()
+    noteAccess.forEach((entry) => {
+      const email = normalizeEmail(entry.email)
+      if (!email) return
+      const list = map.get(entry.page_id) ?? []
+      list.push(email)
+      map.set(entry.page_id, list)
+    })
+    return map
+  }, [noteAccess])
+
+  const accessibleNotes = useMemo(
+    () => notes.filter((note) => {
+      const allowedEmailsForNote = noteAccessMap.get(note.id) ?? []
+      return allowedEmailsForNote.length === 0 || allowedEmailsForNote.includes(normalizedCurrentUserEmail)
+    }),
+    [normalizedCurrentUserEmail, noteAccessMap, notes],
   )
+
+  const selectedNote = useMemo(
+    () => pendingNote?.id === selectedNoteId ? pendingNote : accessibleNotes.find((note) => note.id === selectedNoteId) ?? null,
+    [accessibleNotes, pendingNote, selectedNoteId],
+  )
+
+  useEffect(() => {
+    if (pendingNote) return
+    if (selectedNoteId && accessibleNotes.some((note) => note.id === selectedNoteId)) return
+    setSelectedNoteId(accessibleNotes[0]?.id ?? null)
+  }, [accessibleNotes, pendingNote, selectedNoteId])
 
   const selectedNoteTagIds = useMemo(
     () => noteTags.filter((entry) => entry.page_id === selectedNoteId).map((entry) => entry.category_id),
     [noteTags, selectedNoteId],
+  )
+
+  const selectedNoteAllowedEmails = useMemo(
+    () => noteAccessMap.get(selectedNoteId ?? '') ?? [],
+    [noteAccessMap, selectedNoteId],
   )
 
   useEffect(() => {
@@ -423,6 +496,8 @@ function ManualsPage() {
       section_id: selectedNote.section_id,
       sort_order: selectedNote.sort_order,
       tagIds: selectedNoteTagIds,
+      accessMode: selectedNoteAllowedEmails.length > 0 ? 'selected' : 'all',
+      allowedEmails: selectedNoteAllowedEmails.length > 0 ? selectedNoteAllowedEmails : allowedAccountEmails,
     }
 
     lastSavedSignatureRef.current = noteSignature(nextDraft)
@@ -430,7 +505,7 @@ function ManualsPage() {
     setSaveState('idle')
     setSaveMessage('')
     editor?.commands.setContent(nextDraft.content, { emitUpdate: false })
-  }, [editor, selectedNote, selectedNoteTagIds])
+  }, [allowedAccountEmails, editor, selectedNote, selectedNoteAllowedEmails, selectedNoteTagIds])
 
   const noteTagMap = useMemo(() => {
     const map = new Map<string, string[]>()
@@ -444,7 +519,7 @@ function ManualsPage() {
 
   const filteredNotes = useMemo(() => {
     const keyword = searchText.trim().toLowerCase()
-    const base = notes.filter((note) => {
+    const base = accessibleNotes.filter((note) => {
       const currentTagIds = noteTagMap.get(note.id) ?? []
       const hasSelectedTag = selectedFilterTagIds.length === 0 || selectedFilterTagIds.some((tagId) => currentTagIds.includes(tagId))
       const matchesTitle = keyword.length === 0 || (note.title || '').toLowerCase().includes(keyword)
@@ -454,7 +529,7 @@ function ManualsPage() {
       return [pendingNote, ...base]
     }
     return base
-  }, [noteTagMap, notes, pendingNote, searchText, selectedFilterTagIds])
+  }, [accessibleNotes, noteTagMap, pendingNote, searchText, selectedFilterTagIds])
 
   const notesBySection = useMemo(() => {
     const map = new Map<string, NoteRecord[]>()
@@ -499,7 +574,29 @@ function ManualsPage() {
       }
     }
 
-    lastSavedSignatureRef.current = noteSignature(target)
+    const nextAllowedEmails = target.accessMode === 'selected'
+      ? Array.from(new Set(target.allowedEmails.map(normalizeEmail)))
+        .filter((email) => allowedAccountEmails.includes(email))
+      : []
+
+    const deleteAccessResult = await supabase.from('manual_page_allowed_accounts').delete().eq('page_id', target.id)
+    if (deleteAccessResult.error) {
+      setTimedStatus('error', '閲覧設定の保存に失敗しました')
+      return
+    }
+
+    if (nextAllowedEmails.length > 0) {
+      const insertAccessResult = await supabase.from('manual_page_allowed_accounts').insert(
+        nextAllowedEmails.map((email) => ({ page_id: target.id, email })),
+      )
+      if (insertAccessResult.error) {
+        setTimedStatus('error', '閲覧設定の保存に失敗しました')
+        return
+      }
+    }
+
+    const savedTarget: NoteDraft = { ...target, allowedEmails: nextAllowedEmails }
+    lastSavedSignatureRef.current = noteSignature(savedTarget)
     setNotes((current) => {
       const isNew = !current.some((note) => note.id === target.id)
       return isNew
@@ -510,9 +607,14 @@ function ManualsPage() {
       ...current.filter((entry) => entry.page_id !== target.id),
       ...target.tagIds.map((categoryId) => ({ page_id: target.id, category_id: categoryId })),
     ])
+    setNoteAccess((current) => [
+      ...current.filter((entry) => entry.page_id !== target.id),
+      ...nextAllowedEmails.map((email) => ({ page_id: target.id, email })),
+    ])
+    setDraft(savedTarget)
     if (pendingNote?.id === target.id) setPendingNote(null)
     setTimedStatus('saved', '保存済み ✓')
-  }, [pendingNote?.id, setTimedStatus])
+  }, [allowedAccountEmails, pendingNote?.id, setTimedStatus])
 
   const flushSave = useCallback(async () => {
     const currentDraft = draftRef.current
@@ -577,6 +679,7 @@ function ManualsPage() {
       setSelectedNoteId(null)
       setDraft(null)
     }
+    await supabase.from('manual_page_allowed_accounts').delete().eq('page_id', noteId)
     await supabase.from('manual_page_categories').delete().eq('page_id', noteId)
     const result = await supabase.from('manual_pages').delete().eq('id', noteId)
     if (result.error) {
@@ -589,6 +692,7 @@ function ManualsPage() {
       return next
     })
     setNoteTags((current) => current.filter((entry) => entry.page_id !== noteId))
+    setNoteAccess((current) => current.filter((entry) => entry.page_id !== noteId))
   }
 
   const createTag = async () => {
@@ -687,6 +791,27 @@ function ManualsPage() {
     setDraft((current) => current ? { ...current, tagIds: current.tagIds.filter((id) => id !== tagId) } : current)
   }
 
+  const toggleDraftAllowedEmail = (email: string) => {
+    const normalizedEmail = normalizeEmail(email)
+    if (!normalizedEmail) return
+    setDraft((current) => {
+      if (!current) return current
+      const baseEmails = current.accessMode === 'all' ? allowedAccountEmails : current.allowedEmails
+      const hasEmail = baseEmails.includes(normalizedEmail)
+      const nextEmails = hasEmail
+        ? baseEmails.filter((item) => item !== normalizedEmail)
+        : [...baseEmails, normalizedEmail]
+      const dedupedEmails = Array.from(new Set(nextEmails)).filter((item) => allowedAccountEmails.includes(item))
+      if (dedupedEmails.length === 0) return current
+      const isAllChecked = allowedAccountEmails.length > 0 && dedupedEmails.length === allowedAccountEmails.length
+      return {
+        ...current,
+        accessMode: isAllChecked ? 'all' : 'selected',
+        allowedEmails: isAllChecked ? allowedAccountEmails : dedupedEmails,
+      }
+    })
+  }
+
   const uploadImage = useCallback(async (file: File) => {
     if (!editor || !draftRef.current) return
     setTimedStatus('saving', '画像を保存中...')
@@ -768,6 +893,8 @@ function ManualsPage() {
   const activeDragNote = notes.find((note) => note.id === activeDragId)
   const selectedTags = tags.filter((tag) => Boolean(draft?.tagIds.includes(tag.id)))
   const availableTags = tags.filter((tag) => !draft?.tagIds.includes(tag.id))
+  const selectedAccessCount = draft?.accessMode === 'selected' ? draft.allowedEmails.length : allowedAccountEmails.length
+  const checkedAccessEmails = draft?.accessMode === 'all' ? allowedAccountEmails : draft?.allowedEmails ?? []
   const isInTable = editor?.isActive('table') ?? false
 
   return (
@@ -1089,6 +1216,40 @@ function ManualsPage() {
               <button type="button" title="右寄せ" onClick={() => editor?.chain().focus().setTextAlign('right').run()}>→</button>
               <button type="button" title="画像を挿入" onClick={() => fileInputRef.current?.click()}>🖼 画像</button>
               <button type="button" title="保存 (自動保存も有効)" className="note-save-button" onClick={() => { if (draft) void saveDraft(draft) }}>保存</button>
+              <div className="note-access-menu-wrap">
+                <button
+                  type="button"
+                  className="note-access-button"
+                  title="閲覧設定"
+                  onClick={() => setAccessMenuOpen((current) => !current)}
+                >
+                  閲覧設定
+                  <span>{draft.accessMode === 'all' ? '全員' : `${selectedAccessCount}人`}</span>
+                </button>
+                {accessMenuOpen && (
+                  <div className="note-access-popover">
+                    <div className="note-access-popover-head">
+                      <strong>閲覧できるGoogleアカウント</strong>
+                      <span>{selectedAccessCount}人</span>
+                    </div>
+                    <div className="note-access-list">
+                      {allowedAccounts.map((account) => {
+                        const email = normalizeEmail(account.email)
+                        return (
+                          <label key={account.id} className="note-access-account">
+                            <input
+                              type="checkbox"
+                              checked={checkedAccessEmails.includes(email)}
+                              onChange={() => toggleDraftAllowedEmail(email)}
+                            />
+                            <span>{account.email}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
               <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleImageFileChange} />
             </div>
 

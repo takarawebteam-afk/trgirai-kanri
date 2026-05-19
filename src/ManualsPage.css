@@ -1,5 +1,6 @@
 .note-page-wrapper {
   position: relative;
+  min-width: 0;
 }
 
 .note-page {
@@ -159,6 +160,72 @@
 .note-chip-x {
   color: #6b7280;
   padding-left: 2px !important;
+}
+
+.note-access-box {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.note-access-head,
+.note-access-mode,
+.note-access-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.note-access-head {
+  justify-content: space-between;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.note-access-head span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.note-access-mode {
+  flex-wrap: wrap;
+  color: #374151;
+  font-size: 13px;
+}
+
+.note-access-mode label,
+.note-access-account {
+  cursor: pointer;
+}
+
+.note-access-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px;
+  max-height: 130px;
+  overflow-y: auto;
+  padding-top: 2px;
+}
+
+.note-access-account {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+}
+
+.note-access-account span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .note-add-chip {
@@ -393,12 +460,12 @@
 }
 
 .note-fab {
-  position: fixed;
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  right: 250px !important;
-  bottom: 24px !important;
+  right: 24px;
+  bottom: 24px;
   z-index: 15;
   width: 52px;
   height: 52px;
@@ -472,8 +539,14 @@
 }
 
 .note-tag-menu-wrap,
-.note-toolbar-menu {
+.note-toolbar-menu,
+.note-access-menu-wrap {
   position: relative;
+  order: 20;
+}
+
+.note-save-button {
+  order: 21;
 }
 
 .note-tag-menu,
@@ -527,7 +600,8 @@
 
 .note-toolbar > button,
 .note-toolbar-table-ops > button,
-.note-toolbar-menu > button {
+.note-toolbar-menu > button,
+.note-access-button {
   min-width: 34px;
   height: 32px;
   padding: 0 9px;
@@ -543,10 +617,86 @@
 .note-toolbar > button:hover,
 .note-toolbar-table-ops > button:hover,
 .note-toolbar-menu > button:hover,
+.note-access-button:hover,
 .note-toolbar > button.is-active {
   border-color: #93c5fd;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.note-access-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.note-access-button span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+}
+
+.note-access-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.note-access-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+  font-size: 14px;
+}
+
+.note-access-popover-head span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.note-access-popover .note-access-list {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  max-height: 210px;
+  padding-top: 10px;
+}
+
+.note-access-popover .note-access-account {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  justify-items: start;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.note-access-popover .note-access-account input {
+  justify-self: start;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.note-access-popover .note-access-account span {
+  justify-self: start;
+  text-align: left;
+  font-weight: 700;
 }
 
 .note-font-size-ctrl {

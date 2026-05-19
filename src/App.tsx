@@ -3260,7 +3260,7 @@ function App() {
           })
           const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?${params.toString()}`
           const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-          if (res.status === 401) {
+          if (res.status === 401 || res.status === 403) {
             clearToken()
             return
           }
@@ -4555,7 +4555,7 @@ function App() {
   }
 
   const googleLogin = useGoogleLogin({
-    scope: 'openid email profile',
+    scope: GOOGLE_LOGIN_SCOPE,
     prompt: 'select_account',
     onSuccess: async (res) => {
       await applyLoginAccess(res.access_token, {
@@ -6237,7 +6237,12 @@ function App() {
           </section>
         )}
 
-        {activePage === 'manuals' && <ManualsPage />}
+        {activePage === 'manuals' && (
+          <ManualsPage
+            currentUserEmail={currentUserEmail}
+            allowedAccounts={allowedAccounts}
+          />
+        )}
 
         {/* ===== ストック管理 ===== */}
         {activePage === 'stock' && (() => {
@@ -7632,6 +7637,8 @@ function App() {
 
 const STORAGE_KEY = 'gcal_token'
 const STORAGE_EXPIRY_KEY = 'gcal_token_expiry'
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
+const GOOGLE_LOGIN_SCOPE = `openid email profile ${GOOGLE_CALENDAR_SCOPE}`
 
 function getSavedToken(): string | null {
   try {
@@ -7753,7 +7760,11 @@ function getTaskReportWorkMinutes(memberName: string, events: TaskReportCalendar
   const normalizedSummaries = events.map((event) => normalizeTaskReportText(event.summary))
   if (hasTaskReportDayOff(events)) return 0
 
-  const has395Work = memberName !== '吉田' && normalizedSummaries.some((summary) => summary.includes('395') || summary.includes('３９５'))
+  const has395Work = memberName !== '吉田' && events.some((event) => {
+    if (!event.isAllDay) return false
+    const normalizedSummary = normalizeTaskReportText(event.summary)
+    return normalizedSummary.includes('395') || normalizedSummary.includes('３９５')
+  })
   if (has395Work) return TASK_REPORT_395_MINUTES
 
   if (memberName === STOCK_HONMACHI_MEMBER.name) {
@@ -7951,8 +7962,9 @@ function TaskReportPanel() {
           })
           const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?${params.toString()}`
           const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-          if (res.status === 401) {
+          if (res.status === 401 || res.status === 403) {
             clearToken()
+            setError('勤務時間を読むためのGoogle許可が切れています。もう一度Googleログインしてください。')
             return
           }
           if (!res.ok) return
@@ -9118,7 +9130,7 @@ function TodayTasksPanel() {
             `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(member.calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
             { headers: { Authorization: `Bearer ${token}` } }
           )
-          if (res.status === 401) {
+          if (res.status === 401 || res.status === 403) {
             clearToken()
             setAccessToken(null)
             setCalendarLoading(false)
@@ -9156,7 +9168,7 @@ function TodayTasksPanel() {
 
   // prompt:none でGoogleUIを出さずに無音再認証
   const silentLogin = useGoogleLogin({
-    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    scope: GOOGLE_CALENDAR_SCOPE,
     prompt: 'none',
     onSuccess: (res) => {
       const expiresIn = res.expires_in ?? 3600
@@ -9174,7 +9186,7 @@ function TodayTasksPanel() {
   silentLoginFnRef.current = silentLogin
 
   const googleLogin = useGoogleLogin({
-    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    scope: GOOGLE_CALENDAR_SCOPE,
     onSuccess: async (res) => {
       const expiresIn = res.expires_in ?? 3600
       saveToken(res.access_token, expiresIn)
