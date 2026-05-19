@@ -1506,6 +1506,14 @@ function App() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const [isPrimaryNavCollapsed, setIsPrimaryNavCollapsed] = useState(() => {
+    return localStorage.getItem('primaryNavCollapsed') === 'true'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('primaryNavCollapsed', String(isPrimaryNavCollapsed))
+    if (isPrimaryNavCollapsed) setIsMobileNavOpen(false)
+  }, [isPrimaryNavCollapsed])
 
   // 新規追加フォーム
   const [taskForm, setTaskForm] = useState(defaultTaskForm)
@@ -4652,7 +4660,7 @@ function App() {
 
   return (
     <OfficeNetworkGate allowOutsideOffice={canUseOutsideOffice}>
-      <div className="app-shell">
+      <div className={`app-shell${isPrimaryNavCollapsed ? ' nav-collapsed' : ''}`}>
       <div className="auth-topbar">
         <div className="auth-user-box auth-user-box-top">
           <span className="auth-user-email">{currentUserEmail}</span>
@@ -4702,21 +4710,33 @@ function App() {
         </div>
       </header>
 
-      <button
-        type="button"
-        className="mobile-nav-toggle"
-        aria-expanded={isMobileNavOpen}
-        aria-controls="primary-nav"
-        onClick={() => setIsMobileNavOpen((current) => !current)}
-      >
-        <span>メニュー</span>
-        <strong>{TAB_ITEMS.find((item) => item.key === activePage)?.label ?? 'ページ'}</strong>
-      </button>
+      <div className="nav-control-row">
+        <button
+          type="button"
+          className="mobile-nav-toggle"
+          aria-expanded={isMobileNavOpen}
+          aria-controls="primary-nav"
+          onClick={() => setIsMobileNavOpen((current) => !current)}
+        >
+          <span>メニュー</span>
+          <strong>{TAB_ITEMS.find((item) => item.key === activePage)?.label ?? 'ページ'}</strong>
+        </button>
+        <button
+          type="button"
+          className="nav-collapse-button"
+          aria-expanded={!isPrimaryNavCollapsed}
+          aria-controls="primary-nav"
+          onClick={() => setIsPrimaryNavCollapsed((current) => !current)}
+        >
+          {isPrimaryNavCollapsed ? 'ページ一覧を表示' : 'ページ一覧を隠す'}
+        </button>
+      </div>
 
       <nav
         id="primary-nav"
-        className={`tab-nav${isMobileNavOpen ? ' mobile-open' : ''}`}
+        className={`tab-nav${isMobileNavOpen ? ' mobile-open' : ''}${isPrimaryNavCollapsed ? ' is-collapsed' : ''}`}
         aria-label="主要メニュー"
+        aria-hidden={isPrimaryNavCollapsed}
       >
         {TAB_ITEMS.map((item) => (
           <button

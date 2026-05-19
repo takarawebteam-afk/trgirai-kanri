@@ -17,6 +17,11 @@
   color: #111827;
 }
 
+.nav-collapsed .note-page {
+  height: calc(100vh - 130px);
+  min-height: calc(100vh - 130px);
+}
+
 .note-page.sidebar-closed {
   grid-template-columns: 0 minmax(0, 1fr);
 }

@@ -115,6 +115,36 @@ h1 {
   display: none;
 }
 
+.nav-control-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-collapse-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--blue-200, #bfdbfe);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--blue-700);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-collapse-button:hover {
+  background: var(--blue-50);
+  color: var(--blue-600);
+}
+
+.tab-nav.is-collapsed {
+  display: none;
+}
+
 .tab-nav button {
   display: flex;
   align-items: center;
@@ -149,6 +179,10 @@ h1 {
   display: grid;
   gap: 20px;
   min-width: 0;
+}
+
+.nav-collapsed .page-content {
+  gap: 12px;
 }
 
 /* ===== ダッシュボード ===== */
@@ -1181,6 +1215,10 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   .header-panel select {
     width: 100%;
   }
+  .nav-control-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .mobile-nav-toggle {
     display: flex;
     align-items: center;
@@ -1211,6 +1249,9 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   .tab-nav.mobile-open {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tab-nav.is-collapsed {
+    display: none;
   }
   .tab-nav button {
     width: 100%;
