@@ -946,7 +946,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         contact: record.contact_info || '',
         memo: record.memo || '',
         wp_registered: record.wp_registered || '',
-        post_date: null,
+        post_date: record.scheduled_post_date || null,
         document_url: '',
       }
 
@@ -1143,6 +1143,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       const insertData = {
         property_number: await getNextPropertyNumber('sns_youtube_properties'),
         ...buildCommonSnsPropertyData(record),
+        post_date: record.scheduled_post_date || null,
       }
 
       const { error } = await supabase.from('sns_youtube_properties').insert([insertData])
