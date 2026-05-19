@@ -89,6 +89,7 @@ const AUTOSAVE_DELAY = 1500
 const IMAGE_MIN_WIDTH = 80
 const IMAGE_MAX_WIDTH = 920
 const DEFAULT_IMAGE_WIDTH = 480
+const DEFAULT_FONT_SIZE = 11
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
@@ -302,7 +303,7 @@ function ManualsPage({
   const [editingSectionName, setEditingSectionName] = useState('')
   const [tagMenuOpen, setTagMenuOpen] = useState(false)
   const [accessMenuOpen, setAccessMenuOpen] = useState(false)
-  const [fontSize, setFontSize] = useState(15)
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [markerPickerOpen, setMarkerPickerOpen] = useState(false)
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
@@ -408,6 +409,8 @@ function ManualsPage({
       if (fontSizeStr) {
         const parsed = parseInt(fontSizeStr, 10)
         if (!isNaN(parsed) && parsed >= 8 && parsed <= 72) setFontSize(parsed)
+      } else {
+        setFontSize(DEFAULT_FONT_SIZE)
       }
     },
   })

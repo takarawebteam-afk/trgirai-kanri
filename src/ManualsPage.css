@@ -830,7 +830,12 @@
   outline: none;
   color: #111827;
   line-height: 1.7;
-  font-size: 15px;
+  font-size: 11px;
+}
+
+.note-editor .tiptap :where(p, h1, h2, h3, h4, h5, h6, li, blockquote) {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .note-editor .tiptap p {
@@ -857,7 +862,7 @@
   border: 1px solid #d1d5db;
   padding: 3px 6px;
   min-height: 24px;
-  font-size: 13px;
+  font-size: inherit;
   vertical-align: top;
 }
 
