@@ -7,6 +7,7 @@
   position: relative;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
+  height: calc(100vh - 160px);
   min-height: calc(100vh - 160px);
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -596,6 +597,7 @@
   position: sticky;
   top: 0;
   z-index: 25;
+  align-self: start;
   padding: 10px 24px;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
