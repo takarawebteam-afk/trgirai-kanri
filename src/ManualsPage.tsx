@@ -349,6 +349,12 @@ function ManualsPage({
     ],
     content: EMPTY_CONTENT,
     editorProps: {
+      transformPastedHTML: (html) => {
+        return html.replace(
+          /<span([^>]*?)style="([^"]*?font-weight\s*:\s*(?:bold|[6-9]\d{2})[^"]*?)"([^>]*)>([\s\S]*?)<\/span>/gi,
+          (_match, before, _style, after, inner) => `<strong><span${before}${after}>${inner}</span></strong>`,
+        )
+      },
       handlePaste: (_view, event) => {
         const imageFile = Array.from(event.clipboardData?.items ?? [])
           .find((item) => item.type.startsWith('image/'))
@@ -363,8 +369,14 @@ function ManualsPage({
       setDraft((current) => (current ? { ...current, content: currentEditor.getHTML() } : current))
     },
     onSelectionUpdate: ({ editor: currentEditor }) => {
-      const colorAtCursor = currentEditor.getAttributes('textStyle').color as string | undefined
+      const attrs = currentEditor.getAttributes('textStyle')
+      const colorAtCursor = attrs.color as string | undefined
       setActiveColor(colorAtCursor ?? '#111827')
+      const fontSizeStr = attrs.fontSize as string | undefined
+      if (fontSizeStr) {
+        const parsed = parseInt(fontSizeStr, 10)
+        if (!isNaN(parsed) && parsed >= 8 && parsed <= 72) setFontSize(parsed)
+      }
     },
   })
 
