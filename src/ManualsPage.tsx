@@ -1082,6 +1082,22 @@ function ManualsPage({
             </div>
 
             <div className="note-toolbar">
+              <button
+                type="button"
+                title="元に戻す (Undo)"
+                onClick={() => editor?.chain().focus().undo().run()}
+                disabled={!editor?.can().undo()}
+              >
+                ↩
+              </button>
+              <button
+                type="button"
+                title="やり直す (Redo)"
+                onClick={() => editor?.chain().focus().redo().run()}
+                disabled={!editor?.can().redo()}
+              >
+                ↪
+              </button>
               <span className="note-font-size-ctrl">
                 <button
                   type="button"
