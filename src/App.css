@@ -116,29 +116,25 @@ h1 {
 }
 
 .nav-control-row {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 10px;
+  display: none;
 }
 
 .nav-collapse-button {
-  min-height: 36px;
+  align-self: flex-end;
+  min-height: 37px;
   padding: 0 14px;
-  border: 1px solid var(--blue-200, #bfdbfe);
-  border-radius: 999px;
-  background: var(--white);
-  color: var(--blue-700);
+  border: 1px solid rgba(255,255,255,0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.12);
+  color: var(--white);
   font: inherit;
   font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
 }
 
 .nav-collapse-button:hover {
-  background: var(--blue-50);
-  color: var(--blue-600);
+  background: rgba(255,255,255,0.2);
 }
 
 .tab-nav.is-collapsed {
@@ -1216,8 +1212,13 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
     width: 100%;
   }
   .nav-control-row {
+    display: flex;
     align-items: stretch;
     flex-direction: column;
+  }
+  .nav-collapse-button {
+    align-self: stretch;
+    width: 100%;
   }
   .mobile-nav-toggle {
     display: flex;

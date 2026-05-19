@@ -4685,6 +4685,15 @@ function App() {
           <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
         </div>
         <div className="header-panel header-panel-auth">
+          <button
+            type="button"
+            className="nav-collapse-button"
+            aria-expanded={!isPrimaryNavCollapsed}
+            aria-controls="primary-nav"
+            onClick={() => setIsPrimaryNavCollapsed((current) => !current)}
+          >
+            {isPrimaryNavCollapsed ? 'タブ一覧を表示' : 'タブ一覧を非表示'}
+          </button>
           <label>
             年
             <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
@@ -4720,15 +4729,6 @@ function App() {
         >
           <span>メニュー</span>
           <strong>{TAB_ITEMS.find((item) => item.key === activePage)?.label ?? 'ページ'}</strong>
-        </button>
-        <button
-          type="button"
-          className="nav-collapse-button"
-          aria-expanded={!isPrimaryNavCollapsed}
-          aria-controls="primary-nav"
-          onClick={() => setIsPrimaryNavCollapsed((current) => !current)}
-        >
-          {isPrimaryNavCollapsed ? 'ページ一覧を表示' : 'ページ一覧を隠す'}
         </button>
       </div>
 
