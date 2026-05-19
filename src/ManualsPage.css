@@ -464,8 +464,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  right: 24px;
-  bottom: 24px;
+  right: calc(max(0px, (100vw - 1440px) / 2) + 52px);
+  bottom: 36px;
   z-index: 15;
   width: 52px;
   height: 52px;
