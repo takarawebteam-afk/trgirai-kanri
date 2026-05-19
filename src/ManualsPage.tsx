@@ -86,6 +86,7 @@ const IMAGE_BUCKET = 'manual-images'
 const EMPTY_CONTENT = '<p></p>'
 const NO_SECTION_ID = 'no-section'
 const AUTOSAVE_DELAY = 1500
+const SAVE_STATUS_TIMEOUT = 15000
 const IMAGE_MIN_WIDTH = 80
 const IMAGE_MAX_WIDTH = 920
 const DEFAULT_IMAGE_WIDTH = 480
@@ -317,6 +318,7 @@ function ManualsPage({
   const draftRef = useRef<NoteDraft | null>(null)
   const saveTimerRef = useRef<number | null>(null)
   const fadeTimerRef = useRef<number | null>(null)
+  const savingWatchdogRef = useRef<number | null>(null)
   const lastSavedSignatureRef = useRef('')
   const uploadImageRef = useRef<((file: File) => Promise<void>) | null>(null)
 
@@ -326,6 +328,19 @@ function ManualsPage({
     setSaveState(state)
     setSaveMessage(message)
     if (fadeTimerRef.current) window.clearTimeout(fadeTimerRef.current)
+    if (savingWatchdogRef.current) window.clearTimeout(savingWatchdogRef.current)
+    if (state === 'saving') {
+      savingWatchdogRef.current = window.setTimeout(() => {
+        const currentDraft = draftRef.current
+        if (currentDraft && noteSignature(currentDraft) === lastSavedSignatureRef.current) {
+          setSaveMessage('')
+          setSaveState('idle')
+          return
+        }
+        setSaveState('error')
+        setSaveMessage('保存が終わりませんでした。もう一度保存してください')
+      }, SAVE_STATUS_TIMEOUT)
+    }
     if (state === 'saved' || state === 'error') {
       fadeTimerRef.current = window.setTimeout(() => {
         setSaveMessage('')
@@ -467,6 +482,7 @@ function ManualsPage({
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
       if (fadeTimerRef.current) window.clearTimeout(fadeTimerRef.current)
+      if (savingWatchdogRef.current) window.clearTimeout(savingWatchdogRef.current)
     }
   }, [loadData])
 
