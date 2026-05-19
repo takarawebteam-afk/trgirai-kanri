@@ -10,6 +10,7 @@ type NetworkAccessResponse = {
 
 type OfficeNetworkGateProps = {
   children: ReactNode
+  allowOutsideOffice?: boolean
 }
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1'])
@@ -27,11 +28,16 @@ function getBlockedMessage(reason: string) {
   return '通信の確認ができなかったため、この画面を開けません。'
 }
 
-export default function OfficeNetworkGate({ children }: OfficeNetworkGateProps) {
+export default function OfficeNetworkGate({ children, allowOutsideOffice = false }: OfficeNetworkGateProps) {
   const [accessState, setAccessState] = useState<AccessState>('checking')
   const [message, setMessage] = useState('社内Wi-Fiかどうかを確認しています。')
 
   async function checkAccess() {
+    if (allowOutsideOffice) {
+      setAccessState('allowed')
+      return
+    }
+
     // ローカル開発中は接続制限をかけず、いつでも画面を開けるようにする
     if (IS_DEV_SERVER || LOCAL_HOSTS.has(window.location.hostname)) {
       setAccessState('allowed')
@@ -70,7 +76,7 @@ export default function OfficeNetworkGate({ children }: OfficeNetworkGateProps) 
 
   useEffect(() => {
     void checkAccess()
-  }, [])
+  }, [allowOutsideOffice])
 
   if (accessState === 'allowed') {
     return <>{children}</>

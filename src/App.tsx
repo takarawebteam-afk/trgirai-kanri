@@ -7,6 +7,7 @@ import './App.css'
 import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
 import ProgressPage from './ProgressPage'
+import OfficeNetworkGate from './OfficeNetworkGate'
 
 type Department = '人事' | '総務' | '仲介' | '管理' | '売買' | '本社' | 'その他'
 type TaskType = '単発' | '継続'
@@ -401,6 +402,7 @@ type AllowedAccount = {
   created_at?: string
   email: string
   is_master: boolean
+  allow_outside_office: boolean
   created_by?: string | null
 }
 
@@ -1270,6 +1272,7 @@ function buildDefaultAllowedAccounts(): AllowedAccount[] {
     id: email,
     email,
     is_master: email === MASTER_EMAIL,
+    allow_outside_office: false,
     created_by: MASTER_EMAIL,
   }))
 }
@@ -1726,6 +1729,8 @@ function App() {
   const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
+  const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
+  const canUseOutsideOffice = Boolean(currentAllowedAccount?.allow_outside_office)
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -2290,6 +2295,7 @@ function App() {
     const rows = (data as AllowedAccount[] | null)?.map((row) => ({
       ...row,
       email: normalizeEmail(row.email),
+      allow_outside_office: Boolean(row.allow_outside_office),
     })) ?? []
 
     if (rows.length === 0) {
@@ -3103,6 +3109,7 @@ function App() {
     const { error } = await supabase.from('allowed_accounts').insert({
       email,
       is_master: email === MASTER_EMAIL,
+      allow_outside_office: false,
       created_by: currentUserEmail,
     })
 
@@ -3116,6 +3123,33 @@ function App() {
     setAllowedAccountForm('')
     setAllowedAccountSaving(false)
     setAllowedAccountMessage('Googleアカウントを追加しました。')
+  }
+
+  async function toggleOutsideOfficeAccess(account: AllowedAccount) {
+    if (!isMasterUser) return
+
+    setAllowedAccountSaving(true)
+    setAllowedAccountMessage('')
+
+    const nextValue = !account.allow_outside_office
+    const { error } = await supabase
+      .from('allowed_accounts')
+      .update({ allow_outside_office: nextValue })
+      .eq('email', normalizeEmail(account.email))
+
+    if (error) {
+      setAllowedAccountMessage(`保存できませんでした: ${error.message}`)
+      setAllowedAccountSaving(false)
+      return
+    }
+
+    setAllowedAccounts((accounts) => accounts.map((item) => (
+      normalizeEmail(item.email) === normalizeEmail(account.email)
+        ? { ...item, allow_outside_office: nextValue }
+        : item
+    )))
+    setAllowedAccountSaving(false)
+    setAllowedAccountMessage(nextValue ? '社外からも開けるようにしました。' : '社内Wi-Fiのみ開ける設定に戻しました。')
   }
 
   async function removeAllowedAccount(emailToRemove: string) {
@@ -4610,7 +4644,8 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <OfficeNetworkGate allowOutsideOffice={canUseOutsideOffice}>
+      <div className="app-shell">
       <div className="auth-topbar">
         <div className="auth-user-box auth-user-box-top">
           <span className="auth-user-email">{currentUserEmail}</span>
@@ -6209,15 +6244,31 @@ function App() {
               <div className="access-account-list">
                 {allowedAccounts.map((account) => (
                   <div key={account.id} className="access-account-card">
-                    <div>
+                    <div className="access-account-main">
                       <strong>{account.email}</strong>
                       {account.is_master && <span className="auth-master-badge access-master-badge">マスター</span>}
+                      {account.allow_outside_office && <span className="outside-office-badge">社外OK</span>}
                     </div>
-                    {isMasterUser && !account.is_master && (
-                      <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
-                        削除
-                      </button>
-                    )}
+                    <div className="access-account-actions">
+                      {isMasterUser && (
+                        <>
+                          <label className="outside-office-toggle">
+                            <input
+                              type="checkbox"
+                              checked={account.allow_outside_office}
+                              onChange={() => toggleOutsideOfficeAccess(account)}
+                              disabled={allowedAccountSaving}
+                            />
+                            社外からも開ける
+                          </label>
+                          {!account.is_master && (
+                            <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
+                              削除
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -7603,15 +7654,27 @@ function App() {
             <div className="access-account-list">
               {allowedAccounts.map((account) => (
                 <div key={account.id} className="access-account-card">
-                  <div>
+                  <div className="access-account-main">
                     <strong>{account.email}</strong>
                     {account.is_master && <span className="auth-master-badge access-master-badge">マスター</span>}
+                    {account.allow_outside_office && <span className="outside-office-badge">社外OK</span>}
                   </div>
-                  {!account.is_master && (
-                    <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
-                      削除
-                    </button>
-                  )}
+                  <div className="access-account-actions">
+                    <label className="outside-office-toggle">
+                      <input
+                        type="checkbox"
+                        checked={account.allow_outside_office}
+                        onChange={() => toggleOutsideOfficeAccess(account)}
+                        disabled={allowedAccountSaving}
+                      />
+                      社外からも開ける
+                    </label>
+                    {!account.is_master && (
+                      <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
+                        削除
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -7631,7 +7694,8 @@ function App() {
         />
       )}
 
-    </div>
+      </div>
+    </OfficeNetworkGate>
   )
 }
 

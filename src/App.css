@@ -862,6 +862,51 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   background: #fff;
 }
 
+.access-account-main,
+.access-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.access-account-main {
+  min-width: 0;
+}
+
+.access-account-actions {
+  justify-content: flex-end;
+}
+
+.outside-office-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.outside-office-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray-600);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.outside-office-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--blue-600);
+}
+
 .access-master-badge {
   margin-left: 8px;
 }
