@@ -350,7 +350,18 @@ function ManualsPage({
     content: EMPTY_CONTENT,
     editorProps: {
       transformPastedHTML: (html) => {
-        return html.replace(
+        let cleaned = html
+
+        // src無し・空srcのimgを削除（Google Docsから来る不可視ノード）
+        cleaned = cleaned.replace(/<img(?![^>]*src\s*=\s*["'][^"']+["'])[^>]*\/?>/gi, '')
+
+        // colgroupを削除（Tiptapが不要なスペースを生成する原因）
+        cleaned = cleaned.replace(/<colgroup[^>]*>[\s\S]*?<\/colgroup>/gi, '')
+
+        // td/th直後の空p・brのみ段落を削除
+        cleaned = cleaned.replace(/(<t[dh][^>]*>)(\s*<p[^>]*>\s*(<br\s*\/?>)?\s*<\/p>)+/gi, '$1')
+
+        return cleaned.replace(
           /<span([^>]*?)style="([^"]*?font-weight\s*:\s*(?:bold|[6-9]\d{2})[^"]*?)"([^>]*)>([\s\S]*?)<\/span>/gi,
           (_match, before, _style, after, inner) => `<strong><span${before}${after}>${inner}</span></strong>`,
         )
