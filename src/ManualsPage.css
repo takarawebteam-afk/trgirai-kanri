@@ -593,9 +593,13 @@
 
 .note-toolbar {
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 25;
   padding: 10px 24px;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .note-toolbar > button,
