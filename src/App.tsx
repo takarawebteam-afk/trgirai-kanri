@@ -3346,6 +3346,13 @@ function App() {
   }
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      setCurrentUserEmail(MASTER_EMAIL)
+      setAuthLoading(false)
+      fetchAllowedAccounts()
+      return
+    }
+
     const savedToken = getSavedToken()
     if (!savedToken) {
       setAuthLoading(false)

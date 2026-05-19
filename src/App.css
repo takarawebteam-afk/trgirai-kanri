@@ -2974,7 +2974,7 @@ button.secondary.small {
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
-  padding-left: 0;
+  padding-left: 12px;
   padding-right: 12px;
   box-sizing: border-box;
 }
@@ -3002,7 +3002,9 @@ button.secondary.small {
 
 .progress-table th {
   background: var(--blue-50);
-  border: 1px solid var(--gray-200);
+  border: 1px solid #dbe3ef;
+  border-left: 0;
+  border-top: 0;
   box-sizing: border-box;
   padding: 7px 10px;
   font-weight: 700;
@@ -3010,13 +3012,16 @@ button.secondary.small {
   white-space: nowrap;
   text-align: left;
   color: var(--gray-600);
+  border-radius: 0;
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
 .progress-table td {
-  border: 1px solid var(--gray-100);
+  border: 1px solid #e4ebf5;
+  border-left: 0;
+  border-top: 0;
   box-sizing: border-box;
   padding: 1px 10px;
   vertical-align: middle;
@@ -3026,6 +3031,20 @@ button.secondary.small {
   height: 28px;
   line-height: 1.35;
   overflow: visible;
+}
+
+.progress-table th:first-child,
+.progress-table td:first-child {
+  border-left: 1px solid #dbe3ef;
+}
+
+.progress-table tr:first-child th {
+  border-top: 1px solid #dbe3ef;
+}
+
+.progress-table th:first-child,
+.progress-table th:last-child {
+  border-radius: 0;
 }
 
 .progress-cell-input,
@@ -3600,15 +3619,15 @@ button.secondary.small {
   min-width: 74px;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(1) { left: 0; }
-.progress-table-tiktok :is(th, td):nth-child(2) { left: 135px; }
-.progress-table-tiktok :is(th, td):nth-child(3) { left: 270px; }
-.progress-table-tiktok :is(th, td):nth-child(4) { left: 372px; }
-.progress-table-tiktok :is(th, td):nth-child(5) { left: 484px; }
-.progress-table-tiktok :is(th, td):nth-child(6) { left: 548px; }
+.progress-table-tiktok :is(th, td):nth-child(1) { left: 12px; }
+.progress-table-tiktok :is(th, td):nth-child(2) { left: 147px; }
+.progress-table-tiktok :is(th, td):nth-child(3) { left: 282px; }
+.progress-table-tiktok :is(th, td):nth-child(4) { left: 384px; }
+.progress-table-tiktok :is(th, td):nth-child(5) { left: 496px; }
+.progress-table-tiktok :is(th, td):nth-child(6) { left: 560px; }
 .progress-table-tiktok :is(th, td):nth-child(7) {
-  left: 748px;
-  box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
+  left: 760px;
+  box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
 .progress-table-instagram :is(th, td):nth-child(1) {
@@ -3642,15 +3661,15 @@ button.secondary.small {
   min-width: 200px;
 }
 
-.progress-table-instagram :is(th, td):nth-child(1) { left: 0; }
-.progress-table-instagram :is(th, td):nth-child(2) { left: 135px; }
-.progress-table-instagram :is(th, td):nth-child(3) { left: 227px; }
-.progress-table-instagram :is(th, td):nth-child(4) { left: 357px; }
-.progress-table-instagram :is(th, td):nth-child(5) { left: 431px; }
-.progress-table-instagram :is(th, td):nth-child(6) { left: 495px; }
+.progress-table-instagram :is(th, td):nth-child(1) { left: 12px; }
+.progress-table-instagram :is(th, td):nth-child(2) { left: 147px; }
+.progress-table-instagram :is(th, td):nth-child(3) { left: 239px; }
+.progress-table-instagram :is(th, td):nth-child(4) { left: 369px; }
+.progress-table-instagram :is(th, td):nth-child(5) { left: 443px; }
+.progress-table-instagram :is(th, td):nth-child(6) { left: 507px; }
 .progress-table-instagram :is(th, td):nth-child(7) {
-  left: 695px;
-  box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
+  left: 707px;
+  box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
 .progress-table-recruitment :is(th, td):nth-child(1),
@@ -3675,13 +3694,13 @@ button.secondary.small {
   min-width: 220px;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(1) { left: 0; }
-.progress-table-recruitment :is(th, td):nth-child(2) { left: 135px; }
-.progress-table-recruitment :is(th, td):nth-child(3) { left: 177px; }
-.progress-table-recruitment :is(th, td):nth-child(4) { left: 312px; }
+.progress-table-recruitment :is(th, td):nth-child(1) { left: 12px; }
+.progress-table-recruitment :is(th, td):nth-child(2) { left: 147px; }
+.progress-table-recruitment :is(th, td):nth-child(3) { left: 189px; }
+.progress-table-recruitment :is(th, td):nth-child(4) { left: 324px; }
 .progress-table-recruitment :is(th, td):nth-child(5) {
-  left: 424px;
-  box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
+  left: 436px;
+  box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
 .progress-table-keihan :is(th, td):nth-child(-n + 4) {
@@ -3713,12 +3732,12 @@ button.secondary.small {
   min-width: 74px;
 }
 
-.progress-table-keihan :is(th, td):nth-child(1) { left: 0; }
-.progress-table-keihan :is(th, td):nth-child(2) { left: 135px; }
-.progress-table-keihan :is(th, td):nth-child(3) { left: 218px; }
+.progress-table-keihan :is(th, td):nth-child(1) { left: 12px; }
+.progress-table-keihan :is(th, td):nth-child(2) { left: 147px; }
+.progress-table-keihan :is(th, td):nth-child(3) { left: 230px; }
 .progress-table-keihan :is(th, td):nth-child(4) {
-  left: 418px;
-  box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
+  left: 430px;
+  box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
 .progress-table-simple :is(th, td):nth-child(-n + 5) {
@@ -3751,13 +3770,13 @@ button.secondary.small {
   min-width: 74px;
 }
 
-.progress-table-simple :is(th, td):nth-child(1) { left: 0; }
-.progress-table-simple :is(th, td):nth-child(2) { left: 135px; }
-.progress-table-simple :is(th, td):nth-child(3) { left: 270px; }
-.progress-table-simple :is(th, td):nth-child(4) { left: 334px; }
+.progress-table-simple :is(th, td):nth-child(1) { left: 12px; }
+.progress-table-simple :is(th, td):nth-child(2) { left: 147px; }
+.progress-table-simple :is(th, td):nth-child(3) { left: 282px; }
+.progress-table-simple :is(th, td):nth-child(4) { left: 346px; }
 .progress-table-simple :is(th, td):nth-child(5) {
-  left: 534px;
-  box-shadow: 6px 0 10px -8px rgba(15, 23, 42, 0.55);
+  left: 546px;
+  box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
 .progress-form-tabs {
