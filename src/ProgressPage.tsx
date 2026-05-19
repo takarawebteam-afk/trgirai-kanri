@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
 type ProductionStatus = '撮影済' | '制作中' | 'チェック中' | '完了'
-type ProcessStatus = '未着手' | '進行中' | '完了'
+type ProcessStatus = string
 type StorePromoteTarget = 'keihan-karilun' | 'nishinomiya-karilun' | 'nagase' | 'nishikita' | 'yao'
 type StoreProgressTableName =
   | 'sns_keihan_karilun_properties'
@@ -684,7 +684,8 @@ function toRegisteredLabel(value: boolean) {
 void toRegisteredLabel
 
 function sanitizeProcessStatus(value: unknown): ProcessStatus {
-  return PROCESS_STATUSES.includes(value as ProcessStatus) ? (value as ProcessStatus) : PROCESS_STATUSES[0]
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  return PROCESS_STATUSES[0]
 }
 
 function sanitizeSelectText(value: unknown, fallback = '') {
