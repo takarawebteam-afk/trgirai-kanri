@@ -327,7 +327,10 @@ function ManualsPage({
     setSaveMessage(message)
     if (fadeTimerRef.current) window.clearTimeout(fadeTimerRef.current)
     if (state === 'saved' || state === 'error') {
-      fadeTimerRef.current = window.setTimeout(() => setSaveMessage(''), 2000)
+      fadeTimerRef.current = window.setTimeout(() => {
+        setSaveMessage('')
+        setSaveState('idle')
+      }, state === 'saved' ? 1000 : 2500)
     }
   }, [])
 
@@ -589,6 +592,10 @@ function ManualsPage({
   }, [filteredNotes])
 
   const saveDraft = useCallback(async (target: NoteDraft) => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
     setTimedStatus('saving', '保存中...')
     const payload = {
       id: target.id,
