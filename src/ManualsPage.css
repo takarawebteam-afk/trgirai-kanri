@@ -858,6 +858,7 @@
   padding: 3px 6px;
   min-height: 24px;
   font-size: 13px;
+  vertical-align: top;
 }
 
 .note-editor th {

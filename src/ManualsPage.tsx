@@ -361,6 +361,27 @@ function ManualsPage({
         // td/th直後の空p・brのみ段落を削除
         cleaned = cleaned.replace(/(<t[dh][^>]*>)(\s*<p[^>]*>\s*(<br\s*\/?>)?\s*<\/p>)+/gi, '$1')
 
+        const pastedDocument = new DOMParser().parseFromString(cleaned, 'text/html')
+
+        pastedDocument.querySelectorAll('tr, td, th, p').forEach((element) => {
+          if (!(element instanceof HTMLElement)) return
+          element.style.removeProperty('height')
+          element.style.removeProperty('min-height')
+          if (!element.getAttribute('style')?.trim()) element.removeAttribute('style')
+        })
+
+        pastedDocument.querySelectorAll('td, th').forEach((cell) => {
+          while (
+            cell.firstElementChild?.tagName.toLowerCase() === 'p' &&
+            !cell.firstElementChild.textContent?.replace(/\u00a0/g, '').trim() &&
+            !cell.firstElementChild.querySelector('img, table')
+          ) {
+            cell.firstElementChild.remove()
+          }
+        })
+
+        cleaned = pastedDocument.body.innerHTML
+
         return cleaned.replace(
           /<span([^>]*?)style="([^"]*?font-weight\s*:\s*(?:bold|[6-9]\d{2})[^"]*?)"([^>]*)>([\s\S]*?)<\/span>/gi,
           (_match, before, _style, after, inner) => `<strong><span${before}${after}>${inner}</span></strong>`,
