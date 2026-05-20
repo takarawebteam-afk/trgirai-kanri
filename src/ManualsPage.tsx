@@ -279,6 +279,92 @@ function DroppableNoteGroup({
   )
 }
 
+function SortableSectionItem({
+  section,
+  sectionNotes,
+  collapsed,
+  isEditing,
+  editingName,
+  selectedNoteId,
+  pendingNoteId,
+  onToggle,
+  onStartEdit,
+  onEditNameChange,
+  onSaveName,
+  onDelete,
+  onSelectNote,
+  onDeleteNote,
+}: {
+  section: SectionRecord
+  sectionNotes: NoteRecord[]
+  collapsed: boolean
+  isEditing: boolean
+  editingName: string
+  selectedNoteId: string | null
+  pendingNoteId: string | null
+  onToggle: () => void
+  onStartEdit: () => void
+  onEditNameChange: (name: string) => void
+  onSaveName: () => void
+  onDelete: () => void
+  onSelectNote: (noteId: string) => void
+  onDeleteNote: (noteId: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `section-sort:${section.id}`,
+    data: { type: 'section' },
+  })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="note-section">
+      <div className="note-section-head">
+        <span className="note-drag-handle note-section-drag-handle" {...attributes} {...listeners}>⋮⋮</span>
+        <button type="button" className="note-section-toggle" onClick={onToggle}>
+          {collapsed ? '▶' : '▼'}
+        </button>
+        {isEditing ? (
+          <input
+            className="note-section-name-input"
+            value={editingName}
+            onChange={(event) => onEditNameChange(event.target.value)}
+            onBlur={onSaveName}
+            onKeyDown={(event) => { if (event.key === 'Enter') onSaveName() }}
+            autoFocus
+          />
+        ) : (
+          <button
+            type="button"
+            className="note-section-name"
+            onClick={onStartEdit}
+          >
+            {section.name}
+          </button>
+        )}
+        <button type="button" className="note-icon-button" onClick={onDelete} aria-label="セクションを削除">×</button>
+      </div>
+      {!collapsed && (
+        <DroppableNoteGroup sectionKey={section.id} noteIds={sectionNotes.map((note) => note.id)}>
+          {sectionNotes.map((note) => (
+            <SortableNoteItem
+              key={note.id}
+              note={note}
+              selected={note.id === selectedNoteId}
+              isPending={note.id === pendingNoteId}
+              onSelect={() => onSelectNote(note.id)}
+              onDelete={() => onDeleteNote(note.id)}
+            />
+          ))}
+          {sectionNotes.length === 0 && <p className="note-empty-text">ここに移動できます</p>}
+        </DroppableNoteGroup>
+      )}
+    </div>
+  )
+}
+
 function ManualsPage({
   currentUserEmail,
   allowedAccounts,
@@ -918,12 +1004,33 @@ function ManualsPage({
     const overId = event.over?.id ? String(event.over.id) : ''
     if (!overId || activeId === overId) return
 
+    // セクション並べ替え
+    if (activeId.startsWith('section-sort:')) {
+      if (!overId.startsWith('section-sort:')) return
+      const activeSectionId = activeId.replace('section-sort:', '')
+      const overSectionId = overId.replace('section-sort:', '')
+      const oldIndex = sections.findIndex((s) => s.id === activeSectionId)
+      const newIndex = sections.findIndex((s) => s.id === overSectionId)
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return
+      const nextSections = [...sections]
+      const [moved] = nextSections.splice(oldIndex, 1)
+      nextSections.splice(newIndex, 0, moved)
+      const updatedSections = nextSections.map((s, i) => ({ ...s, sort_order: i }))
+      setSections(updatedSections)
+      for (const s of updatedSections) {
+        await supabase.from('manual_sections').update({ sort_order: s.sort_order }).eq('id', s.id)
+      }
+      return
+    }
+
     const activeNote = notes.find((note) => note.id === activeId)
     if (!activeNote) return
 
     const overNote = notes.find((note) => note.id === overId)
     const targetSectionKey = overId.startsWith('section:')
       ? overId.replace('section:', '')
+      : overId.startsWith('section-sort:')
+      ? overId.replace('section-sort:', '')
       : getSectionKey(overNote?.section_id ?? null)
     const targetSectionId = sectionKeyToValue(targetSectionKey)
     const targetSectionNotes = sortByOrder(notes.filter((note) => getSectionKey(note.section_id) === targetSectionKey && note.id !== activeId))
@@ -962,6 +1069,9 @@ function ManualsPage({
   }
 
   const activeDragNote = notes.find((note) => note.id === activeDragId)
+  const activeDragSection = activeDragId?.startsWith('section-sort:')
+    ? sections.find((s) => s.id === activeDragId.replace('section-sort:', ''))
+    : null
   const selectedTags = tags.filter((tag) => Boolean(draft?.tagIds.includes(tag.id)))
   const availableTags = tags.filter((tag) => !draft?.tagIds.includes(tag.id))
   const selectedAccessCount = draft?.accessMode === 'selected' ? draft.allowedEmails.length : allowedAccountEmails.length
@@ -1011,59 +1121,34 @@ function ManualsPage({
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="note-section-list">
             {loading && <p className="note-empty-text">読み込み中...</p>}
-            {sections.map((section) => {
-              const sectionKey = section.id
-              const sectionNotes = notesBySection.get(sectionKey) ?? []
-              const collapsed = collapsedSectionIds.has(sectionKey)
-              return (
-                <div key={section.id} className="note-section">
-                  <div className="note-section-head">
-                    <button type="button" className="note-section-toggle" onClick={() => toggleSection(sectionKey)}>
-                      {collapsed ? '▶' : '▼'}
-                    </button>
-                    {editingSectionId === section.id ? (
-                      <input
-                        className="note-section-name-input"
-                        value={editingSectionName}
-                        onChange={(event) => setEditingSectionName(event.target.value)}
-                        onBlur={() => void saveSectionName()}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') void saveSectionName()
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="note-section-name"
-                        onClick={() => {
-                          setEditingSectionId(section.id)
-                          setEditingSectionName(section.name)
-                        }}
-                      >
-                        {section.name}
-                      </button>
-                    )}
-                    <button type="button" className="note-icon-button" onClick={() => void deleteSection(section.id)} aria-label="セクションを削除">×</button>
-                  </div>
-                  {!collapsed && (
-                    <DroppableNoteGroup sectionKey={sectionKey} noteIds={sectionNotes.map((note) => note.id)}>
-                      {sectionNotes.map((note) => (
-                        <SortableNoteItem
-                          key={note.id}
-                          note={note}
-                          selected={note.id === selectedNoteId}
-                          isPending={note.id === pendingNote?.id}
-                          onSelect={() => void handleSelectNote(note.id)}
-                          onDelete={() => void deleteNote(note.id)}
-                        />
-                      ))}
-                      {sectionNotes.length === 0 && <p className="note-empty-text">ここに移動できます</p>}
-                    </DroppableNoteGroup>
-                  )}
-                </div>
-              )
-            })}
+            <SortableContext items={sections.map((s) => `section-sort:${s.id}`)} strategy={verticalListSortingStrategy}>
+              {sections.map((section) => {
+                const sectionNotes = notesBySection.get(section.id) ?? []
+                const collapsed = collapsedSectionIds.has(section.id)
+                return (
+                  <SortableSectionItem
+                    key={section.id}
+                    section={section}
+                    sectionNotes={sectionNotes}
+                    collapsed={collapsed}
+                    isEditing={editingSectionId === section.id}
+                    editingName={editingSectionName}
+                    selectedNoteId={selectedNoteId}
+                    pendingNoteId={pendingNote?.id ?? null}
+                    onToggle={() => toggleSection(section.id)}
+                    onStartEdit={() => {
+                      setEditingSectionId(section.id)
+                      setEditingSectionName(section.name)
+                    }}
+                    onEditNameChange={setEditingSectionName}
+                    onSaveName={() => void saveSectionName()}
+                    onDelete={() => void deleteSection(section.id)}
+                    onSelectNote={(noteId) => void handleSelectNote(noteId)}
+                    onDeleteNote={(noteId) => void deleteNote(noteId)}
+                  />
+                )
+              })}
+            </SortableContext>
 
             <div className="note-section note-section-none">
               <div className="note-section-head">
@@ -1091,7 +1176,11 @@ function ManualsPage({
           </div>
 
           <DragOverlay>
-            {activeDragNote ? <div className="note-drag-preview">{activeDragNote.title || '無題ノート'}</div> : null}
+            {activeDragSection
+              ? <div className="note-drag-preview">{activeDragSection.name}</div>
+              : activeDragNote
+              ? <div className="note-drag-preview">{activeDragNote.title || '無題ノート'}</div>
+              : null}
           </DragOverlay>
         </DndContext>
 
