@@ -652,10 +652,13 @@ function ManualsPage({
       allowedEmails: selectedNoteAllowedEmails.length > 0 ? selectedNoteAllowedEmails : allowedAccountEmails,
     }
 
+    const isSwitchingNote = draftRef.current?.id !== selectedNote.id
     lastSavedSignatureRef.current = noteSignature(nextDraft)
     setDraft(nextDraft)
-    setSaveState('idle')
-    setSaveMessage('')
+    if (isSwitchingNote) {
+      setSaveState('idle')
+      setSaveMessage('')
+    }
     editor?.commands.setContent(nextDraft.content, { emitUpdate: false })
   }, [allowedAccountEmails, editor, selectedNote, selectedNoteAllowedEmails, selectedNoteTagIds])
 
