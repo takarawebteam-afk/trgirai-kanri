@@ -701,7 +701,6 @@ function ManualsPage({
       window.clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
-    setTimedStatus('saving', '保存中...')
     const payload = {
       id: target.id,
       title: target.title.trim() || '無題ノート',
