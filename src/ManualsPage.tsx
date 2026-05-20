@@ -788,7 +788,6 @@ function ManualsPage({
     if (!draft) return
     if (pendingNote?.id === draft.id) return
     if (noteSignature(draft) === lastSavedSignatureRef.current) return
-    setTimedStatus('saving', '保存中...')
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(() => {
       void saveDraft(draft)
