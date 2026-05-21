@@ -3736,12 +3736,12 @@ button.secondary.small {
   min-width: 220px;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(1) { left: 12px; }
-.progress-table-recruitment :is(th, td):nth-child(2) { left: 147px; }
-.progress-table-recruitment :is(th, td):nth-child(3) { left: 189px; }
-.progress-table-recruitment :is(th, td):nth-child(4) { left: 324px; }
+.progress-table-recruitment :is(th, td):nth-child(1) { left: 0px; }
+.progress-table-recruitment :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-recruitment :is(th, td):nth-child(3) { left: 177px; }
+.progress-table-recruitment :is(th, td):nth-child(4) { left: 312px; }
 .progress-table-recruitment :is(th, td):nth-child(5) {
-  left: 436px;
+  left: 424px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
@@ -3774,11 +3774,11 @@ button.secondary.small {
   min-width: 74px;
 }
 
-.progress-table-keihan :is(th, td):nth-child(1) { left: 12px; }
-.progress-table-keihan :is(th, td):nth-child(2) { left: 147px; }
-.progress-table-keihan :is(th, td):nth-child(3) { left: 230px; }
+.progress-table-keihan :is(th, td):nth-child(1) { left: 0px; }
+.progress-table-keihan :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-keihan :is(th, td):nth-child(3) { left: 218px; }
 .progress-table-keihan :is(th, td):nth-child(4) {
-  left: 430px;
+  left: 418px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
@@ -3812,12 +3812,12 @@ button.secondary.small {
   min-width: 74px;
 }
 
-.progress-table-simple :is(th, td):nth-child(1) { left: 12px; }
-.progress-table-simple :is(th, td):nth-child(2) { left: 147px; }
-.progress-table-simple :is(th, td):nth-child(3) { left: 282px; }
-.progress-table-simple :is(th, td):nth-child(4) { left: 346px; }
+.progress-table-simple :is(th, td):nth-child(1) { left: 0px; }
+.progress-table-simple :is(th, td):nth-child(2) { left: 135px; }
+.progress-table-simple :is(th, td):nth-child(3) { left: 270px; }
+.progress-table-simple :is(th, td):nth-child(4) { left: 334px; }
 .progress-table-simple :is(th, td):nth-child(5) {
-  left: 546px;
+  left: 534px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
