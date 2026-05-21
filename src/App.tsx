@@ -8857,6 +8857,7 @@ function TodayTasksPanel() {
   const [openAddFormMemberId, setOpenAddFormMemberId] = useState<string | null>(null)
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskMinutes, setNewTaskMinutes] = useState('')
+  const [newTaskCategory, setNewTaskCategory] = useState('')
   const [manualTaskSaving, setManualTaskSaving] = useState(false)
   const [openMemoMemberId, setOpenMemoMemberId] = useState<string | null>(null)
   const [memoDraft, setMemoDraft] = useState('')
@@ -9129,7 +9130,7 @@ function TodayTasksPanel() {
         member_calendar_id: memberCalendarId,
         task_name: taskName,
         minutes,
-        category: resolveTaskCategory(taskName),
+        category: newTaskCategory || resolveTaskCategory(taskName),
         checked: false,
       })
       .select('id, event_date, member_calendar_id, task_name, minutes, checked, category, created_at')
@@ -9144,6 +9145,7 @@ function TodayTasksPanel() {
     }))
     setNewTaskName('')
     setNewTaskMinutes('')
+    setNewTaskCategory('')
     setOpenAddFormMemberId(null)
   }
 
@@ -9435,6 +9437,7 @@ function TodayTasksPanel() {
                     setOpenMemoMemberId(null)
                     setNewTaskName('')
                     setNewTaskMinutes('')
+                    setNewTaskCategory('')
                     setMemoError('')
                   }}
                 >
@@ -9446,9 +9449,23 @@ function TodayTasksPanel() {
                       type="text"
                       className="manual-task-input"
                       value={newTaskName}
-                      onChange={(e) => setNewTaskName(e.target.value)}
+                      onChange={(e) => {
+                        const name = e.target.value
+                        setNewTaskName(name)
+                        setNewTaskCategory(resolveTaskCategory(name))
+                      }}
                       placeholder="業務名を入力"
                     />
+                    <select
+                      className="manual-task-category-select"
+                      value={newTaskCategory}
+                      onChange={(e) => setNewTaskCategory(e.target.value)}
+                    >
+                      <option value="">カテゴリ（自動）</option>
+                      {categoryOptions.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                     <div className="manual-task-form-row">
                       <input
                         type="text"

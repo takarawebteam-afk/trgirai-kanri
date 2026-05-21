@@ -3860,6 +3860,16 @@ button.secondary.small {
   font-size: 12px;
   cursor: pointer;
 }
+.manual-task-category-select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
 .manual-task-add-btn:hover { background: #f5f5f5; color: #333; }
 .manual-task-form { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
 .manual-task-form-row { display: flex; gap: 4px; align-items: center; }
