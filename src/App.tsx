@@ -9449,14 +9449,26 @@ function TodayTasksPanel() {
                       onChange={(e) => setNewTaskName(e.target.value)}
                       placeholder="業務名を入力"
                     />
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => addManualTask(member.calendarId)}
-                      disabled={manualTaskSaving}
-                    >
-                      {manualTaskSaving ? '保存中...' : '追加'}
-                    </button>
+                    <div className="manual-task-form-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setOpenAddFormMemberId(null)
+                          setNewTaskName('')
+                        }}
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => addManualTask(member.calendarId)}
+                        disabled={manualTaskSaving}
+                      >
+                        {manualTaskSaving ? '保存中...' : '追加'}
+                      </button>
+                    </div>
                   </div>
                 )}
                 {totalCount === 0 ? (
