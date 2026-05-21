@@ -9449,24 +9449,14 @@ function TodayTasksPanel() {
                       onChange={(e) => setNewTaskName(e.target.value)}
                       placeholder="業務名を入力"
                     />
-                    <div className="manual-task-form-row">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        className="manual-task-minutes"
-                        value={newTaskMinutes}
-                        onChange={(e) => setNewTaskMinutes(e.target.value)}
-                        placeholder="分数 例：30"
-                      />
-                      <button
-                        type="button"
-                        className="primary"
-                        onClick={() => addManualTask(member.calendarId)}
-                        disabled={manualTaskSaving}
-                      >
-                        {manualTaskSaving ? '保存中...' : '追加'}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => addManualTask(member.calendarId)}
+                      disabled={manualTaskSaving}
+                    >
+                      {manualTaskSaving ? '保存中...' : '追加'}
+                    </button>
                   </div>
                 )}
                 {totalCount === 0 ? (
