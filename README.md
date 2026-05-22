@@ -1,5 +1,30 @@
 # React + TypeScript + Vite
 
+## 納品管理シートから管理ツールへ送るAPI
+
+GoogleスプレッドシートのGASから、物件名と号室だけを管理ツールへ反映するAPIです。
+
+- API URL: `https://trgirai-kanri.vercel.app/api/sheet-import`
+- メソッド: `POST`
+- 認証ヘッダー: `x-api-key`
+- Vercelに設定する環境変数: `SHEET_IMPORT_API_KEY`
+
+反映先は次の2つだけです。
+
+- `Karilun｜西宮市`: `JR西宮店`
+- `Karilun｜京阪`: `枚方店`, `守口店`, `寝屋川店`
+
+既存一覧に「物件名」と「号室」がどちらも空の行があれば、上から最初の空欄行へ入力します。空欄行がない場合は新しい行を追加します。投稿予定日など、ほかの列は上書きしません。
+
+curlでのテスト例:
+
+```bash
+curl -X POST "https://trgirai-kanri.vercel.app/api/sheet-import" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: Vercelに設定したSHEET_IMPORT_API_KEYの値" \
+  -d "{\"storeName\":\"枚方店\",\"propertyName\":\"テストマンション\",\"roomNumber\":\"202\",\"destinationName\":\"Karilun｜京阪\"}"
+```
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
