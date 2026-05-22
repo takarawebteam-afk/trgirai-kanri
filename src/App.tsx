@@ -19,7 +19,7 @@ type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
 type TaskItemRecurrence = 'none' | 'monthly'
 type RecurringDateRule = 'same_day' | 'month_end'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty' | 'settings'
 
 type StockRecord = {
   id: string
@@ -472,6 +472,7 @@ const TAB_ITEMS: { key: PageKey; label: string }[] = [
   { key: 'stock', label: 'ストック管理' },
   { key: 'sns', label: 'SNS投稿管理' },
   { key: 'manuals', label: 'Note' },
+  { key: 'settings', label: '設定' },
 ] as const
 
 type CalendarEvent = { id: string; summary: string; start: string }
@@ -7225,10 +7226,72 @@ function App() {
         })()}
         {activePage === 'taskreport' && <TaskReportPanel />}
         {activePage === 'progress' && <ProgressPage onSnsPropertyPromoted={handleSnsPropertyPromoted} />}
+        {activePage === 'settings' && (
+          <section className="members-page">
+            <div className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>閲覧できるGoogleアカウント</h2>
+                  <p>ここに入っているGoogleアカウントだけ、この管理ツールを開けます。</p>
+                </div>
+              </div>
+              {isMasterUser ? (
+                <>
+                  <div className="access-manager-form">
+                    <input
+                      type="email"
+                      placeholder="追加したいGoogleアカウント"
+                      value={allowedAccountForm}
+                      onChange={(e) => setAllowedAccountForm(e.target.value)}
+                    />
+                    <button className="primary" onClick={addAllowedAccount} disabled={allowedAccountSaving}>
+                      {allowedAccountSaving ? '保存中...' : '追加'}
+                    </button>
+                  </div>
+                  <p className="access-manager-note">`trg.yshini@gmail.com` がマスターです。このアカウントだけが追加と削除をできます。</p>
+                </>
+              ) : (
+                <p className="access-manager-note">追加や削除はマスターアカウントだけができます。</p>
+              )}
+              {allowedAccountMessage && <p className="access-manager-message">{allowedAccountMessage}</p>}
+              <div className="access-account-list">
+                {allowedAccounts.map((account) => (
+                  <div key={account.id} className="access-account-card">
+                    <div className="access-account-main">
+                      <strong>{account.email}</strong>
+                      {account.is_master && <span className="auth-master-badge access-master-badge">マスター</span>}
+                      {account.allow_outside_office && <span className="outside-office-badge">社外OK</span>}
+                    </div>
+                    <div className="access-account-actions">
+                      {isMasterUser && (
+                        <>
+                          <label className="outside-office-toggle">
+                            <input
+                              type="checkbox"
+                              checked={account.allow_outside_office}
+                              onChange={() => toggleOutsideOfficeAccess(account)}
+                              disabled={allowedAccountSaving}
+                            />
+                            社外からも開ける
+                          </label>
+                          {!account.is_master && (
+                            <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
+                              削除
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && activePage !== 'settings' && (
         <button
           className="fab"
           onClick={() => {
@@ -7247,7 +7310,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && activePage !== 'settings' && (
         <div className="modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) {
             if (activePage === 'busho') {
@@ -8857,6 +8920,7 @@ function TodayTasksPanel() {
   const [openAddFormMemberId, setOpenAddFormMemberId] = useState<string | null>(null)
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskMinutes, setNewTaskMinutes] = useState('')
+  const [newTaskCategory, setNewTaskCategory] = useState('')
   const [manualTaskSaving, setManualTaskSaving] = useState(false)
   const [openMemoMemberId, setOpenMemoMemberId] = useState<string | null>(null)
   const [memoDraft, setMemoDraft] = useState('')
@@ -9129,7 +9193,7 @@ function TodayTasksPanel() {
         member_calendar_id: memberCalendarId,
         task_name: taskName,
         minutes,
-        category: resolveTaskCategory(taskName),
+        category: newTaskCategory || resolveTaskCategory(taskName),
         checked: false,
       })
       .select('id, event_date, member_calendar_id, task_name, minutes, checked, category, created_at')
@@ -9143,6 +9207,7 @@ function TodayTasksPanel() {
       [memberCalendarId]: [...(prev[memberCalendarId] || []), data as ManualTask],
     }))
     setNewTaskName('')
+    setNewTaskCategory('')
     setNewTaskMinutes('')
     setOpenAddFormMemberId(null)
   }
@@ -9435,6 +9500,7 @@ function TodayTasksPanel() {
                     setOpenMemoMemberId(null)
                     setNewTaskName('')
                     setNewTaskMinutes('')
+                    setNewTaskCategory('')
                     setMemoError('')
                   }}
                 >
@@ -9446,9 +9512,27 @@ function TodayTasksPanel() {
                       type="text"
                       className="manual-task-input"
                       value={newTaskName}
-                      onChange={(e) => setNewTaskName(e.target.value)}
+                      onChange={(e) => {
+                        const name = e.target.value
+                        setNewTaskName(name)
+                        if (name.trim()) {
+                          setNewTaskCategory(resolveTaskCategory(name))
+                        } else {
+                          setNewTaskCategory('')
+                        }
+                      }}
                       placeholder="業務名を入力"
                     />
+                    <select
+                      className="manual-task-category-select"
+                      value={newTaskCategory}
+                      onChange={(e) => setNewTaskCategory(e.target.value)}
+                    >
+                      <option value="">カテゴリ（自動）</option>
+                      {categoryOptions.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                     <div className="manual-task-form-actions">
                       <button
                         type="button"
