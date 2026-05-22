@@ -19,7 +19,7 @@ type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
 type TaskItemRecurrence = 'none' | 'monthly'
 type RecurringDateRule = 'same_day' | 'month_end'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty' | 'settings'
+type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
 
 type StockRecord = {
   id: string
@@ -406,6 +406,13 @@ type AllowedAccount = {
   created_by?: string | null
 }
 
+type AllowedIp = {
+  id: string
+  ip_address: string
+  label: string | null
+  created_by: string
+}
+
 const TEAM_MEMBERS = [
   { name: '新居', calendarId: 'trg.yshini@gmail.com', color: '#374151' },
   { name: '泉', calendarId: 'izumiyurina2322@gmail.com', color: '#7c3aed' },
@@ -472,7 +479,6 @@ const TAB_ITEMS: { key: PageKey; label: string }[] = [
   { key: 'stock', label: 'ストック管理' },
   { key: 'sns', label: 'SNS投稿管理' },
   { key: 'manuals', label: 'Note' },
-  { key: 'settings', label: '設定' },
 ] as const
 
 type CalendarEvent = { id: string; summary: string; start: string }
@@ -1735,6 +1741,11 @@ function App() {
   const [allowedAccountForm, setAllowedAccountForm] = useState('')
   const [allowedAccountSaving, setAllowedAccountSaving] = useState(false)
   const [allowedAccountMessage, setAllowedAccountMessage] = useState('')
+  const [allowedIps, setAllowedIps] = useState<AllowedIp[]>([])
+  const [allowedIpIpInput, setAllowedIpIpInput] = useState('')
+  const [allowedIpLabelInput, setAllowedIpLabelInput] = useState('')
+  const [allowedIpSaving, setAllowedIpSaving] = useState(false)
+  const [allowedIpMessage, setAllowedIpMessage] = useState('')
   const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
@@ -2314,6 +2325,11 @@ function App() {
 
     setAllowedAccounts(rows)
     return rows
+  }
+
+  async function fetchAllowedIps() {
+    const { data } = await supabase.from('allowed_ips').select('*').order('created_at', { ascending: true })
+    if (data) setAllowedIps(data as AllowedIp[])
   }
 
   const getSnsPropertySelectOptions = useCallback((field: SnsPropertySelectField) => {
@@ -3134,6 +3150,31 @@ function App() {
     setAllowedAccountMessage('Googleアカウントを追加しました。')
   }
 
+  async function addAllowedIp() {
+    if (!isMasterUser) return
+    const ip = allowedIpIpInput.trim()
+    if (!ip) {
+      setAllowedIpMessage('IPアドレスを入力してください。')
+      return
+    }
+    setAllowedIpSaving(true)
+    const { error } = await supabase.from('allowed_ips').insert({
+      ip_address: ip,
+      label: allowedIpLabelInput.trim() || null,
+      created_by: currentUserEmail,
+      updated_by: currentUserEmail,
+    })
+    if (!error) {
+      setAllowedIpIpInput('')
+      setAllowedIpLabelInput('')
+      await fetchAllowedIps()
+      setAllowedIpMessage('IPアドレスを追加しました。')
+    } else {
+      setAllowedIpMessage('追加に失敗しました。')
+    }
+    setAllowedIpSaving(false)
+  }
+
   async function toggleOutsideOfficeAccess(account: AllowedAccount) {
     if (!isMasterUser) return
 
@@ -3184,6 +3225,15 @@ function App() {
     await fetchAllowedAccounts()
     setAllowedAccountSaving(false)
     setAllowedAccountMessage('Googleアカウントを削除しました。')
+  }
+
+  async function removeAllowedIp(id: string) {
+    if (!isMasterUser) return
+    setAllowedIpSaving(true)
+    await supabase.from('allowed_ips').delete().eq('id', id)
+    await fetchAllowedIps()
+    setAllowedIpMessage('IPアドレスを削除しました。')
+    setAllowedIpSaving(false)
   }
 
   function logoutFromApp() {
@@ -4670,6 +4720,7 @@ function App() {
               className="auth-master-button"
               onClick={() => {
                 setAllowedAccountMessage('')
+                void fetchAllowedIps()
                 setShowAllowedAccountsModal(true)
               }}
             >
@@ -7226,72 +7277,10 @@ function App() {
         })()}
         {activePage === 'taskreport' && <TaskReportPanel />}
         {activePage === 'progress' && <ProgressPage onSnsPropertyPromoted={handleSnsPropertyPromoted} />}
-        {activePage === 'settings' && (
-          <section className="members-page">
-            <div className="panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>閲覧できるGoogleアカウント</h2>
-                  <p>ここに入っているGoogleアカウントだけ、この管理ツールを開けます。</p>
-                </div>
-              </div>
-              {isMasterUser ? (
-                <>
-                  <div className="access-manager-form">
-                    <input
-                      type="email"
-                      placeholder="追加したいGoogleアカウント"
-                      value={allowedAccountForm}
-                      onChange={(e) => setAllowedAccountForm(e.target.value)}
-                    />
-                    <button className="primary" onClick={addAllowedAccount} disabled={allowedAccountSaving}>
-                      {allowedAccountSaving ? '保存中...' : '追加'}
-                    </button>
-                  </div>
-                  <p className="access-manager-note">`trg.yshini@gmail.com` がマスターです。このアカウントだけが追加と削除をできます。</p>
-                </>
-              ) : (
-                <p className="access-manager-note">追加や削除はマスターアカウントだけができます。</p>
-              )}
-              {allowedAccountMessage && <p className="access-manager-message">{allowedAccountMessage}</p>}
-              <div className="access-account-list">
-                {allowedAccounts.map((account) => (
-                  <div key={account.id} className="access-account-card">
-                    <div className="access-account-main">
-                      <strong>{account.email}</strong>
-                      {account.is_master && <span className="auth-master-badge access-master-badge">マスター</span>}
-                      {account.allow_outside_office && <span className="outside-office-badge">社外OK</span>}
-                    </div>
-                    <div className="access-account-actions">
-                      {isMasterUser && (
-                        <>
-                          <label className="outside-office-toggle">
-                            <input
-                              type="checkbox"
-                              checked={account.allow_outside_office}
-                              onChange={() => toggleOutsideOfficeAccess(account)}
-                              disabled={allowedAccountSaving}
-                            />
-                            社外からも開ける
-                          </label>
-                          {!account.is_master && (
-                            <button className="danger" onClick={() => removeAllowedAccount(account.email)} disabled={allowedAccountSaving}>
-                              削除
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}
-      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && activePage !== 'settings' && (
+      {activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && (
         <button
           className="fab"
           onClick={() => {
@@ -7310,7 +7299,7 @@ function App() {
       )}
 
       {/* ===== 追加フォームモーダル ===== */}
-      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && activePage !== 'settings' && (
+      {showModal && activePage !== 'dashboard' && activePage !== 'members' && activePage !== 'manuals' && activePage !== 'jishashukyaku' && activePage !== 'taskreport' && activePage !== 'progress' && activePage !== 'snsproperty' && (
         <div className="modal-overlay" onClick={(e) => {
           if (e.target === e.currentTarget) {
             if (activePage === 'busho') {
@@ -7765,6 +7754,46 @@ function App() {
                       </button>
                     )}
                   </div>
+                </div>
+              ))}
+            </div>
+            <hr className="access-section-divider" />
+            <h4 className="access-section-title">社内Wi-Fi IPアドレス</h4>
+            <p className="access-manager-note">アクセスを許可するIPアドレスを管理します。</p>
+            {isMasterUser && (
+              <div className="access-manager-form access-ip-form">
+                <input
+                  type="text"
+                  placeholder="IPアドレス（例: 218.42.153.89）"
+                  value={allowedIpIpInput}
+                  onChange={(e) => setAllowedIpIpInput(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="名前（例: 本部Wi-Fi）"
+                  value={allowedIpLabelInput}
+                  onChange={(e) => setAllowedIpLabelInput(e.target.value)}
+                />
+                <button className="primary" onClick={addAllowedIp} disabled={allowedIpSaving}>
+                  {allowedIpSaving ? '保存中...' : '追加'}
+                </button>
+              </div>
+            )}
+            {allowedIpMessage && <p className="access-manager-message">{allowedIpMessage}</p>}
+            <div className="access-account-list">
+              {allowedIps.map((ipEntry) => (
+                <div key={ipEntry.id} className="access-account-card">
+                  <div className="access-account-main">
+                    <strong>{ipEntry.ip_address}</strong>
+                    {ipEntry.label && <span className="outside-office-badge">{ipEntry.label}</span>}
+                  </div>
+                  {isMasterUser && (
+                    <div className="access-account-actions">
+                      <button className="danger" onClick={() => void removeAllowedIp(ipEntry.id)} disabled={allowedIpSaving}>
+                        削除
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
