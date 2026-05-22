@@ -2328,8 +2328,11 @@ function App() {
   }
 
   async function fetchAllowedIps() {
-    const { data } = await supabase.from('allowed_ips').select('*').order('created_at', { ascending: true })
-    if (data) setAllowedIps(data as AllowedIp[])
+    const resp = await fetch('/api/manage-ips')
+    if (resp.ok) {
+      const data = await resp.json() as AllowedIp[]
+      setAllowedIps(data)
+    }
   }
 
   const getSnsPropertySelectOptions = useCallback((field: SnsPropertySelectField) => {
@@ -3158,12 +3161,16 @@ function App() {
       return
     }
     setAllowedIpSaving(true)
-    const { error } = await supabase.from('allowed_ips').insert({
-      ip_address: ip,
-      label: allowedIpLabelInput.trim() || null,
-      created_by: currentUserEmail,
-      updated_by: currentUserEmail,
+    const resp = await fetch('/api/manage-ips', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ip_address: ip,
+        label: allowedIpLabelInput.trim() || null,
+        email: currentUserEmail,
+      }),
     })
+    const error = resp.ok ? null : true
     if (!error) {
       setAllowedIpIpInput('')
       setAllowedIpLabelInput('')
@@ -3230,7 +3237,11 @@ function App() {
   async function removeAllowedIp(id: string) {
     if (!isMasterUser) return
     setAllowedIpSaving(true)
-    await supabase.from('allowed_ips').delete().eq('id', id)
+    await fetch('/api/manage-ips', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, email: currentUserEmail }),
+    })
     await fetchAllowedIps()
     setAllowedIpMessage('IPアドレスを削除しました。')
     setAllowedIpSaving(false)
