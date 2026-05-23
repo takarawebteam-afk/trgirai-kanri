@@ -5375,3 +5375,12 @@ button.secondary.small {
 .row-empty-add:hover td {
   background-color: var(--gray-50, #f9fafb);
 }
+
+.row-draft td {
+  opacity: 0.55;
+}
+
+.row-draft:hover td {
+  opacity: 1;
+  background-color: var(--gray-50, #f9fafb);
+}

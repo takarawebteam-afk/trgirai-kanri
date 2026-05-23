@@ -733,6 +733,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     useState<Record<SelectOptionGroup, string[]>>(() => getStoredSelectOptions())
   const [selectMenu, setSelectMenu] = useState<SelectMenuState>(null)
   const [selectOptionEditor, setSelectOptionEditor] = useState<SelectOptionEditorState>(null)
+  // ドラフト行のトラッキング（refで管理し、レンダー間で安定させる）
+  const draftRecordIds = useRef<Set<string>>(new Set())
+  const draftRecordMediaMap = useRef<Map<string, string>>(new Map())
+  const draftRowsRef = useRef<Map<string, string[]>>(new Map())
   const selectMenuRef = useRef<HTMLDivElement | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -1173,6 +1177,45 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   async function updateField(id: string, field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
+    // ドラフト行の場合: UPDATE ではなく INSERT
+    if (draftRecordIds.current.has(id)) {
+      const media = draftRecordMediaMap.current.get(id) || ''
+      // ドラフト追跡から削除
+      draftRecordIds.current.delete(id)
+      draftRecordMediaMap.current.delete(id)
+      const existingIds = draftRowsRef.current.get(media) || []
+      draftRowsRef.current.set(media, existingIds.filter((i) => i !== id))
+
+      const dbField = field === 'material_saved' ? 'shooting_date' : field
+      const normalizedValue = normalizeProgressFieldValue(field, value)
+
+      // defaultForm を DB 形式に変換（handleSubmit と同じパターン）
+      const baseDefaults = { ...defaultForm } as Omit<ProductionRecord, 'id' | 'created_at' | 'material_saved'> & { material_saved?: string }
+      delete baseDefaults.material_saved
+      const insertData: Record<string, unknown> = {
+        ...baseDefaults,
+        id,
+        media,
+        shooting_date: null,
+        scheduled_post_date: null,
+        [dbField]: normalizedValue || null,
+      }
+
+      const { error } = await supabase.from('production_records').insert(insertData)
+      if (error) {
+        alert(`保存に失敗しました。\n${error.message}`)
+        // エラー時はドラフトに戻す
+        draftRecordIds.current.add(id)
+        draftRecordMediaMap.current.set(id, media)
+        const ids2 = draftRowsRef.current.get(media) || []
+        draftRowsRef.current.set(media, [...ids2, id])
+        return false
+      }
+      fetchRecords()
+      return true
+    }
+
+    // 既存レコードの UPDATE
     const dbField = field === 'material_saved' ? 'shooting_date' : field
     const normalizedValue = normalizeProgressFieldValue(field, value)
     const { error } = await supabase.from('production_records').update({ [dbField]: normalizedValue }).eq('id', id)
@@ -1369,11 +1412,31 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   }
 
   function openEdit(record: ProductionRecord) {
-    const { id, created_at, ...rest } = record
-    setForm({ ...defaultForm, ...rest, media: getMediaDisplayName(rest.media) })
-    setEditId(id)
+    const rest = { ...record }
+    delete (rest as Partial<ProductionRecord>).id
+    delete (rest as Partial<ProductionRecord>).created_at
+    setForm({ ...defaultForm, ...rest, media: getMediaDisplayName(record.media) })
+    setEditId(record.id)
     setFormTab('basic')
     setShowModal(true)
+  }
+
+  function getDraftRecords(media: string, count: number): ProductionRecord[] {
+    if (count <= 0) return []
+    const existing = draftRowsRef.current.get(media) || []
+    while (existing.length < count) {
+      const newId = crypto.randomUUID()
+      existing.push(newId)
+      draftRecordIds.current.add(newId)
+      draftRecordMediaMap.current.set(newId, media)
+    }
+    draftRowsRef.current.set(media, existing)
+    return existing.slice(0, count).map((id) => ({
+      ...defaultForm,
+      id,
+      media,
+      created_at: '',
+    }))
   }
 
   function openNew(presetMedia?: string) {
@@ -1854,17 +1917,17 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
-          {Array.from({ length: Math.max(0, minRows - mediaRecords.length) }).map((_, i) => (
-            <tr key={`empty-${i}`} className="row-empty-add" onClick={() => openNew(media)} style={{ cursor: 'pointer' }}>
-              <td className="ptcell-group-1" />
-              <td className="ptcell-group-2" />
-              <td className="ptcell-group-2" />
-              <td className="ptcell-group-2" />
-              <td className="ptcell-group-2" />
-              <td className="ptcell-group-4" />
-              <td className="ptcell-group-4" />
-              <td className="ptcell-group-3" />
-              <td className="ptcell-group-5" />
+          {getDraftRecords(media, Math.max(0, minRows - mediaRecords.length)).map((record) => (
+            <tr key={record.id} className="row-hoverable row-draft">
+              <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date')}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'post_type', config.typeLabel)}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
+              <td className="ptcell-group-2">{renderPropertyLink(record)}</td>
+              <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'floor_plan_insert')}</td>
+              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
+              <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5" />
             </tr>
           ))}
@@ -1926,20 +1989,20 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
-          {Array.from({ length: Math.max(0, minRows - mediaRecords.length) }).map((_, i) => (
-            <tr key={`empty-${i}`} className="row-empty-add" onClick={() => openNew(media)} style={{ cursor: 'pointer' }}>
-              <td className="ptcell-group-1" />
-              <td className="ptcell-group-1" />
-              <td className="ptcell-group-1" />
-              <td className="ptcell-group-2" />
-              <td className="ptcell-group-2" />
-              <td className="ptcell-group-3" />
-              <td className="ptcell-group-3" />
-              <td className="ptcell-group-3" />
-              <td className="ptcell-group-3" />
-              <td className="ptcell-group-4" />
-              <td className="ptcell-group-4" />
-              <td className="ptcell-group-5" />
+          {getDraftRecords(media, Math.max(0, minRows - mediaRecords.length)).map((record) => (
+            <tr key={record.id} className="row-hoverable row-draft">
+              <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date')}</td>
+              <td className="ptcell-group-1">{getWeekdayLabel(record.scheduled_post_date)}</td>
+              <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
+              <td className="ptcell-group-2">{renderRecruitmentPostTypeCell(record)}</td>
+              <td className="ptcell-group-2">{renderTextCell(record, 'property_name', 'タイトル')}</td>
+              <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
+              <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
+              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
+              <td className="ptcell-group-3">{renderSelectCell(record, 'floor_plan_check', getProcessGroupByField('floor_plan_check'), '仕上げ')}</td>
+              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
+              <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
+              <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5" />
             </tr>
           ))}
