@@ -1407,7 +1407,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       media: getMediaDisplayName(form.media),
       shooting_date: form.material_saved || null,
       shooting_start_date: form.shooting_start_date || null,
-      shooting_end_date: form.shooting_end_date || null,
+      shooting_end_date: null,
       scheduled_post_date: form.scheduled_post_date || null,
     }
 
@@ -1538,22 +1538,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderShootingPeriodCell(record: ProductionRecord) {
     return (
-      <div className="progress-date-range-cell" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
         <input
           className="progress-cell-input is-date"
           type="date"
-          title="撮影開始日"
+          title="撮影期日"
           value={record.shooting_start_date || ''}
           onChange={(e) => updateField(record.id, 'shooting_start_date', e.target.value)}
-          onClick={(e) => e.stopPropagation()}
-        />
-        <span className="progress-date-range-separator">～</span>
-        <input
-          className="progress-cell-input is-date"
-          type="date"
-          title="撮影終了日"
-          value={record.shooting_end_date || ''}
-          onChange={(e) => updateField(record.id, 'shooting_end_date', e.target.value)}
           onClick={(e) => e.stopPropagation()}
         />
       </div>
@@ -1737,7 +1728,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <table className="progress-table progress-table-tiktok">
         <colgroup>
           <col style={{ width: 135 }} />
-          <col style={{ width: 268 }} />
+          <col style={{ width: 135 }} />
           <col style={{ width: 135 }} />
           <col style={{ width: 102 }} />
           <col style={{ width: 112 }} />
@@ -1771,7 +1762,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <thead>
           <tr>
             <th className="ptcol-group-1">素材保存</th>
-            <th className="ptcol-group-1">撮影予定期間</th>
+            <th className="ptcol-group-1">撮影期日</th>
             <th className="ptcol-group-1">投稿予定日</th>
             <th className="ptcol-group-2">WP登録</th>
             <th className="ptcol-group-2">AOS登録</th>
@@ -2196,19 +2187,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               ))}
             </select>
           </label>
-          <div style={{ display: 'grid', gridTemplateColumns: isTikTokMedia(form.media) ? '1fr 2fr 1fr' : '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isTikTokMedia(form.media) ? '1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
             <label className="form-label">
               素材保存
               <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
             </label>
             {isTikTokMedia(form.media) && (
               <label className="form-label">
-                撮影予定期間
-                <div className="progress-form-date-range">
-                  <input type="date" title="撮影開始日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value })} />
-                  <span>～</span>
-                  <input type="date" title="撮影終了日" value={form.shooting_end_date} onChange={(e) => setForm({ ...form, shooting_end_date: e.target.value })} />
-                </div>
+                撮影期日
+                <input type="date" title="撮影期日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value, shooting_end_date: '' })} />
               </label>
             )}
             <label className="form-label">
@@ -2706,12 +2693,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                 </label>
                 {isTikTokMedia(form.media) && (
                   <label className="form-label">
-                    撮影予定期間
-                    <div className="progress-form-date-range">
-                      <input type="date" title="撮影開始日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value })} />
-                      <span>～</span>
-                      <input type="date" title="撮影終了日" value={form.shooting_end_date} onChange={(e) => setForm({ ...form, shooting_end_date: e.target.value })} />
-                    </div>
+                    撮影期日
+                    <input type="date" title="撮影期日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value, shooting_end_date: '' })} />
                   </label>
                 )}
                 <label className="form-label">
