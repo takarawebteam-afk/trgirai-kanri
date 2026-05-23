@@ -87,10 +87,20 @@ function wantsJsonResponse(req: VercelRequest) {
   return getQueryParam(req, 'format') === 'json'
 }
 
+function wantsCsvResponse(req: VercelRequest) {
+  return getQueryParam(req, 'format') === 'csv'
+}
+
 function sendPixel(res: VercelResponse) {
   res.setHeader('Content-Type', 'image/gif')
   res.setHeader('Cache-Control', 'no-store, max-age=0')
   return res.status(200).send(TRANSPARENT_GIF)
+}
+
+function sendCsv(res: VercelResponse, value: string) {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store, max-age=0')
+  return res.status(200).send(value)
 }
 
 function normalizeStoreName(value: string) {
@@ -144,39 +154,11 @@ async function getNextPropertyNumber(tableName: StoreSnsPropertyTableName) {
   return String(maxValue + 1)
 }
 
-async function findExistingProperty(
-  tableName: StoreSnsPropertyTableName,
-  propertyName: string,
-  roomNumber: string,
-) {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase
-    .from(tableName)
-    .select('id, property_number')
-    .eq('property_name', propertyName)
-    .eq('room_number', roomNumber)
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  return data as ExistingPropertyRow | null
-}
-
 async function addProperty(
   tableName: StoreSnsPropertyTableName,
   propertyName: string,
   roomNumber: string,
 ) {
-  const existingRow = await findExistingProperty(tableName, propertyName, roomNumber)
-
-  if (existingRow) {
-    return {
-      action: 'already_exists',
-      id: existingRow.id,
-      propertyNumber: existingRow.property_number || '',
-    }
-  }
-
   const propertyNumber = await getNextPropertyNumber(tableName)
   const supabase = getSupabaseClient()
   const { data, error } = await supabase
@@ -203,6 +185,7 @@ async function addProperty(
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     const jsonMode = wantsJsonResponse(req)
+    const csvMode = wantsCsvResponse(req)
     const spreadsheetId = getQueryParam(req, 'spreadsheetId')
     const token = getQueryParam(req, 'token')
 
@@ -216,6 +199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const roomNumber = getQueryParam(req, 'roomNumber')
 
     if (!storeName || !propertyName || !roomNumber || !isStoreName(storeName)) {
+      if (csvMode) return sendCsv(res, 'SKIP')
       if (jsonMode) {
         return json(res, 400, {
           success: false,
@@ -231,6 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const config = STORE_DESTINATION_CONFIG[storeName]
       const result = await addProperty(config.tableName, propertyName, roomNumber)
+      if (csvMode) return sendCsv(res, `OK,${result.propertyNumber}`)
       if (jsonMode) {
         return json(res, 200, {
           success: true,
