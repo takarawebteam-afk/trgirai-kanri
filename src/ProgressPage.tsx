@@ -1011,7 +1011,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       return Number.isFinite(value) ? Math.max(max, value) : max
     }, 0)
 
-    return String(maxValue + 1)
+    return String(maxValue + 1).padStart(3, '0')
   }
 
   async function promoteToSnsProperty(record: ProductionRecord, trigger: 'post_completed' | 'youtube_reserved') {
@@ -1189,7 +1189,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           category: record.post_type || '',
           title: record.property_name || '',
           property_number: await getNextRecruitmentPropertyNumber(),
-          post_reserved: '',
+          tiktok_reserved: '',
+          instagram_reserved: '',
           youtube_reserved: '',
         }
 

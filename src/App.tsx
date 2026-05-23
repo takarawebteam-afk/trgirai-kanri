@@ -1,4 +1,4 @@
-﻿import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useGoogleLogin } from '@react-oauth/google'
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
@@ -321,7 +321,8 @@ type RecruitmentSnsPropertyRecord = {
   category: string
   title: string
   property_number: string
-  post_reserved: string
+  tiktok_reserved: string
+  instagram_reserved: string
   youtube_reserved: string
 }
 
@@ -666,7 +667,8 @@ const defaultRecruitmentSnsPropertyForm: Omit<RecruitmentSnsPropertyRecord, 'id'
   category: '',
   title: '',
   property_number: '',
-  post_reserved: '',
+  tiktok_reserved: '',
+  instagram_reserved: '',
   youtube_reserved: '',
 }
 
@@ -2348,7 +2350,7 @@ function App() {
         ? tiktokProperties.map((item) => item.aos_registered)
         : field === 'post_reserved'
           ? recruitmentValues
-          : field === 'youtube_reserved'
+          : field === 'tiktok_reserved' || field === 'instagram_reserved' || field === 'youtube_reserved'
             ? [...storeValues, ...recruitmentValues]
             : storeValues
 
@@ -4041,7 +4043,7 @@ function App() {
         return Number.isFinite(value) ? Math.max(max, value) : max
       }, 0)
 
-      return String(maxValue + 1)
+      return String(maxValue + 1).padStart(3, '0')
     }
 
     if (platform === 'tiktok' || platform === 'instagram' || platform === 'youtube') {
@@ -4352,10 +4354,11 @@ function App() {
       return (
         <>
           {renderSnsPropertyCreateInput('メモ', 'memo', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, { textarea: true })}
-          {renderSnsPropertyCreateInput('投稿予定日', 'post_date', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, { type: 'date' })}
+          {renderSnsPropertyCreateInput('投稿日', 'post_date', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, { type: 'date' })}
           {renderSnsPropertyCreateSelect('投稿種類', 'category', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, ['リール', 'フィード'])}
           {renderSnsPropertyCreateInput('タイトル', 'title', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm)}
-          {renderSnsPropertyCreateSelect('投稿予約', 'post_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('post_reserved'))}
+          {renderSnsPropertyCreateSelect('TikTok予約', 'tiktok_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('tiktok_reserved'))}
+          {renderSnsPropertyCreateSelect('INSTA予約', 'instagram_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('instagram_reserved'))}
           {renderSnsPropertyCreateSelect('YouTube予約', 'youtube_reserved', recruitmentSnsPropertyForm, setRecruitmentSnsPropertyForm, getSnsPropertySelectOptions('youtube_reserved'))}
         </>
       )
@@ -5842,19 +5845,20 @@ function App() {
                     <thead>
                       <tr>
                         <th className="sns-col-memo">メモ</th>
-                        <th className="sns-col-date">投稿予定日</th>
+                        <th className="sns-col-date">投稿日</th>
                         <th className="sns-col-weekday">曜日</th>
                         <th className="sns-col-plan">投稿種類</th>
                         <th className="sns-col-property-name">タイトル</th>
                         <th className="sns-col-code">番号</th>
-                        <th className="sns-col-check">投稿予約</th>
+                        <th className="sns-col-check">TikTok予約</th>
+                        <th className="sns-col-check">INSTA予約</th>
                         <th className="sns-col-check">YouTube予約</th>
                         <th className="sns-col-actions">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {recruitmentSnsProperties.length === 0 && (
-                        <tr><td colSpan={9} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
+                        <tr><td colSpan={10} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
                       {recruitmentSnsProperties.map((r) => (
                         <tr key={r.id} className="row-hoverable">
@@ -5864,7 +5868,8 @@ function App() {
                           <td className="sns-col-plan">{renderSnsSelect(r.category, ['リール', 'フィード'], (value) => updateRecruitmentSnsPropertyRow(r.id, 'category', value))}</td>
                           <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:title`, r.title, (value) => updateRecruitmentSnsPropertyRow(r.id, 'title', value))}</td>
                           <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateRecruitmentSnsPropertyRow(r.id, 'property_number', value))}</td>
-                          <td className="sns-col-check">{renderSnsSelect(r.post_reserved, getSnsPropertySelectOptions('post_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'post_reserved', value), () => openSnsPropertyOptionEditor('post_reserved', '投稿予約'))}</td>
+                          <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'tiktok_reserved', value), () => openSnsPropertyOptionEditor('tiktok_reserved', 'TikTok予約'))}</td>
+                          <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'instagram_reserved', value), () => openSnsPropertyOptionEditor('instagram_reserved', 'INSTA予約'))}</td>
                           <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'youtube_reserved', value), () => openSnsPropertyOptionEditor('youtube_reserved', 'YouTube予約'))}</td>
                           <td className="sns-col-actions">
                             <div className="row-actions">
