@@ -5371,3 +5371,7 @@ button.secondary.small {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.row-empty-add:hover td {
+  background-color: var(--gray-50, #f9fafb);
+}

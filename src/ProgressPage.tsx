@@ -1376,8 +1376,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     setShowModal(true)
   }
 
-  function openNew() {
-    setForm({ ...defaultForm })
+  function openNew(presetMedia?: string) {
+    setForm({ ...defaultForm, ...(presetMedia ? { media: presetMedia } : {}) })
     setEditId(null)
     setFormTab('basic')
     setShowModal(true)
@@ -1810,7 +1810,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
-  function renderStoreProgressTable(mediaRecords: ProductionRecord[], config: NonNullable<ReturnType<typeof getStoreProgressConfig>>, minRows = 0) {
+  function renderStoreProgressTable(mediaRecords: ProductionRecord[], config: NonNullable<ReturnType<typeof getStoreProgressConfig>>, minRows = 0, media = '') {
     return (
       <table className="progress-table progress-table-keihan">
         <colgroup>
@@ -1855,7 +1855,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             </tr>
           ))}
           {Array.from({ length: Math.max(0, minRows - mediaRecords.length) }).map((_, i) => (
-            <tr key={`empty-${i}`}>
+            <tr key={`empty-${i}`} className="row-empty-add" onClick={() => openNew(media)} style={{ cursor: 'pointer' }}>
               <td className="ptcell-group-1" />
               <td className="ptcell-group-2" />
               <td className="ptcell-group-2" />
@@ -1873,7 +1873,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
-  function renderRecruitmentTable(mediaRecords: ProductionRecord[], minRows = 0) {
+  function renderRecruitmentTable(mediaRecords: ProductionRecord[], minRows = 0, media = '') {
     return (
       <table className="progress-table progress-table-recruitment">
         <colgroup>
@@ -1927,7 +1927,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             </tr>
           ))}
           {Array.from({ length: Math.max(0, minRows - mediaRecords.length) }).map((_, i) => (
-            <tr key={`empty-${i}`}>
+            <tr key={`empty-${i}`} className="row-empty-add" onClick={() => openNew(media)} style={{ cursor: 'pointer' }}>
               <td className="ptcell-group-1" />
               <td className="ptcell-group-1" />
               <td className="ptcell-group-1" />
@@ -2354,13 +2354,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   </tbody>
                 </table>
               ) : isRecruitmentMedia(media) ? (
-                renderRecruitmentTable(mediaRecords, MEDIA_MIN_ROWS[media] ?? 0)
+                renderRecruitmentTable(mediaRecords, MEDIA_MIN_ROWS[media] ?? 0, media)
               ) : isTikTokMedia(media) ? (
                 renderTikTokTable(mediaRecords)
               ) : isInstagramMedia(media) ? (
                 renderInstagramTable(mediaRecords)
               ) : getStoreProgressConfig(media) ? (
-                renderStoreProgressTable(mediaRecords, getStoreProgressConfig(media)!, MEDIA_MIN_ROWS[media] ?? 0)
+                renderStoreProgressTable(mediaRecords, getStoreProgressConfig(media)!, MEDIA_MIN_ROWS[media] ?? 0, media)
               ) : (
                 renderTikTokTable(mediaRecords)
               )}
@@ -2526,7 +2526,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         </div>
       )}
 
-      <button className="fab" onClick={openNew} aria-label="新しい進捗を追加" title="新しい進捗を追加">＋</button>
+      <button className="fab" onClick={() => openNew()} aria-label="新しい進捗を追加" title="新しい進捗を追加">＋</button>
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && closeModal()}>
