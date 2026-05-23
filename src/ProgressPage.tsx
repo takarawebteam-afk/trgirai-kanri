@@ -522,6 +522,14 @@ const MEDIA_OPTIONS = [
   '採用',
 ]
 
+const ALWAYS_SHOW_MEDIA = new Set(['Karilun｜京阪', 'Karilun｜西宮市', '採用'])
+
+const MEDIA_MIN_ROWS: Partial<Record<string, number>> = {
+  'Karilun｜京阪': 6,
+  'Karilun｜西宮市': 4,
+  '採用': 8,
+}
+
 const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾', '採用']
 
 const STORE_PROGRESS_CONFIGS: {
@@ -819,7 +827,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           .filter((record) => getMediaDisplayName(record.media) === media)
           .sort((a, b) => (a.scheduled_post_date || '').localeCompare(b.scheduled_post_date || '')),
       }))
-      .filter(({ records: mediaRecords }) => mediaRecords.length > 0)
+      .filter(({ media, records: mediaRecords }) => mediaRecords.length > 0 || ALWAYS_SHOW_MEDIA.has(media))
   }, [records])
 
   const tikTokSourceRecords = useMemo(
@@ -1802,7 +1810,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
-  function renderStoreProgressTable(mediaRecords: ProductionRecord[], config: NonNullable<ReturnType<typeof getStoreProgressConfig>>) {
+  function renderStoreProgressTable(mediaRecords: ProductionRecord[], config: NonNullable<ReturnType<typeof getStoreProgressConfig>>, minRows = 0) {
     return (
       <table className="progress-table progress-table-keihan">
         <colgroup>
@@ -1846,12 +1854,26 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
             </tr>
           ))}
+          {Array.from({ length: Math.max(0, minRows - mediaRecords.length) }).map((_, i) => (
+            <tr key={`empty-${i}`}>
+              <td className="ptcell-group-1" />
+              <td className="ptcell-group-2" />
+              <td className="ptcell-group-2" />
+              <td className="ptcell-group-2" />
+              <td className="ptcell-group-2" />
+              <td className="ptcell-group-4" />
+              <td className="ptcell-group-4" />
+              <td className="ptcell-group-3" />
+              <td className="ptcell-group-5" />
+              <td className="ptcell-group-5" />
+            </tr>
+          ))}
         </tbody>
       </table>
     )
   }
 
-  function renderRecruitmentTable(mediaRecords: ProductionRecord[]) {
+  function renderRecruitmentTable(mediaRecords: ProductionRecord[], minRows = 0) {
     return (
       <table className="progress-table progress-table-recruitment">
         <colgroup>
@@ -1902,6 +1924,23 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
+            </tr>
+          ))}
+          {Array.from({ length: Math.max(0, minRows - mediaRecords.length) }).map((_, i) => (
+            <tr key={`empty-${i}`}>
+              <td className="ptcell-group-1" />
+              <td className="ptcell-group-1" />
+              <td className="ptcell-group-1" />
+              <td className="ptcell-group-2" />
+              <td className="ptcell-group-2" />
+              <td className="ptcell-group-3" />
+              <td className="ptcell-group-3" />
+              <td className="ptcell-group-3" />
+              <td className="ptcell-group-3" />
+              <td className="ptcell-group-4" />
+              <td className="ptcell-group-4" />
+              <td className="ptcell-group-5" />
+              <td className="ptcell-group-5" />
             </tr>
           ))}
         </tbody>
@@ -2306,7 +2345,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <span>{mediaRecords.length} 件</span>
             </div>
             <div className="progress-table-wrap">
-              {mediaRecords.length === 0 ? (
+              {mediaRecords.length === 0 && !ALWAYS_SHOW_MEDIA.has(media) ? (
                 <table className="progress-table">
                   <tbody>
                     <tr>
@@ -2315,13 +2354,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   </tbody>
                 </table>
               ) : isRecruitmentMedia(media) ? (
-                renderRecruitmentTable(mediaRecords)
+                renderRecruitmentTable(mediaRecords, MEDIA_MIN_ROWS[media] ?? 0)
               ) : isTikTokMedia(media) ? (
                 renderTikTokTable(mediaRecords)
               ) : isInstagramMedia(media) ? (
                 renderInstagramTable(mediaRecords)
               ) : getStoreProgressConfig(media) ? (
-                renderStoreProgressTable(mediaRecords, getStoreProgressConfig(media)!)
+                renderStoreProgressTable(mediaRecords, getStoreProgressConfig(media)!, MEDIA_MIN_ROWS[media] ?? 0)
               ) : (
                 renderTikTokTable(mediaRecords)
               )}
