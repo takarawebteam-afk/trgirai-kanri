@@ -1683,7 +1683,6 @@ function App() {
   const [snsTiktokSheetSyncing, setSnsTiktokSheetSyncing] = useState(false)
   const [snsInstagramSheetSyncing, setSnsInstagramSheetSyncing] = useState(false)
   const [snsYoutubeSheetSyncing, setSnsYoutubeSheetSyncing] = useState(false)
-  const [snsRecruitmentSheetSyncing, setSnsRecruitmentSheetSyncing] = useState(false)
   const [storeSnsSheetSyncing, setStoreSnsSheetSyncing] = useState<StoreSnsPropertyPlatform | null>(null)
   const snsPropertySheetSyncTimers = useRef<Partial<Record<Exclude<SnsPropertyPlatform, 'sokanri'>, number>>>({})
   const [snsPostingRules, setSnsPostingRules] = useState<SnsPostingRule[]>([])
@@ -3071,7 +3070,7 @@ function App() {
       if (!confirmed) return
     }
 
-    setSnsRecruitmentSheetSyncing(true)
+
     try {
       const response = await fetch('/api/sync-sns-recruitment-sheet', { method: 'POST' })
       const data = await response.json() as { ok?: boolean; message?: string }
@@ -3091,7 +3090,7 @@ function App() {
         alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
       }
     } finally {
-      setSnsRecruitmentSheetSyncing(false)
+
     }
   }
 
