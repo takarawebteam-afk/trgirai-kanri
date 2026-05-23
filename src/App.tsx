@@ -1683,8 +1683,9 @@ function App() {
   const [snsTiktokSheetSyncing, setSnsTiktokSheetSyncing] = useState(false)
   const [snsInstagramSheetSyncing, setSnsInstagramSheetSyncing] = useState(false)
   const [snsYoutubeSheetSyncing, setSnsYoutubeSheetSyncing] = useState(false)
+  const [snsRecruitmentSheetSyncing, setSnsRecruitmentSheetSyncing] = useState(false)
   const [storeSnsSheetSyncing, setStoreSnsSheetSyncing] = useState<StoreSnsPropertyPlatform | null>(null)
-  const snsPropertySheetSyncTimers = useRef<Partial<Record<Exclude<SnsPropertyPlatform, 'sokanri' | 'recruitment'>, number>>>({})
+  const snsPropertySheetSyncTimers = useRef<Partial<Record<Exclude<SnsPropertyPlatform, 'sokanri'>, number>>>({})
   const [snsPostingRules, setSnsPostingRules] = useState<SnsPostingRule[]>([])
   const [sokanriData, setSokanriData] = useState<Record<string, string[]>>({})
   const [sokanriLoading, setSokanriLoading] = useState(false)
@@ -2001,6 +2002,7 @@ function App() {
     }
     if (target === 'recruitment') {
       void fetchRecruitmentSnsProperties()
+      scheduleSnsPropertySheetSync('recruitment')
       return
     }
     fetchYoutubeProperties()
@@ -2413,7 +2415,7 @@ function App() {
       .find((platform) => storeSnsPropertyTableMap[platform] === tableName) || null
   }
 
-  function scheduleSnsPropertySheetSync(platform: 'tiktok' | 'instagram' | 'youtube' | StoreSnsPropertyPlatform) {
+  function scheduleSnsPropertySheetSync(platform: 'tiktok' | 'instagram' | 'youtube' | 'recruitment' | StoreSnsPropertyPlatform) {
     const existingTimer = snsPropertySheetSyncTimers.current[platform]
     if (existingTimer) {
       window.clearTimeout(existingTimer)
@@ -2428,6 +2430,8 @@ function App() {
         void syncInstagramPropertiesToSheet({ silent: true })
       } else if (platform === 'youtube') {
         void syncYoutubePropertiesToSheet({ silent: true })
+      } else if (platform === 'recruitment') {
+        void syncRecruitmentPropertiesToSheet({ silent: true })
       } else {
         void syncStoreSnsPropertiesToSheet(platform, { silent: true })
       }
@@ -2436,7 +2440,7 @@ function App() {
 
   function scheduleSnsPropertySheetSyncByTable(tableName: SnsPropertyTableName) {
     const platform = getSnsPropertyPlatformByTable(tableName)
-    if (platform && platform !== 'recruitment') scheduleSnsPropertySheetSync(platform)
+    if (platform) scheduleSnsPropertySheetSync(platform)
   }
 
   async function updateRecruitmentSnsPropertyRow(
@@ -2457,6 +2461,7 @@ function App() {
     setRecruitmentSnsProperties((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     )
+    scheduleSnsPropertySheetSync('recruitment')
   }
 
   async function updateStoreSnsPropertyRow(
@@ -3057,6 +3062,36 @@ function App() {
       }
     } finally {
       setSnsYoutubeSheetSyncing(false)
+    }
+  }
+
+  async function syncRecruitmentPropertiesToSheet(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      const confirmed = window.confirm('採用の一覧をご指定のスプレッドシートへ反映しますか？')
+      if (!confirmed) return
+    }
+
+    setSnsRecruitmentSheetSyncing(true)
+    try {
+      const response = await fetch('/api/sync-sns-recruitment-sheet', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || '反映に失敗しました。')
+      }
+
+      if (!options?.silent) {
+        alert('スプレッドシートへ反映しました。')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '反映に失敗しました。'
+      if (options?.silent) {
+        console.error('スプレッドシート自動反映に失敗しました。', message)
+      } else {
+        alert(`スプレッドシート反映に失敗しました。\n\n${message}`)
+      }
+    } finally {
+      setSnsRecruitmentSheetSyncing(false)
     }
   }
 
@@ -4199,6 +4234,7 @@ function App() {
         setSnsPropertyPage((prev) => ({ ...prev, recruitment: 1 }))
         setSnsPropertyTotalCount((prev) => ({ ...prev, recruitment: prev.recruitment + 1 }))
         setRecruitmentSnsProperties((prev) => [data as RecruitmentSnsPropertyRecord, ...prev])
+        scheduleSnsPropertySheetSync('recruitment')
       }
 
       closeSnsPropertyCreate()
@@ -5873,7 +5909,7 @@ function App() {
                           <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'youtube_reserved', value), () => openSnsPropertyOptionEditor('youtube_reserved', 'YouTube予約'))}</td>
                           <td className="sns-col-actions">
                             <div className="row-actions">
-                              <button className="danger" onClick={() => confirmAndDeleteRecord('sns_recruitment_properties', r.id, fetchRecruitmentSnsProperties, 'このレコードを削除しますか？')}>削除</button>
+                              <button className="danger" onClick={() => confirmAndDeleteRecord('sns_recruitment_properties', r.id, fetchRecruitmentSnsProperties, 'このレコードを削除しますか？', () => scheduleSnsPropertySheetSync('recruitment'))}>削除</button>
                             </div>
                           </td>
                         </tr>
