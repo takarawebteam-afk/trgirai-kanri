@@ -127,6 +127,15 @@ type SelectOptionEditorState = {
   title: string
   items: string[]
 } | null
+type ProgressScrollSnapshot = {
+  x: number
+  y: number
+  tableScrolls: Array<{
+    element: HTMLElement
+    left: number
+    top: number
+  }>
+}
 
 const PROCESS_STATUSES: ProcessStatus[] = ['未着手', '進行中', '完了']
 const ASSIGNEE_OPTIONS = ['泉', '坂本', '吉田', '新居']
@@ -858,8 +867,42 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   const today = new Date().toISOString().split('T')[0]
 
-  async function fetchRecords() {
-    setLoading(true)
+  function captureProgressScroll(): ProgressScrollSnapshot | null {
+    if (typeof window === 'undefined') return null
+
+    return {
+      x: window.scrollX,
+      y: window.scrollY,
+      tableScrolls: Array.from(document.querySelectorAll<HTMLElement>('.progress-table-wrap')).map((element) => ({
+        element,
+        left: element.scrollLeft,
+        top: element.scrollTop,
+      })),
+    }
+  }
+
+  function restoreProgressScroll(snapshot: ProgressScrollSnapshot | null) {
+    if (!snapshot || typeof window === 'undefined') return
+
+    const restore = () => {
+      window.scrollTo(snapshot.x, snapshot.y)
+      snapshot.tableScrolls.forEach(({ element, left, top }) => {
+        element.scrollLeft = left
+        element.scrollTop = top
+      })
+    }
+
+    requestAnimationFrame(() => {
+      restore()
+      requestAnimationFrame(restore)
+    })
+  }
+
+  async function fetchRecords(options?: { keepScroll?: boolean; showLoading?: boolean }) {
+    const scrollSnapshot = options?.keepScroll ? captureProgressScroll() : null
+    const showLoading = options?.showLoading ?? true
+
+    if (showLoading) setLoading(true)
     try {
       const { data, error } = await supabase
         .from('production_records')
@@ -902,11 +945,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       } else {
         setRecords([])
       }
+      restoreProgressScroll(scrollSnapshot)
     } catch (error) {
       console.error('progress fetch failed', error)
       setRecords([])
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
+      restoreProgressScroll(scrollSnapshot)
     }
   }
 
@@ -1333,7 +1378,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         draftRowsRef.current.set(media, [...ids2, id])
         return false
       }
-      fetchRecords()
+      await fetchRecords({ keepScroll: true, showLoading: false })
       return true
     }
 
