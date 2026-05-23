@@ -31,6 +31,15 @@ type StockRecord = {
   created_at?: string
 }
 
+type StockShootingPeriod = {
+  id: string
+  media: string
+  property_name: string
+  room_number: string
+  shooting_start_date: string | null
+  shooting_end_date: string | null
+}
+
 const DEPARTMENTS = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他'] as const
 
 type BushoSchedule = {
@@ -1705,6 +1714,7 @@ function App() {
   const [stockForm, setStockForm] = useState(defaultStockForm)
   const [stockInlineId, setStockInlineId] = useState<string | null>(null)
   const [stockInlineForm, setStockInlineForm] = useState(defaultStockForm)
+  const [stockShootingPeriods, setStockShootingPeriods] = useState<StockShootingPeriod[]>([])
   const [stockCalendarMonth, setStockCalendarMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -2190,6 +2200,22 @@ function App() {
   async function fetchStock() {
     const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
     if (data) setStockRecords(data as StockRecord[])
+  }
+
+  async function fetchStockShootingPeriods() {
+    const { data } = await supabase
+      .from('production_records')
+      .select('id,media,property_name,room_number,shooting_start_date,shooting_end_date')
+      .not('shooting_start_date', 'is', null)
+      .not('shooting_end_date', 'is', null)
+      .order('shooting_start_date', { ascending: true })
+
+    if (data) {
+      setStockShootingPeriods((data as StockShootingPeriod[]).filter((record) => {
+        const media = String(record.media || '').toLowerCase()
+        return media.includes('tiktok') && !!record.shooting_start_date && !!record.shooting_end_date
+      }))
+    }
   }
 
   async function fetchBusho() {
@@ -3452,6 +3478,7 @@ function App() {
     fetchHankyo()
     fetchDm()
     fetchStock()
+    fetchStockShootingPeriods()
     fetchBusho()
     fetchJishaShukyaku()
 
@@ -3461,6 +3488,7 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posts' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, () => { void fetchTaskItems() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_records' }, () => { void fetchStockShootingPeriods() })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -6391,7 +6419,39 @@ function App() {
           const firstDay = new Date(calYear, calMonth - 1, 1)
           const lastDay = new Date(calYear, calMonth, 0)
           const today2 = new Date().toISOString().split('T')[0]
+          type StockShootingBar = {
+            id: string
+            start: string
+            end: string
+            count: number
+            records: StockShootingPeriod[]
+          }
           type CalCell = { day: number; date: string; isOtherMonth: boolean; isToday: boolean; stocks: StockRecord[] }
+          const shootingBars = stockShootingPeriods
+            .map((record) => {
+              const start = record.shooting_start_date || ''
+              const end = record.shooting_end_date || ''
+              return {
+                id: record.id,
+                start: start <= end ? start : end,
+                end: start <= end ? end : start,
+                count: 1,
+                records: [record],
+              } as StockShootingBar
+            })
+            .filter((period) => period.start && period.end)
+            .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end))
+            .reduce<StockShootingBar[]>((groups, period) => {
+              const latest = groups[groups.length - 1]
+              if (latest && period.start <= latest.end) {
+                latest.end = latest.end > period.end ? latest.end : period.end
+                latest.count += period.count
+                latest.records.push(...period.records)
+                return groups
+              }
+              groups.push({ ...period, records: [...period.records] })
+              return groups
+            }, [])
           const cells: CalCell[] = []
           for (let i = 0; i < firstDay.getDay(); i++) {
             const d = new Date(calYear, calMonth - 2, new Date(calYear, calMonth - 1, 0).getDate() - firstDay.getDay() + i + 1)
@@ -6425,6 +6485,9 @@ function App() {
                       const attendanceBadges = cell.date
                         ? (stockAttendanceMap[cell.date] || []).filter((badge) => badge !== '新' || stockHonmachiDateMap[cell.date])
                         : []
+                      const cellShootingBars = cell.date
+                        ? shootingBars.filter((period) => period.start <= cell.date && period.end >= cell.date)
+                        : []
                       return (
                         <div key={i} className={`cal-cell${cell.isOtherMonth ? ' other-month' : ''}${cell.isToday ? ' today' : ''}`}>
                           <div className="cal-cell-top">
@@ -6444,6 +6507,31 @@ function App() {
                               </div>
                             )}
                           </div>
+                          {cellShootingBars.length > 0 && (
+                            <div className="stock-shooting-bars">
+                              {cellShootingBars.map((period) => {
+                                const isStart = cell.date === period.start
+                                const isEnd = cell.date === period.end
+                                const monthFirstDate = `${calYear}-${String(calMonth).padStart(2, '0')}-01`
+                                const showLabel = isStart || (cell.date === monthFirstDate && period.start < cell.date)
+                                const label = period.count > 1
+                                  ? `この期間で${period.count}件`
+                                  : period.records[0]?.property_name || '撮影予定 1件'
+                                const title = period.records
+                                  .map((record) => `${record.property_name || '物件名未入力'}${record.room_number ? ` ${record.room_number}` : ''}`)
+                                  .join(' / ')
+                                return (
+                                  <div
+                                    key={period.id}
+                                    className={`stock-shooting-bar${isStart ? ' is-start' : ''}${isEnd ? ' is-end' : ''}${isStart && isEnd ? ' is-single' : ''}`}
+                                    title={`${period.start} ～ ${period.end}: ${title}`}
+                                  >
+                                    {showLabel && <span>{label}</span>}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                           {cell.stocks.map(s => {
                             const done = s.achieved_count >= s.required_count
                             return (
