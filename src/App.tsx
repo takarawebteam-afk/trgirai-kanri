@@ -542,6 +542,7 @@ const hankyoInquiryTypes = ['物件問合', 'アンケート', '来店予約', '
 const hankyoContactMethods = ['LINE', 'メール', 'DM', 'コメント', '電話']
 const hankyoMoveInTimings = ['2週間以内', '1ヶ月以内', '2ヶ月以内', '3ヶ月以内', '4ヶ月以内', '時期先', '良いのがあれば', '時期未定', '不明']
 const hankyoStores = ['対象外', '店舗誘導済', '大阪店', '京橋店', '放出店', '淡路店', '長瀬店', '西北店', '枚方店', '八尾店', '塚口店', 'JR西宮店', '寝屋川店', '守口店', '高槻店', '長田店', '布施店', '小阪店', '瓢箪山店', '深井店', 'WEB', '反響C', '重複']
+const hankyoStorePlaceholder = '選択してください'
 
 const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   date: new Date().toISOString().split('T')[0],
@@ -4510,9 +4511,17 @@ function App() {
   // 反響管理ハンドラー
   const handleHankyoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await supabase.from('hankyo').insert({ ...hankyoForm, id: crypto.randomUUID() })
+    if (!hankyoForm.store) {
+      window.alert('送客先店舗を選んでください')
+      return
+    }
+    const { error } = await supabase.from('hankyo').insert({ ...hankyoForm, id: crypto.randomUUID() })
+    if (error) {
+      window.alert(`保存できませんでした: ${error.message}`)
+      return
+    }
     setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] })
-    fetchHankyo()
+    await fetchHankyo()
     setShowModal(false)
   }
 
@@ -4535,9 +4544,21 @@ function App() {
 
   const saveHankyoInline = async () => {
     if (!hankyoInlineId) return
-    await supabase.from('hankyo').update({ ...hankyoInlineForm, updated_at: new Date().toISOString() }).eq('id', hankyoInlineId)
+    if (!hankyoInlineForm.store) {
+      window.alert('送客先店舗を選んでください')
+      return
+    }
+    const updateData = { ...hankyoInlineForm, updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('hankyo').update(updateData).eq('id', hankyoInlineId)
+    if (error) {
+      window.alert(`保存できませんでした: ${error.message}`)
+      return
+    }
+    setHankyoRecords((records) => records.map((record) => (
+      record.id === hankyoInlineId ? { ...record, ...updateData } : record
+    )))
     setHankyoInlineId(null)
-    fetchHankyo()
+    await fetchHankyo()
   }
 
   const duplicateHankyo = (r: HankyoRecord) => {
@@ -6098,13 +6119,13 @@ function App() {
                             <div className="row-actions">
                               {isEditing ? (
                                 <>
-                                  <button className="primary" onClick={saveHankyoInline}>保存</button>
-                                  <button className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
+                                  <button type="button" className="primary" onClick={saveHankyoInline}>保存</button>
+                                  <button type="button" className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
                                 </>
                               ) : (
                                 <>
-                                  <button className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
-                                  <button className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
+                                  <button type="button" className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
+                                  <button type="button" className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
                                 </>
                               )}
                             </div>
@@ -6164,8 +6185,8 @@ function App() {
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
-                              ? <select className="inline-select" value={f.store} onChange={(e) => setHankyoInlineForm({ ...f, store: e.target.value })}>{hankyoStores.map((s) => <option key={s}>{s}</option>)}</select>
-                              : r.store}
+                              ? <select className="inline-select" value={f.store} onChange={(e) => setHankyoInlineForm({ ...f, store: e.target.value })}><option value="">{hankyoStorePlaceholder}</option>{hankyoStores.map((s) => <option key={s}>{s}</option>)}</select>
+                              : r.store || '未選択'}
                           </td>
                           <td onClick={(e) => isEditing && e.stopPropagation()}>
                             {isEditing
@@ -7579,8 +7600,8 @@ function App() {
                   </select>
                 </label>
                 <label className="form-label">送客先店舗
-                  <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })}>
-                    <option value="">選択してください</option>
+                  <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })} required>
+                    <option value="">{hankyoStorePlaceholder}</option>
                     {hankyoStores.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </label>
