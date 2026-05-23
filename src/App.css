@@ -5192,16 +5192,16 @@ button.secondary.small {
 
 .sns-property-table th.sns-col-check,
 .sns-property-table td.sns-col-check {
-  width: 116px;
-  min-width: 116px;
-  max-width: 116px;
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
 }
 
 .sns-property-header-cell {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: center;
+  gap: 0;
 }
 
 .sns-property-header-edit-button {

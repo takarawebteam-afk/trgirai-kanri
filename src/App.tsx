@@ -1174,7 +1174,6 @@ function SnsPropertyOptionEditorModal({
 
 function SnsPropertyHeader({
   title,
-  onEdit,
 }: {
   title: string
   onEdit?: () => void
@@ -1182,17 +1181,6 @@ function SnsPropertyHeader({
   return (
     <div className="sns-property-header-cell">
       <span>{title}</span>
-      {onEdit && (
-        <button
-          type="button"
-          className="sns-property-header-edit-button"
-          title={`${title}の候補を編集`}
-          aria-label={`${title}の候補を編集`}
-          onClick={onEdit}
-        >
-          編集
-        </button>
-      )}
     </div>
   )
 }
