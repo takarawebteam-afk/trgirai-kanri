@@ -17,6 +17,8 @@ interface ProductionRecord {
   created_at?: string
   status: ProductionStatus
   material_saved: string
+  shooting_start_date: string
+  shooting_end_date: string
   scheduled_post_date: string
   aos_registered: string
   media: string
@@ -265,8 +267,24 @@ function formatRentValue(value: string) {
   return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
+type ProgressDateField =
+  | 'material_saved'
+  | 'shooting_date'
+  | 'shooting_start_date'
+  | 'shooting_end_date'
+  | 'scheduled_post_date'
+
+function isProgressDateField(field: keyof ProductionRecord | 'shooting_date'): field is ProgressDateField {
+  return field === 'material_saved'
+    || field === 'shooting_date'
+    || field === 'shooting_start_date'
+    || field === 'shooting_end_date'
+    || field === 'scheduled_post_date'
+}
+
 function normalizeProgressFieldValue(field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
   if (typeof value !== 'string') return value
+  if (isProgressDateField(field)) return value || null
   if (field === 'rent') return formatRentValue(value)
   return value
 }
@@ -612,6 +630,8 @@ const FORM_TABS: { key: FormTabKey; label: string }[] = [
 const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
   status: '撮影済',
   material_saved: '',
+  shooting_start_date: '',
+  shooting_end_date: '',
   scheduled_post_date: '',
   aos_registered: INITIAL_SELECT_OPTIONS.register_aos[0],
   media: 'Karilun｜TikTok',
@@ -759,6 +779,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           ...record,
           media: getMediaDisplayName(sanitizeSelectText(record.media, defaultForm.media)),
           material_saved: sanitizeSelectText(record.shooting_date),
+          shooting_start_date: sanitizeSelectText(record.shooting_start_date),
+          shooting_end_date: sanitizeSelectText(record.shooting_end_date),
           scheduled_post_date: sanitizeSelectText(record.scheduled_post_date),
           post_type: sanitizeSelectText(record.post_type),
           property_number: sanitizeSelectText(record.property_number),
@@ -1197,6 +1219,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         id,
         media,
         shooting_date: null,
+        shooting_start_date: null,
+        shooting_end_date: null,
         scheduled_post_date: null,
         [dbField]: normalizedValue || null,
       }
@@ -1225,10 +1249,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
 
     const currentRecord = records.find((record) => record.id === id) || null
+    const localValue = normalizedValue ?? ''
     const updatedRecord: ProductionRecord | null = currentRecord
       ? {
         ...currentRecord,
-        ...(field === 'material_saved' ? { material_saved: String(normalizedValue) } : { [field]: normalizedValue }),
+        ...(field === 'material_saved' || field === 'shooting_date'
+          ? { material_saved: String(localValue) }
+          : { [field]: localValue }),
       }
       : null
 
@@ -1379,6 +1406,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       post_text: normalizeProgressFieldValue('post_text', form.post_text),
       media: getMediaDisplayName(form.media),
       shooting_date: form.material_saved || null,
+      shooting_start_date: form.shooting_start_date || null,
+      shooting_end_date: form.shooting_end_date || null,
       scheduled_post_date: form.scheduled_post_date || null,
     }
 
@@ -1489,7 +1518,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
   }
 
-  function renderDateCell(record: ProductionRecord, field: 'material_saved' | 'scheduled_post_date', delayed = false) {
+  function renderDateCell(
+    record: ProductionRecord,
+    field: 'material_saved' | 'shooting_start_date' | 'shooting_end_date' | 'scheduled_post_date',
+    delayed = false,
+  ) {
     return (
       <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
         <input
@@ -1497,6 +1530,30 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           type="date"
           value={record[field] || ''}
           onChange={(e) => updateField(record.id, field, e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    )
+  }
+
+  function renderShootingPeriodCell(record: ProductionRecord) {
+    return (
+      <div className="progress-date-range-cell" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+        <input
+          className="progress-cell-input is-date"
+          type="date"
+          title="撮影開始日"
+          value={record.shooting_start_date || ''}
+          onChange={(e) => updateField(record.id, 'shooting_start_date', e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <span className="progress-date-range-separator">～</span>
+        <input
+          className="progress-cell-input is-date"
+          type="date"
+          title="撮影終了日"
+          value={record.shooting_end_date || ''}
+          onChange={(e) => updateField(record.id, 'shooting_end_date', e.target.value)}
           onClick={(e) => e.stopPropagation()}
         />
       </div>
@@ -1680,6 +1737,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <table className="progress-table progress-table-tiktok">
         <colgroup>
           <col style={{ width: 135 }} />
+          <col style={{ width: 268 }} />
           <col style={{ width: 135 }} />
           <col style={{ width: 102 }} />
           <col style={{ width: 112 }} />
@@ -1713,6 +1771,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <thead>
           <tr>
             <th className="ptcol-group-1">素材保存</th>
+            <th className="ptcol-group-1">撮影予定期間</th>
             <th className="ptcol-group-1">投稿予定日</th>
             <th className="ptcol-group-2">WP登録</th>
             <th className="ptcol-group-2">AOS登録</th>
@@ -1748,6 +1807,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           {mediaRecords.map((record) => (
             <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
+              <td className="ptcell-group-1">{renderShootingPeriodCell(record)}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
               <td className="ptcell-group-2">{renderRegisterCell(record, 'wp_registered')}</td>
               <td className="ptcell-group-2">{renderRegisterCell(record, 'aos_registered')}</td>
@@ -2136,11 +2196,21 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               ))}
             </select>
           </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isTikTokMedia(form.media) ? '1fr 2fr 1fr' : '1fr 1fr', gap: 12 }}>
             <label className="form-label">
               素材保存
               <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
             </label>
+            {isTikTokMedia(form.media) && (
+              <label className="form-label">
+                撮影予定期間
+                <div className="progress-form-date-range">
+                  <input type="date" title="撮影開始日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value })} />
+                  <span>～</span>
+                  <input type="date" title="撮影終了日" value={form.shooting_end_date} onChange={(e) => setForm({ ...form, shooting_end_date: e.target.value })} />
+                </div>
+              </label>
+            )}
             <label className="form-label">
               投稿予定日
               <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />
@@ -2634,6 +2704,16 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   {isRecruitmentMedia(form.media) ? '撮影予定日' : '素材保存日'}
                   <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
                 </label>
+                {isTikTokMedia(form.media) && (
+                  <label className="form-label">
+                    撮影予定期間
+                    <div className="progress-form-date-range">
+                      <input type="date" title="撮影開始日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value })} />
+                      <span>～</span>
+                      <input type="date" title="撮影終了日" value={form.shooting_end_date} onChange={(e) => setForm({ ...form, shooting_end_date: e.target.value })} />
+                    </div>
+                  </label>
+                )}
                 <label className="form-label">
                   投稿予定日
                   <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />

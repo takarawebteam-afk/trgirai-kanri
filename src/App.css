@@ -3411,9 +3411,34 @@ button.secondary.small {
   text-align: center;
 }
 
-.progress-table-tiktok th:nth-child(5),
-.progress-table-tiktok td:nth-child(5) {
+.progress-table-tiktok th:nth-child(6),
+.progress-table-tiktok td:nth-child(6) {
   text-align: center;
+}
+
+.progress-date-range-cell,
+.progress-form-date-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.progress-date-range-cell .progress-cell-input.is-date {
+  min-width: 0;
+  width: 100%;
+}
+
+.progress-date-range-separator,
+.progress-form-date-range span {
+  color: var(--gray-400);
+  font-weight: 700;
+  text-align: center;
+}
+
+.progress-form-date-range input {
+  min-width: 0;
+  width: 100%;
 }
 
 .progress-table-simple th:nth-child(3),
@@ -3627,7 +3652,7 @@ button.secondary.small {
 .ptcell-group-4 { background: #faf8ff; }
 .ptcell-group-5 { background: #fff8f8; }
 
-.progress-table-tiktok :is(th, td):nth-child(-n + 7),
+.progress-table-tiktok :is(th, td):nth-child(-n + 8),
 .progress-table-instagram :is(th, td):nth-child(-n + 7) {
   position: sticky;
   z-index: 4;
@@ -3638,7 +3663,7 @@ button.secondary.small {
   z-index: 4;
 }
 
-.progress-table-tiktok th:nth-child(-n + 7),
+.progress-table-tiktok th:nth-child(-n + 8),
 .progress-table-instagram th:nth-child(-n + 7) {
   z-index: 6;
 }
@@ -3648,44 +3673,50 @@ button.secondary.small {
 }
 
 .progress-table-tiktok :is(th, td):nth-child(1),
-.progress-table-tiktok :is(th, td):nth-child(2) {
+.progress-table-tiktok :is(th, td):nth-child(3) {
   width: 135px;
   min-width: 135px;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(3) {
+.progress-table-tiktok :is(th, td):nth-child(2) {
+  width: 268px;
+  min-width: 268px;
+}
+
+.progress-table-tiktok :is(th, td):nth-child(4) {
   width: 102px;
   min-width: 102px;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(4) {
+.progress-table-tiktok :is(th, td):nth-child(5) {
   width: 112px;
   min-width: 112px;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(5) {
+.progress-table-tiktok :is(th, td):nth-child(6) {
   width: 64px;
   min-width: 64px;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(6) {
+.progress-table-tiktok :is(th, td):nth-child(7) {
   width: 200px;
   min-width: 200px;
 }
 
-.progress-table-tiktok :is(th, td):nth-child(7) {
+.progress-table-tiktok :is(th, td):nth-child(8) {
   width: 74px;
   min-width: 74px;
 }
 
 .progress-table-tiktok :is(th, td):nth-child(1) { left: 0px; }
 .progress-table-tiktok :is(th, td):nth-child(2) { left: 135px; }
-.progress-table-tiktok :is(th, td):nth-child(3) { left: 270px; }
-.progress-table-tiktok :is(th, td):nth-child(4) { left: 372px; }
-.progress-table-tiktok :is(th, td):nth-child(5) { left: 484px; }
-.progress-table-tiktok :is(th, td):nth-child(6) { left: 548px; }
-.progress-table-tiktok :is(th, td):nth-child(7) {
-  left: 748px;
+.progress-table-tiktok :is(th, td):nth-child(3) { left: 403px; }
+.progress-table-tiktok :is(th, td):nth-child(4) { left: 538px; }
+.progress-table-tiktok :is(th, td):nth-child(5) { left: 640px; }
+.progress-table-tiktok :is(th, td):nth-child(6) { left: 752px; }
+.progress-table-tiktok :is(th, td):nth-child(7) { left: 816px; }
+.progress-table-tiktok :is(th, td):nth-child(8) {
+  left: 1016px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
