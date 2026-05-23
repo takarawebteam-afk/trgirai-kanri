@@ -4741,80 +4741,82 @@ function App() {
           <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
         </div>
       </div>
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">WEB Strategic Team</p>
-          <h1>WEB戦略チーム管理表</h1>
-          <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
-        </div>
-        <div className="header-panel header-panel-auth">
+      <div className="app-sticky-header">
+        <header className="app-header">
+          <div>
+            <p className="eyebrow">WEB Strategic Team</p>
+            <h1>WEB戦略チーム管理表</h1>
+            <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
+          </div>
+          <div className="header-panel header-panel-auth">
+            <button
+              type="button"
+              className="nav-collapse-button"
+              aria-expanded={!isPrimaryNavCollapsed}
+              aria-controls="primary-nav"
+              onClick={() => setIsPrimaryNavCollapsed((current) => !current)}
+            >
+              {isPrimaryNavCollapsed ? 'タブ一覧を表示' : 'タブ一覧を非表示'}
+            </button>
+            <label>
+              年
+              <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>{year}年</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              月
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
+                <option value="all">全年月</option>
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <option key={month} value={String(month)}>{month}月</option>
+                ))}
+              </select>
+            </label>
+            <div className="auth-user-box">
+              <span className="auth-user-email">{currentUserEmail}</span>
+              {isMasterUser && <span className="auth-master-badge">マスター</span>}
+              <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
+            </div>
+          </div>
+        </header>
+
+        <div className="nav-control-row">
           <button
             type="button"
-            className="nav-collapse-button"
-            aria-expanded={!isPrimaryNavCollapsed}
+            className="mobile-nav-toggle"
+            aria-expanded={isMobileNavOpen}
             aria-controls="primary-nav"
-            onClick={() => setIsPrimaryNavCollapsed((current) => !current)}
+            onClick={() => setIsMobileNavOpen((current) => !current)}
           >
-            {isPrimaryNavCollapsed ? 'タブ一覧を表示' : 'タブ一覧を非表示'}
+            <span>メニュー</span>
+            <strong>{TAB_ITEMS.find((item) => item.key === activePage)?.label ?? 'ページ'}</strong>
           </button>
-          <label>
-            年
-            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>{year}年</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            月
-            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
-              <option value="all">全年月</option>
-              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                <option key={month} value={String(month)}>{month}月</option>
-              ))}
-            </select>
-          </label>
-          <div className="auth-user-box">
-            <span className="auth-user-email">{currentUserEmail}</span>
-            {isMasterUser && <span className="auth-master-badge">マスター</span>}
-            <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
-          </div>
         </div>
-      </header>
 
-      <div className="nav-control-row">
-        <button
-          type="button"
-          className="mobile-nav-toggle"
-          aria-expanded={isMobileNavOpen}
-          aria-controls="primary-nav"
-          onClick={() => setIsMobileNavOpen((current) => !current)}
+        <nav
+          id="primary-nav"
+          className={`tab-nav${isMobileNavOpen ? ' mobile-open' : ''}${isPrimaryNavCollapsed ? ' is-collapsed' : ''}`}
+          aria-label="主要メニュー"
+          aria-hidden={isPrimaryNavCollapsed}
         >
-          <span>メニュー</span>
-          <strong>{TAB_ITEMS.find((item) => item.key === activePage)?.label ?? 'ページ'}</strong>
-        </button>
+          {TAB_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              className={activePage === item.key ? 'active' : ''}
+              onClick={() => {
+                setActivePage(item.key)
+                setShowModal(false)
+                setIsMobileNavOpen(false)
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
       </div>
-
-      <nav
-        id="primary-nav"
-        className={`tab-nav${isMobileNavOpen ? ' mobile-open' : ''}${isPrimaryNavCollapsed ? ' is-collapsed' : ''}`}
-        aria-label="主要メニュー"
-        aria-hidden={isPrimaryNavCollapsed}
-      >
-        {TAB_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            className={activePage === item.key ? 'active' : ''}
-            onClick={() => {
-              setActivePage(item.key)
-              setShowModal(false)
-              setIsMobileNavOpen(false)
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
 
       <main className="page-content">
         {activePage === 'dashboard' && (

@@ -43,6 +43,13 @@
 }
 
 /* ===== ヘッダー ===== */
+.app-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #f8f9fa;
+}
+
 .app-header {
   display: flex;
   justify-content: space-between;
