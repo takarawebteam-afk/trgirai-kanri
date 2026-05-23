@@ -72,6 +72,13 @@ type ProgressTextCellInputProps = {
   onSave: (value: string) => boolean | void | Promise<boolean | void>
 }
 
+type ProgressDateCellInputProps = {
+  value: string
+  delayed?: boolean
+  title?: string
+  onChange: (value: string) => void
+}
+
 type FormTabKey = 'basic' | 'production' | 'check' | 'finish'
 type ProcessField =
   | 'floor_plan_order'
@@ -164,6 +171,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
 }
 
 const SELECT_OPTION_STORAGE_PREFIX = 'progress_select_options:'
+const PROGRESS_DATE_COLUMN_WIDTH = 84
 /*
 const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   process: '工程',
@@ -287,6 +295,13 @@ function normalizeProgressFieldValue(field: keyof ProductionRecord | 'shooting_d
   if (isProgressDateField(field)) return value || null
   if (field === 'rent') return formatRentValue(value)
   return value
+}
+
+function formatProgressMonthDay(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return value
+
+  return `${Number(match[2])}/${Number(match[3])}`
 }
 
 function getProgressTextInputProps(field: keyof ProductionRecord) {
@@ -525,6 +540,54 @@ function ProgressTextCellInput({
         onClick={(e) => e.stopPropagation()}
       />
       )}
+    </div>
+  )
+}
+
+function ProgressDateCellInput({
+  value,
+  delayed = false,
+  title,
+  onChange,
+}: ProgressDateCellInputProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  function openPicker() {
+    const input = inputRef.current
+    if (!input) return
+
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+
+    input.focus()
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`progress-date-display${delayed ? ' is-delayed' : ''}`}
+      title={title || value || ''}
+      onClick={openPicker}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          openPicker()
+        }
+      }}
+    >
+      <span>{value ? formatProgressMonthDay(value) : '月/日'}</span>
+      <input
+        ref={inputRef}
+        className="progress-date-native-input"
+        type="date"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+        tabIndex={-1}
+      />
     </div>
   )
 }
@@ -1525,12 +1588,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   ) {
     return (
       <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-        <input
-          className={`progress-cell-input is-date${delayed ? ' is-delayed' : ''}`}
-          type="date"
+        <ProgressDateCellInput
           value={record[field] || ''}
-          onChange={(e) => updateField(record.id, field, e.target.value)}
-          onClick={(e) => e.stopPropagation()}
+          delayed={delayed}
+          onChange={(value) => updateField(record.id, field, value)}
         />
       </div>
     )
@@ -1539,13 +1600,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   function renderShootingPeriodCell(record: ProductionRecord) {
     return (
       <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-        <input
-          className="progress-cell-input is-date"
-          type="date"
+        <ProgressDateCellInput
           title="撮影期日"
           value={record.shooting_start_date || ''}
-          onChange={(e) => updateField(record.id, 'shooting_start_date', e.target.value)}
-          onClick={(e) => e.stopPropagation()}
+          onChange={(value) => updateField(record.id, 'shooting_start_date', value)}
         />
       </div>
     )
@@ -1727,9 +1785,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <table className="progress-table progress-table-tiktok">
         <colgroup>
-          <col style={{ width: 135 }} />
-          <col style={{ width: 135 }} />
-          <col style={{ width: 135 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 102 }} />
           <col style={{ width: 112 }} />
           <col style={{ width: 64 }} />
@@ -1839,9 +1897,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <table className="progress-table progress-table-instagram">
         <colgroup>
-          <col style={{ width: 135 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 92 }} />
-          <col style={{ width: 130 }} />
+          <col style={{ width: 84 }} />
           <col style={{ width: 74 }} />
           <col style={{ width: 64 }} />
           <col style={{ width: 200 }} />
@@ -1928,7 +1986,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <table className="progress-table progress-table-keihan">
         <colgroup>
-          <col style={{ width: 135 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
           <col style={{ width: 200 }} />
           <col style={{ width: 74 }} />
@@ -1991,9 +2049,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <table className="progress-table progress-table-recruitment">
         <colgroup>
-          <col style={{ width: 135 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 42 }} />
-          <col style={{ width: 135 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 112 }} />
           <col style={{ width: 220 }} />
           <col style={{ width: 296 }} />
@@ -2066,8 +2124,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <table className="progress-table progress-table-simple">
         <colgroup>
-          <col style={{ width: 135 }} />
-          <col style={{ width: 135 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 64 }} />
           <col style={{ width: 200 }} />
           <col style={{ width: 74 }} />
