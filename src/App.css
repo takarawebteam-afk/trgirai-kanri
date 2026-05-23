@@ -3046,7 +3046,7 @@ button.secondary.small {
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
-  padding-left: 0;
+  padding-left: 36px;
   padding-right: 12px;
   box-sizing: border-box;
 }
@@ -3108,6 +3108,7 @@ button.secondary.small {
 .progress-table th:first-child,
 .progress-table td:first-child {
   border-left: 1px solid #dbe3ef;
+  box-shadow: -36px 0 0 #fff;
 }
 
 .progress-table tr:first-child th {
