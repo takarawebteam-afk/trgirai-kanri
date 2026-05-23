@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
-type ProductionStatus = '撮影済' | '制作中' | 'チェック中' | '完了'
+type ProductionStatus = '' | '撮影済' | '制作中' | 'チェック中' | '完了'
 type ProcessStatus = string
 type StorePromoteTarget = 'keihan-karilun' | 'nishinomiya-karilun' | 'nagase' | 'nishikita' | 'yao'
 type StoreProgressTableName =
@@ -102,6 +102,10 @@ type SelectOptionGroup =
   | 'audio'
   | 'instagram_post_type'
   | 'recruitment_post_type'
+  | 'recruitment_material_saved'
+  | 'recruitment_shooting'
+  | 'recruitment_complete'
+  | 'recruitment_edit_complete'
   | 'register'
   | 'register_wp'
   | 'register_aos'
@@ -135,6 +139,10 @@ const REGISTER_OPTIONS = [
 
 const INSTAGRAM_POST_TYPE_OPTIONS = ['動画', '画像'] as const
 const RECRUITMENT_POST_TYPE_OPTIONS = ['リール', 'フィード'] as const
+const RECRUITMENT_MATERIAL_SAVED_OPTIONS = ['未完了', '完了'] as const
+const RECRUITMENT_SHOOTING_OPTIONS = ['撮影済'] as const
+const RECRUITMENT_COMPLETE_OPTIONS = ['完了'] as const
+const RECRUITMENT_EDIT_COMPLETE_OPTIONS = ['編集中', '完了'] as const
 const ACQUISITION_SOURCE_OPTIONS = ['SUUMO', 'HOME’S', 'at home', '自社', 'その他'] as const
 const DEFAULT_PROCESS_OPTIONS: string[] = [...PROCESS_STATUSES]
 void ACQUISITION_SOURCE_OPTIONS
@@ -156,6 +164,10 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   register: ['未登録', '登録済'],
   instagram_post_type: [...INSTAGRAM_POST_TYPE_OPTIONS],
   recruitment_post_type: [...RECRUITMENT_POST_TYPE_OPTIONS],
+  recruitment_material_saved: [...RECRUITMENT_MATERIAL_SAVED_OPTIONS],
+  recruitment_shooting: [...RECRUITMENT_SHOOTING_OPTIONS],
+  recruitment_complete: [...RECRUITMENT_COMPLETE_OPTIONS],
+  recruitment_edit_complete: [...RECRUITMENT_EDIT_COMPLETE_OPTIONS],
   process_floor_plan_order: [...DEFAULT_PROCESS_OPTIONS],
   process_material_processing: [...DEFAULT_PROCESS_OPTIONS],
   process_floor_plan_insert: [...DEFAULT_PROCESS_OPTIONS],
@@ -197,6 +209,10 @@ const SELECT_OPTION_GROUP_LABELS: Partial<Record<SelectOptionGroup, string>> = {
   register_youtube: 'YouTube予約',
   acquisition_source: '資料取得先',
   post_text: '投稿文',
+  recruitment_material_saved: '素材保存',
+  recruitment_shooting: '撮影',
+  recruitment_complete: '完了',
+  recruitment_edit_complete: '編集状況',
 }
 const SELECT_OPTION_FIELD_LABELS: Partial<Record<keyof ProductionRecord, string>> = {
   floor_plan_order: '図面準備',
@@ -234,7 +250,17 @@ function getRegisterLabel(value: string, options: string[]) {
   void options
   const normalizedValue = String(value || '').trim()
   if (normalizedValue) return normalizedValue
-  return getDefaultRegisterLabel()
+  return ''
+}
+
+function getSelectDisplayValue(value: string) {
+  const normalizedValue = String(value || '').trim()
+  if (['未設定', '未登録', '未着手'].includes(normalizedValue)) return ''
+  return normalizedValue
+}
+
+function getTextDisplayValue(value: string) {
+  return String(value || '').trim() === '未登録' ? '' : String(value || '')
 }
 
 function getRegisterGroupByField(field: 'wp_registered' | 'aos_registered' | 'youtube_reserved') {
@@ -556,12 +582,16 @@ function ProgressDateCellInput({
     const input = inputRef.current
     if (!input) return
 
-    if (typeof input.showPicker === 'function') {
-      input.showPicker()
-      return
-    }
+    input.focus({ preventScroll: true })
 
-    input.focus()
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker()
+        return
+      } catch {
+        // ブラウザによっては、日付選択を開けない場面があるのでフォーカスだけ残す。
+      }
+    }
   }
 
   return (
@@ -570,6 +600,7 @@ function ProgressDateCellInput({
       tabIndex={0}
       className={`progress-date-display${delayed ? ' is-delayed' : ''}`}
       title={title || value || ''}
+      aria-label={title || '日付'}
       onClick={openPicker}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -585,7 +616,10 @@ function ProgressDateCellInput({
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          openPicker()
+        }}
         tabIndex={-1}
       />
     </div>
@@ -691,12 +725,12 @@ const FORM_TABS: { key: FormTabKey; label: string }[] = [
 ]
 
 const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
-  status: '撮影済',
+  status: '',
   material_saved: '',
   shooting_start_date: '',
   shooting_end_date: '',
   scheduled_post_date: '',
-  aos_registered: INITIAL_SELECT_OPTIONS.register_aos[0],
+  aos_registered: '',
   media: 'Karilun｜TikTok',
   post_type: '',
   property_number: '',
@@ -711,23 +745,23 @@ const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
   area: '',
   nearest_station: '',
   assignee: '',
-  device: '未設定',
+  device: '',
   property_url: '',
-  wp_registered: INITIAL_SELECT_OPTIONS.register_wp[0],
-  youtube_reserved: INITIAL_SELECT_OPTIONS.register_youtube[0],
+  wp_registered: '',
+  youtube_reserved: '',
   post_completed: false,
-  material_processing: '未着手',
-  text_overlay: '未着手',
-  video_duration: '未設定',
-  afureko: '未着手',
-  floor_plan_order: '未着手',
-  floor_plan_insert: '未着手',
-  floor_plan_check: '未着手',
+  material_processing: '',
+  text_overlay: '',
+  video_duration: '',
+  afureko: '',
+  floor_plan_order: '',
+  floor_plan_insert: '',
+  floor_plan_check: '',
   countermeasure: '',
   memo: '',
-  final_save: '未着手',
+  final_save: '',
   post_text: '',
-  audio_source: '未登録',
+  audio_source: '',
 }
 
 function normalizeMediaName(media: string) {
@@ -776,7 +810,7 @@ void toRegisteredLabel
 
 function sanitizeProcessStatus(value: unknown): ProcessStatus {
   if (typeof value === 'string' && value.trim()) return value.trim()
-  return PROCESS_STATUSES[0]
+  return ''
 }
 
 function sanitizeSelectText(value: unknown, fallback = '') {
@@ -786,7 +820,7 @@ function sanitizeSelectText(value: unknown, fallback = '') {
 function sanitizeRegisterText(value: unknown, options = INITIAL_SELECT_OPTIONS.register) {
   if (typeof value === 'string' && value.trim()) return value.trim()
   if (value === true) return options[1] || options[0] || ''
-  return options[0] || ''
+  return ''
 }
 
 function isCustomRegisterSelected(value: string, options: string[]) {
@@ -1587,7 +1621,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     delayed = false,
   ) {
     return (
-      <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="progress-cell-hitbox progress-date-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
         <ProgressDateCellInput
           value={record[field] || ''}
           delayed={delayed}
@@ -1599,7 +1633,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderShootingPeriodCell(record: ProductionRecord) {
     return (
-      <div className="progress-cell-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="progress-cell-hitbox progress-date-hitbox" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
         <ProgressDateCellInput
           title="撮影期日"
           value={record.shooting_start_date || ''}
@@ -1618,7 +1652,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <ProgressTextCellInput
         className={className}
-        value={String(record[field] || '')}
+        value={getTextDisplayValue(String(record[field] || ''))}
         placeholder={placeholder}
         {...getProgressTextInputProps(field)}
         onSave={(value) => updateField(record.id, field, value)}
@@ -1634,6 +1668,15 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return renderSelectCell(record, 'post_type', 'recruitment_post_type', '投稿種類', '', undefined, false, false)
   }
 
+  function renderRecruitmentSelectCell(
+    record: ProductionRecord,
+    field: keyof ProductionRecord,
+    group: SelectOptionGroup,
+    title: string,
+  ) {
+    return renderSelectCell(record, field, group, title, '', undefined, false, false)
+  }
+
   function renderSelectCell(
     record: ProductionRecord,
     field: keyof ProductionRecord,
@@ -1642,18 +1685,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     extraClassName = '',
     style?: React.CSSProperties,
     showEditButton = true,
-    useFirstOptionAsFallback = true,
+    useFirstOptionAsFallback = false,
   ) {
     const effectiveGroup = group === 'register'
       ? getRegisterGroupByField(field as 'wp_registered' | 'aos_registered' | 'youtube_reserved')
       : group
     const options = selectOptions[effectiveGroup]
+    const rawValue = String(record[field] || '')
     const value =
       effectiveGroup.startsWith('register')
-        ? getRegisterLabel(String(record[field] || ''), options)
+        ? getSelectDisplayValue(getRegisterLabel(rawValue, options))
         : useFirstOptionAsFallback
-          ? String(record[field] || options[0] || '')
-          : String(record[field] || '')
+          ? getSelectDisplayValue(rawValue || options[0] || '')
+          : getSelectDisplayValue(rawValue)
     const isOpen = selectMenu?.id === record.id && selectMenu.field === field
 
     return (
@@ -2049,25 +2093,30 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     return (
       <table className="progress-table progress-table-recruitment">
         <colgroup>
+          <col style={{ width: 90 }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: 72 }} />
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 42 }} />
-          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 112 }} />
           <col style={{ width: 220 }} />
           <col style={{ width: 296 }} />
           <col style={{ width: 90 }} />
           <col style={{ width: 88 }} />
           <col style={{ width: 88 }} />
-          <col style={{ width: PROGRESS_SHARED_COLUMN_WIDTHS.postText }} />
+          <col style={{ width: 72 }} />
+          <col style={{ width: 72 }} />
           <col style={{ width: 98 }} />
           <col style={{ width: 56 }} />
           <col style={{ width: 72 }} />
         </colgroup>
         <thead>
           <tr>
+            <th className="ptcol-group-1">素材保存</th>
+            <th className="ptcol-group-1">撮影期日</th>
+            <th className="ptcol-group-1">撮影</th>
             <th className="ptcol-group-1">投稿予定日</th>
             <th className="ptcol-group-1">曜日</th>
-            <th className="ptcol-group-1">撮影予定日</th>
             <th className="ptcol-group-2">投稿種類</th>
             <th className="ptcol-group-2">タイトル</th>
             <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
@@ -2075,6 +2124,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-3">文字入れ</th>
             <th className="ptcol-group-3">仕上げ</th>
             <th className="ptcol-group-4">投稿文</th>
+            <th className="ptcol-group-4">リンク設置</th>
             <th className="ptcol-group-4">完成品保存</th>
             <th className="ptcol-group-5">完了</th>
             <th className="ptcol-group-5">削除</th>
@@ -2083,16 +2133,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <tbody>
           {mediaRecords.map((record) => (
             <tr key={record.id} className="row-hoverable">
+              <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'material_processing', 'recruitment_material_saved', '素材保存')}</td>
+              <td className="ptcell-group-1">{renderDateCell(record, 'shooting_start_date')}</td>
+              <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'status', 'recruitment_shooting', '撮影')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
               <td className="ptcell-group-1">{getWeekdayLabel(record.scheduled_post_date)}</td>
-              <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-2">{renderRecruitmentPostTypeCell(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', 'タイトル')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
-              <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
-              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
-              <td className="ptcell-group-3">{renderSelectCell(record, 'floor_plan_check', getProcessGroupByField('floor_plan_check'), '仕上げ')}</td>
-              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
+              <td className="ptcell-group-3">{renderRecruitmentSelectCell(record, 'video_duration', 'recruitment_complete', '動画尺')}</td>
+              <td className="ptcell-group-3">{renderRecruitmentSelectCell(record, 'text_overlay', 'recruitment_edit_complete', '文字入れ')}</td>
+              <td className="ptcell-group-3">{renderRecruitmentSelectCell(record, 'floor_plan_check', 'recruitment_edit_complete', '仕上げ')}</td>
+              <td className="ptcell-group-4">{renderRecruitmentSelectCell(record, 'post_text', 'recruitment_complete', '投稿文')}</td>
+              <td className="ptcell-group-4">{renderRecruitmentSelectCell(record, 'wp_registered', 'recruitment_complete', 'リンク設置')}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5">{renderDeleteCell(record)}</td>
@@ -2100,16 +2153,19 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           ))}
           {getDraftRecords(media, Math.max(0, minRows - mediaRecords.length)).map((record) => (
             <tr key={record.id} className="row-hoverable row-draft">
+              <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'material_processing', 'recruitment_material_saved', '素材保存')}</td>
+              <td className="ptcell-group-1">{renderDateCell(record, 'shooting_start_date')}</td>
+              <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'status', 'recruitment_shooting', '撮影')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date')}</td>
               <td className="ptcell-group-1">{getWeekdayLabel(record.scheduled_post_date)}</td>
-              <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-2">{renderRecruitmentPostTypeCell(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', 'タイトル')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>
-              <td className="ptcell-group-3">{renderSelectCell(record, 'video_duration', 'duration')}</td>
-              <td className="ptcell-group-3">{renderIndependentProcessCell(record, 'text_overlay')}</td>
-              <td className="ptcell-group-3">{renderSelectCell(record, 'floor_plan_check', getProcessGroupByField('floor_plan_check'), '仕上げ')}</td>
-              <td className="ptcell-group-4">{renderSelectCell(record, 'post_text', 'post_text', '投稿文', '', undefined, true, false)}</td>
+              <td className="ptcell-group-3">{renderRecruitmentSelectCell(record, 'video_duration', 'recruitment_complete', '動画尺')}</td>
+              <td className="ptcell-group-3">{renderRecruitmentSelectCell(record, 'text_overlay', 'recruitment_edit_complete', '文字入れ')}</td>
+              <td className="ptcell-group-3">{renderRecruitmentSelectCell(record, 'floor_plan_check', 'recruitment_edit_complete', '仕上げ')}</td>
+              <td className="ptcell-group-4">{renderRecruitmentSelectCell(record, 'post_text', 'recruitment_complete', '投稿文')}</td>
+              <td className="ptcell-group-4">{renderRecruitmentSelectCell(record, 'wp_registered', 'recruitment_complete', 'リンク設置')}</td>
               <td className="ptcell-group-4">{renderIndependentProcessCell(record, 'final_save')}</td>
               <td className="ptcell-group-5">{renderCheckboxCell(record, 'post_completed')}</td>
               <td className="ptcell-group-5" />
@@ -2207,8 +2263,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />
             </label>
             <label className="form-label">
-              撮影予定日
-              <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
+              撮影期日
+              <input type="date" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value, shooting_end_date: '' })} />
             </label>
           </div>
           <label className="form-label">
@@ -2746,8 +2802,14 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   </label>
                 )}
                 <label className="form-label">
-                  {isRecruitmentMedia(form.media) ? '撮影予定日' : '素材保存日'}
-                  <input type="date" value={form.material_saved} onChange={(e) => setForm({ ...form, material_saved: e.target.value })} />
+                  {isRecruitmentMedia(form.media) ? '撮影期日' : '素材保存日'}
+                  <input
+                    type="date"
+                    value={isRecruitmentMedia(form.media) ? form.shooting_start_date : form.material_saved}
+                    onChange={(e) => setForm(isRecruitmentMedia(form.media)
+                      ? { ...form, shooting_start_date: e.target.value, shooting_end_date: '' }
+                      : { ...form, material_saved: e.target.value })}
+                  />
                 </label>
                 {isTikTokMedia(form.media) && (
                   <label className="form-label">

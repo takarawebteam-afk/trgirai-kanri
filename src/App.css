@@ -3159,6 +3159,10 @@ button.secondary.small {
   box-sizing: border-box;
 }
 
+.progress-date-hitbox {
+  cursor: pointer;
+}
+
 .progress-cell-link-view {
   display: flex;
   align-items: center;
@@ -3351,8 +3355,10 @@ button.secondary.small {
 
 .progress-date-display {
   position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
-  height: 20px;
+  min-height: 28px;
   padding: 0;
   border: none;
   background: transparent;
@@ -3382,6 +3388,7 @@ button.secondary.small {
   height: 100%;
   opacity: 0;
   cursor: pointer;
+  font-size: 16px;
 }
 
 .progress-cell-input.is-delayed {
@@ -3715,7 +3722,7 @@ button.secondary.small {
   z-index: 4;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(-n + 5) {
+.progress-table-recruitment :is(th, td):nth-child(-n + 7) {
   position: sticky;
   z-index: 4;
 }
@@ -3725,7 +3732,7 @@ button.secondary.small {
   z-index: 6;
 }
 
-.progress-table-recruitment th:nth-child(-n + 5) {
+.progress-table-recruitment th:nth-child(-n + 7) {
   z-index: 6;
 }
 
@@ -3807,34 +3814,49 @@ button.secondary.small {
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(1),
-.progress-table-recruitment :is(th, td):nth-child(3) {
+.progress-table-recruitment :is(th, td):nth-child(2),
+.progress-table-recruitment :is(th, td):nth-child(4) {
   width: 84px;
   min-width: 84px;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(2) {
+.progress-table-recruitment :is(th, td):nth-child(1),
+.progress-table-recruitment :is(th, td):nth-child(9) {
+  width: 90px;
+  min-width: 90px;
+}
+
+.progress-table-recruitment :is(th, td):nth-child(3),
+.progress-table-recruitment :is(th, td):nth-child(12),
+.progress-table-recruitment :is(th, td):nth-child(13) {
+  width: 72px;
+  min-width: 72px;
+}
+
+.progress-table-recruitment :is(th, td):nth-child(5) {
   width: 42px;
   min-width: 42px;
   text-align: center;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(4) {
+.progress-table-recruitment :is(th, td):nth-child(6) {
   width: 112px;
   min-width: 112px;
 }
 
-.progress-table-recruitment :is(th, td):nth-child(5) {
+.progress-table-recruitment :is(th, td):nth-child(7) {
   width: 220px;
   min-width: 220px;
 }
 
 .progress-table-recruitment :is(th, td):nth-child(1) { left: 0px; }
-.progress-table-recruitment :is(th, td):nth-child(2) { left: 84px; }
-.progress-table-recruitment :is(th, td):nth-child(3) { left: 126px; }
-.progress-table-recruitment :is(th, td):nth-child(4) { left: 210px; }
-.progress-table-recruitment :is(th, td):nth-child(5) {
-  left: 322px;
+.progress-table-recruitment :is(th, td):nth-child(2) { left: 90px; }
+.progress-table-recruitment :is(th, td):nth-child(3) { left: 174px; }
+.progress-table-recruitment :is(th, td):nth-child(4) { left: 246px; }
+.progress-table-recruitment :is(th, td):nth-child(5) { left: 330px; }
+.progress-table-recruitment :is(th, td):nth-child(6) { left: 372px; }
+.progress-table-recruitment :is(th, td):nth-child(7) {
+  left: 484px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
