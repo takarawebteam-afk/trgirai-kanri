@@ -3,9 +3,7 @@
   line-height: 1.5;
   font-weight: 500;
   color: #111827;
-  background:
-    radial-gradient(circle at top, rgba(20, 184, 166, 0.12), transparent 28%),
-    linear-gradient(180deg, #f8fafc, #eef2ff 45%, #fff7ed);
+  background: #f8f9fa;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,18 +13,7 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; }
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 90%);
-  pointer-events: none;
-}
-#root { max-width: 1440px; margin: 0 auto; padding: 28px; }
+#root { max-width: none; margin: 0; padding: 0; }
 h1, h2, p { margin-top: 0; }
 button, input, select, textarea { font: inherit; }
 
@@ -88,4 +75,4 @@ button, input, select, textarea { font: inherit; }
   background: #1550b8;
 }
 
-@media (max-width: 720px) { #root { padding: 16px; } }
+@media (max-width: 720px) { #root { padding: 0; } }
