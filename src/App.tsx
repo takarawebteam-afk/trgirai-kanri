@@ -9311,7 +9311,7 @@ function TodayTasksPanel() {
     setMemoError('')
     try {
       const notifySecret = import.meta.env.VITE_NOTIFY_SECRET as string | undefined
-      const response = await fetch('/api/notify-today-memo', {
+      const response = await fetch('/api/notify-task', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
