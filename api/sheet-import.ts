@@ -63,6 +63,11 @@ type ExistingPropertyRow = {
   source_month?: string | null
 }
 
+type SupabaseMaybeError = {
+  code?: string
+  message?: string
+}
+
 function json(res: VercelResponse, status: number, body: Record<string, unknown>) {
   return res.status(status).json(body)
 }
@@ -236,6 +241,27 @@ async function addProperty(
     }])
     .select('id, property_number')
     .single()
+
+  if (error && sourceMonth && (error as SupabaseMaybeError).code === '23505') {
+    const { data: existingRows, error: existingError } = await supabase
+      .from(tableName)
+      .select('id, property_number, source_month')
+      .eq('source_month', sourceMonth)
+      .eq('property_name', propertyName)
+      .eq('room_number', roomNumber)
+      .limit(1)
+
+    if (existingError) throw new Error(existingError.message)
+
+    const existing = (existingRows || [])[0] as ExistingPropertyRow | undefined
+    if (existing) {
+      return {
+        action: 'already_exists',
+        id: existing.id,
+        propertyNumber: String(existing.property_number || ''),
+      }
+    }
+  }
 
   if (error || !data) {
     throw new Error(error?.message || 'SNS物件管理への追加に失敗しました')
