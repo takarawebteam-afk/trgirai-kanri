@@ -2007,6 +2007,7 @@ function App() {
     let query = supabase
       .from('sns_recruitment_properties')
       .select('*', { count: 'exact' })
+      .order('property_number', { ascending: true, nullsFirst: false })
       .order('post_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
 
