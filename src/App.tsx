@@ -2294,12 +2294,23 @@ function App() {
   }
 
   async function fetchTiktokProgressForStock() {
-    const { data } = await supabase
-      .from('production_records')
-      .select('id,shooting_start_date,shooting_date,material_processing,property_name,media')
-      .or('media.ilike.%TikTok%,media.eq.採用')
-      .not('shooting_start_date', 'is', null)
-    if (data) setTiktokProgressForStock(data as TiktokProgressRecord[])
+    const [tiktokResult, recruitmentResult] = await Promise.all([
+      supabase
+        .from('production_records')
+        .select('id,shooting_start_date,shooting_date,material_processing,property_name,media')
+        .ilike('media', '%TikTok%')
+        .not('shooting_start_date', 'is', null),
+      supabase
+        .from('production_records')
+        .select('id,shooting_start_date,shooting_date,material_processing,property_name,media')
+        .eq('media', '採用')
+        .not('shooting_start_date', 'is', null),
+    ])
+    const combined = [
+      ...(tiktokResult.data ?? []),
+      ...(recruitmentResult.data ?? []),
+    ]
+    setTiktokProgressForStock(combined as TiktokProgressRecord[])
   }
 
   async function fetchBusho() {
