@@ -147,7 +147,7 @@ async function fetchAllProperties(platform: SnsPlatform) {
 
     if (error) throw new Error(error.message)
 
-    const pageRows = (data || []) as SnsPropertyRecord[]
+    const pageRows = (data || []) as unknown as SnsPropertyRecord[]
     rows.push(...pageRows)
     if (pageRows.length < pageSize) break
   }
