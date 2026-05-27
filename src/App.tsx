@@ -6792,7 +6792,7 @@ function App() {
                       {tiktokDerivedStocks.map(r => (
                         <tr key={r.id} style={{ background: '#f0f9ff' }}>
                           <td>{r.deadline}</td>
-                          <td><span style={{ fontSize: '0.78rem', background: r.label === '採用' ? '#e67e22' : '#010101', color: '#fff', borderRadius: 3, padding: '1px 6px' }}>{r.label}</span></td>
+                          <td><span style={{ fontSize: '0.78rem', background: r.label === '採用' ? '#1a73e8' : '#010101', color: '#fff', borderRadius: 3, padding: '1px 6px', display: 'inline-block', minWidth: '3.2rem', textAlign: 'center' }}>{r.label}</span></td>
                           <td>{r.required_count}件</td>
                           <td>{r.achieved_count}件</td>
                           <td>{r.note}</td>
