@@ -50,6 +50,10 @@ function getPrivateKey() {
   return (process.env.GA4_PRIVATE_KEY || process.env.GOOGLE_ANALYTICS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
 }
 
+function envText(value: string | undefined) {
+  return (value || '').trim()
+}
+
 function normalizeAccount(value: string): AnalysisAccount | null {
   const normalized = value.toLowerCase().replace(/\s+/g, '_')
 
@@ -178,15 +182,15 @@ async function getAccessTokenFromRefreshToken(clientId: string, clientSecret: st
 }
 
 async function getAnalyticsAccessToken() {
-  const refreshClientId = process.env.GA4_OAUTH_CLIENT_ID || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_ID
-  const refreshClientSecret = process.env.GA4_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_SECRET
-  const refreshToken = process.env.GA4_REFRESH_TOKEN || process.env.GOOGLE_ANALYTICS_REFRESH_TOKEN
+  const refreshClientId = envText(process.env.GA4_OAUTH_CLIENT_ID || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_ID)
+  const refreshClientSecret = envText(process.env.GA4_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_SECRET)
+  const refreshToken = envText(process.env.GA4_REFRESH_TOKEN || process.env.GOOGLE_ANALYTICS_REFRESH_TOKEN)
 
   if (refreshClientId && refreshClientSecret && refreshToken) {
     return await getAccessTokenFromRefreshToken(refreshClientId, refreshClientSecret, refreshToken)
   }
 
-  const clientEmail = process.env.GA4_CLIENT_EMAIL || process.env.GOOGLE_ANALYTICS_CLIENT_EMAIL
+  const clientEmail = envText(process.env.GA4_CLIENT_EMAIL || process.env.GOOGLE_ANALYTICS_CLIENT_EMAIL)
   const privateKey = getPrivateKey()
 
   if (clientEmail && privateKey) {
