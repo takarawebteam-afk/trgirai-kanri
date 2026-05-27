@@ -2635,6 +2635,9 @@ function App() {
             {snsPropertySearch[platform] && (
               <button type="button" className="secondary" onClick={() => updateSnsPropertySearch(platform, '')}>×</button>
             )}
+            <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
+              変更履歴
+            </button>
             <button
               type="button"
               className="secondary"
@@ -5553,11 +5556,6 @@ function App() {
                 >{tab.label}</button>
               ))}
             </div>
-            <div className="history-toolbar">
-              <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
-                変更履歴
-              </button>
-            </div>
 
             {activeSnsPropertyPlatform === 'sokanri' && (
               <section className="panel table-panel sokanri-panel">
@@ -5763,6 +5761,9 @@ function App() {
                     {snsPropertySearch.tiktok && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('tiktok', '')}>×</button>
                     )}
+                    <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
+                      変更履歴
+                    </button>
                     <button
                       type="button"
                       className="secondary"
@@ -5847,6 +5848,9 @@ function App() {
                     {snsPropertySearch.instagram && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('instagram', '')}>×</button>
                     )}
+                    <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
+                      変更履歴
+                    </button>
                     <button
                       type="button"
                       className="secondary"
@@ -5924,6 +5928,9 @@ function App() {
                     {snsPropertySearch.youtube && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('youtube', '')}>×</button>
                     )}
+                    <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
+                      変更履歴
+                    </button>
                     <button
                       type="button"
                       className="secondary"
@@ -5999,6 +6006,9 @@ function App() {
                     {snsPropertySearch.recruitment && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('recruitment', '')}>×</button>
                     )}
+                    <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
+                      変更履歴
+                    </button>
                     <button type="button" className="primary" onClick={() => openSnsPropertyCreate('recruitment')}>新規登録</button>
                   </div>
                 </div>

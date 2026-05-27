@@ -5506,12 +5506,6 @@ button.secondary.small {
   cursor: not-allowed;
 }
 
-.history-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin: -8px 0 12px;
-}
-
 .history-modal {
   max-width: 720px;
 }
