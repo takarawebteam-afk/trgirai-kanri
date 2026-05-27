@@ -391,6 +391,93 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   flex-wrap: nowrap;
 }
 
+/* ===== 分析ページ ===== */
+.analysis-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.analysis-import-message {
+  color: var(--gray-500);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.analysis-import-message.is-success {
+  color: var(--green-700);
+}
+
+.analysis-import-message.is-error {
+  color: var(--red-700);
+}
+
+.analysis-monthly-table-wrap {
+  border: 1px solid #cfd7e3;
+  max-height: calc(100vh - 210px);
+}
+
+.table-wrap table.analysis-monthly-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.analysis-monthly-table th,
+.analysis-monthly-table td {
+  min-width: 62px;
+  height: 22px;
+  padding: 2px 6px;
+  border: 1px solid #d7dde7;
+  color: #111827;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.analysis-monthly-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #dbe7f8;
+  color: #0f172a;
+  font-weight: 800;
+  text-align: center;
+}
+
+.analysis-monthly-table tbody th {
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.analysis-monthly-table .analysis-account-cell {
+  min-width: 86px;
+  border-right: 2px solid #1f2937;
+  border-bottom: 2px solid #1f2937;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.analysis-monthly-table .analysis-media-cell {
+  min-width: 90px;
+  text-align: right;
+}
+
+.analysis-monthly-table .analysis-total-row th,
+.analysis-monthly-table .analysis-total-row td,
+.analysis-monthly-table .analysis-diff-row th,
+.analysis-monthly-table .analysis-diff-row td {
+  font-weight: 800;
+}
+
+.analysis-monthly-table .analysis-diff-row th,
+.analysis-monthly-table .analysis-diff-row td {
+  border-bottom: 2px solid #1f2937;
+}
+
 /* ===== 進行中案件 ===== */
 .ongoing-list { display: grid; gap: 10px; }
 

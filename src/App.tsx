@@ -586,6 +586,107 @@ const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
 }
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
+
+type AnalysisMonthlyMediaRow = {
+  media: string
+  values: number[]
+}
+
+type AnalysisMonthlyAccountGroup = {
+  account: string
+  rows: AnalysisMonthlyMediaRow[]
+}
+
+type AnalysisSessionImportRow = {
+  account: string
+  media: string
+  month: number
+  sessions: number
+}
+
+const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
+
+const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
+  {
+    account: 'Karilun',
+    rows: [
+      { media: 'TikTok', values: [299, 240, 189, 126] },
+      { media: 'Instagram', values: [125, 85, 131, 116] },
+      { media: 'Threads', values: [59, 25, 59, 21] },
+      { media: 'YouTube', values: [12, 8, 8, 10] },
+      { media: 'その他', values: [15, 3, 3, 1] },
+    ],
+  },
+  {
+    account: '京阪',
+    rows: [
+      { media: 'TikTok', values: [0, 0, 0, 0] },
+      { media: 'Instagram', values: [2, 5, 1, 4] },
+      { media: 'その他', values: [0, 0, 0, 0] },
+    ],
+  },
+  {
+    account: '西宮市',
+    rows: [
+      { media: 'TikTok', values: [61, 28, 32, 24] },
+      { media: 'Instagram', values: [37, 36, 40, 16] },
+      { media: 'Threads', values: [59, 55, 28, 12] },
+      { media: 'YouTube', values: [0, 1, 0, 0] },
+      { media: 'その他', values: [0, 0, 0, 0] },
+    ],
+  },
+  {
+    account: '八尾',
+    rows: [
+      { media: 'TikTok', values: [66, 45, 28, 23] },
+      { media: 'Instagram', values: [8, 5, 15, 3] },
+      { media: 'Threads', values: [0, 0, 15, 14] },
+      { media: 'YouTube', values: [10, 40, 9, 5] },
+      { media: 'その他', values: [0, 0, 0, 0] },
+    ],
+  },
+  {
+    account: '長瀬',
+    rows: [
+      { media: 'TikTok', values: [185, 179, 120, 63] },
+      { media: 'Instagram', values: [11, 28, 9, 10] },
+      { media: 'Threads', values: [0, 0, 0, 0] },
+      { media: 'YouTube', values: [30, 33, 15, 4] },
+      { media: 'その他', values: [0, 0, 0, 0] },
+    ],
+  },
+  {
+    account: '西北',
+    rows: [
+      { media: 'TikTok', values: [136, 88, 53, 35] },
+      { media: 'Instagram', values: [10, 19, 27, 26] },
+      { media: 'Threads', values: [0, 3, 1, 0] },
+      { media: 'YouTube', values: [11, 8, 12, 1] },
+      { media: 'その他', values: [0, 0, 0, 0] },
+    ],
+  },
+]
+
+function getAnalysisMonthlyTotal(group: AnalysisMonthlyAccountGroup, monthIndex: number) {
+  return group.rows.reduce((sum, row) => sum + (row.values[monthIndex] ?? 0), 0)
+}
+
+function getAnalysisMonthlyDiff(group: AnalysisMonthlyAccountGroup, monthIndex: number) {
+  if (monthIndex === 0) return ''
+  return getAnalysisMonthlyTotal(group, monthIndex) - getAnalysisMonthlyTotal(group, monthIndex - 1)
+}
+
+function buildAnalysisGroupsFromImportedRows(rows: AnalysisSessionImportRow[]) {
+  return ANALYSIS_MONTHLY_TABLE_GROUPS.map((group) => ({
+    ...group,
+    rows: group.rows.map((mediaRow) => ({
+      ...mediaRow,
+      values: ANALYSIS_MONTHS.map((month) => (
+        rows.find((row) => row.account === group.account && row.media === mediaRow.media && row.month === month)?.sessions ?? 0
+      )),
+    })),
+  }))
+}
 const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
 const jobTypes: JobType[] = ['正社員', 'パート']
 
@@ -1801,6 +1902,10 @@ function App() {
   const [allowedIpSaving, setAllowedIpSaving] = useState(false)
   const [allowedIpMessage, setAllowedIpMessage] = useState('')
   const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
+  const [analysisTableGroups, setAnalysisTableGroups] = useState<AnalysisMonthlyAccountGroup[]>(ANALYSIS_MONTHLY_TABLE_GROUPS)
+  const [analysisImporting, setAnalysisImporting] = useState(false)
+  const [analysisImportMessage, setAnalysisImportMessage] = useState('')
+  const [analysisImportMessageType, setAnalysisImportMessageType] = useState<'success' | 'error'>('success')
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
@@ -1814,6 +1919,40 @@ function App() {
   async function fetchPosts() {
     const { data } = await supabase.from('sns_posts').select('*').order('created_at', { ascending: false })
     if (data) setPosts(data as SnsPost[])
+  }
+
+  async function importAnalysisSessions() {
+    setAnalysisImporting(true)
+    setAnalysisImportMessage('')
+    setAnalysisImportMessageType('success')
+
+    try {
+      const response = await fetch('/api/analytics-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year: 2026 }),
+      })
+      const data = await response.json() as {
+        ok?: boolean
+        message?: string
+        rows?: AnalysisSessionImportRow[]
+        fetchedAt?: string
+      }
+
+      if (!response.ok || !data.ok || !data.rows) {
+        throw new Error(data.message || 'GA4から数字を取れませんでした。')
+      }
+
+      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(data.rows))
+      setAnalysisImportMessageType('success')
+      setAnalysisImportMessage(`最終更新: ${new Date(data.fetchedAt || Date.now()).toLocaleString('ja-JP')}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'GA4取込に失敗しました。'
+      setAnalysisImportMessageType('error')
+      setAnalysisImportMessage(message)
+    } finally {
+      setAnalysisImporting(false)
+    }
   }
 
   async function fetchRecruitment() {
@@ -5125,12 +5264,66 @@ function App() {
 
         {/* ===== 分析 ===== */}
         {activePage === 'analysis' && (
-          <section className="panel">
+          <section className="panel table-panel">
             <div className="panel-heading">
               <div>
                 <h2>分析</h2>
-                <p>中身はこれから追加します。</p>
+                <p>アカウント別・媒体別の月別数値を確認できます。</p>
               </div>
+              <div className="analysis-actions">
+                {analysisImportMessage && (
+                  <span className={`analysis-import-message ${analysisImportMessageType === 'error' ? 'is-error' : 'is-success'}`}>
+                    {analysisImportMessage}
+                  </span>
+                )}
+                <button className="primary" onClick={() => void importAnalysisSessions()} disabled={analysisImporting}>
+                  {analysisImporting ? '取込中...' : 'GA4から取込'}
+                </button>
+              </div>
+            </div>
+            <div className="table-wrap analysis-monthly-table-wrap">
+              <table className="analysis-monthly-table">
+                <thead>
+                  <tr>
+                    <th>アカウント</th>
+                    <th>媒体</th>
+                    {ANALYSIS_MONTHS.map((month) => (
+                      <th key={month}>2026年{month}月</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {analysisTableGroups.map((group) => (
+                    <Fragment key={group.account}>
+                      {group.rows.map((row, rowIndex) => (
+                        <tr key={`${group.account}-${row.media}`}>
+                          {rowIndex === 0 && (
+                            <th className="analysis-account-cell" rowSpan={group.rows.length + 2}>
+                              {group.account}
+                            </th>
+                          )}
+                          <th className="analysis-media-cell">{row.media}</th>
+                          {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                            <td key={monthIndex}>{row.values[monthIndex] ?? ''}</td>
+                          ))}
+                        </tr>
+                      ))}
+                      <tr className="analysis-total-row">
+                        <th className="analysis-media-cell">計</th>
+                        {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                          <td key={monthIndex}>{getAnalysisMonthlyTotal(group, monthIndex)}</td>
+                        ))}
+                      </tr>
+                      <tr className="analysis-diff-row">
+                        <th className="analysis-media-cell">前月比</th>
+                        {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                          <td key={monthIndex}>{getAnalysisMonthlyDiff(group, monthIndex)}</td>
+                        ))}
+                      </tr>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         )}
