@@ -3311,7 +3311,7 @@ function App() {
 
     setSnsTiktokSheetSyncing(true)
     try {
-      const response = await fetch('/api/sync-sns-tiktok-sheet', { method: 'POST' })
+      const response = await fetch('/api/sync-sns-sheet?platform=tiktok', { method: 'POST' })
       const data = await response.json() as { ok?: boolean; count?: number; message?: string }
 
       if (!response.ok || !data.ok) {
@@ -3341,7 +3341,7 @@ function App() {
 
     setSnsInstagramSheetSyncing(true)
     try {
-      const response = await fetch('/api/sync-sns-instagram-sheet', { method: 'POST' })
+      const response = await fetch('/api/sync-sns-sheet?platform=instagram', { method: 'POST' })
       const data = await response.json() as { ok?: boolean; count?: number; message?: string }
 
       if (!response.ok || !data.ok) {
@@ -3371,7 +3371,7 @@ function App() {
 
     setSnsYoutubeSheetSyncing(true)
     try {
-      const response = await fetch('/api/sync-sns-youtube-sheet', { method: 'POST' })
+      const response = await fetch('/api/sync-sns-sheet?platform=youtube', { method: 'POST' })
       const data = await response.json() as { ok?: boolean; count?: number; message?: string }
 
       if (!response.ok || !data.ok) {
