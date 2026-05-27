@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useCallback, useRef } from 'react'
+import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useGoogleLogin } from '@react-oauth/google'
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
@@ -37,6 +37,14 @@ type StockRecord = {
   note: string
   achieved_count: number
   created_at?: string
+}
+
+type TiktokProgressRecord = {
+  id: string
+  shooting_start_date: string | null
+  shooting_date: string | null
+  property_name: string
+  media: string
 }
 
 const DEPARTMENTS = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他'] as const
@@ -1711,6 +1719,7 @@ function App() {
 
   // ストック管理
   const [stockRecords, setStockRecords] = useState<StockRecord[]>([])
+  const [tiktokProgressForStock, setTiktokProgressForStock] = useState<TiktokProgressRecord[]>([])
   const [stockForm, setStockForm] = useState(defaultStockForm)
   const [stockInlineId, setStockInlineId] = useState<string | null>(null)
   const [stockInlineForm, setStockInlineForm] = useState(defaultStockForm)
@@ -1720,6 +1729,23 @@ function App() {
   })
   const [stockAttendanceMap, setStockAttendanceMap] = useState<Record<string, string[]>>({})
   const [stockHonmachiDateMap, setStockHonmachiDateMap] = useState<Record<string, boolean>>({})
+  const tiktokDerivedStocks = useMemo(() => {
+    const validRecords = tiktokProgressForStock.filter(r => r.shooting_start_date && r.property_name && r.property_name.trim())
+    const grouped: Record<string, TiktokProgressRecord[]> = {}
+    for (const r of validRecords) {
+      const key = r.shooting_start_date!
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(r)
+    }
+    return Object.entries(grouped).map(([date, recs]) => ({
+      id: `tiktok-${date}`,
+      deadline: date,
+      label: 'TikTok',
+      required_count: recs.length,
+      achieved_count: recs.filter(r => r.shooting_date && r.shooting_date.trim()).length,
+      note: '',
+    })).sort((a, b) => a.deadline.localeCompare(b.deadline))
+  }, [tiktokProgressForStock])
   const [weatherMap, setWeatherMap] = useState<Record<string, number>>({})
   const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
   const [bushoForm, setBushoForm] = useState(defaultBushoForm)
@@ -2255,6 +2281,15 @@ function App() {
   async function fetchStock() {
     const { data } = await supabase.from('stock').select('*').order('deadline', { ascending: true })
     if (data) setStockRecords(data as StockRecord[])
+  }
+
+  async function fetchTiktokProgressForStock() {
+    const { data } = await supabase
+      .from('production_records')
+      .select('id,shooting_start_date,shooting_date,property_name,media')
+      .ilike('media', '%TikTok%')
+      .not('shooting_start_date', 'is', null)
+    if (data) setTiktokProgressForStock(data as TiktokProgressRecord[])
   }
 
   async function fetchBusho() {
@@ -3601,6 +3636,7 @@ function App() {
     fetchHankyo()
     fetchDm()
     fetchStock()
+    fetchTiktokProgressForStock()
     fetchBusho()
     fetchJishaShukyaku()
 
@@ -6627,7 +6663,7 @@ function App() {
           }
           for (let d = 1; d <= lastDay.getDate(); d++) {
             const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: stockRecords.filter(r => r.deadline === dateStr) })
+            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: [...stockRecords.filter(r => r.deadline === dateStr), ...tiktokDerivedStocks.filter(r => r.deadline === dateStr)] })
           }
           const remaining = (7 - (cells.length % 7)) % 7
           for (let i = 1; i <= remaining; i++) cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, stocks: [] })
@@ -6677,7 +6713,7 @@ function App() {
                             return (
                               <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
                                 <span className="stock-badge-label">{s.label}</span>
-                                <span className="stock-badge-count">{s.achieved_count}/{s.required_count}件</span>
+                                <span className="stock-badge-count">{s.required_count - s.achieved_count}/{s.required_count}件</span>
                               </div>
                             )
                           })}
@@ -6695,15 +6731,14 @@ function App() {
                   <table className="compact-list-table">
                     <thead>
                       <tr>
-                        <th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>状態</th><th>メモ</th><th>操作</th>
+                        <th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>メモ</th><th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {stockRecords.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
+                      {stockRecords.length === 0 && tiktokDerivedStocks.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
                       {stockRecords.map(r => {
                         const isEditing = stockInlineId === r.id
                         const f = stockInlineForm
-                        const done = r.achieved_count >= r.required_count
                         return (
                           <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startStockInline(r) }}>
                             <td onClick={e => isEditing && e.stopPropagation()}>
@@ -6718,7 +6753,6 @@ function App() {
                             <td onClick={e => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" type="number" min="0" value={f.achieved_count} onChange={e => setStockInlineForm({ ...f, achieved_count: Number(e.target.value) })} /> : `${r.achieved_count}件`}
                             </td>
-                            <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.78rem', background: done ? '#dcfce7' : '#fef9c3', color: done ? '#166534' : '#713f12' }}>{done ? '達成' : '未達'}</span></td>
                             <td onClick={e => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" value={f.note} onChange={e => setStockInlineForm({ ...f, note: e.target.value })} /> : r.note}
                             </td>
@@ -6734,6 +6768,16 @@ function App() {
                           </tr>
                         )
                       })}
+                      {tiktokDerivedStocks.map(r => (
+                        <tr key={r.id} style={{ background: '#f0f9ff' }}>
+                          <td>{r.deadline}</td>
+                          <td><span style={{ fontSize: '0.78rem', background: '#010101', color: '#fff', borderRadius: 3, padding: '1px 6px' }}>TikTok</span></td>
+                          <td>{r.required_count}件</td>
+                          <td>{r.achieved_count}件</td>
+                          <td>{r.note}</td>
+                          <td></td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
