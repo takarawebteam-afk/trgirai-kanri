@@ -3713,8 +3713,12 @@ function App() {
 
   useEffect(() => {
     if (!currentUserEmail || activePage !== 'snsproperty') return
-    void refreshSnsPropertyOptions('wp_registered')
-    void refreshSnsPropertyOptions('aos_registered')
+    const fields: SnsPropertySelectField[] = [
+      'wp_registered', 'aos_registered', 'tiktok_reserved', 'tiktok_wp',
+      'instagram_reserved', 'instagram_wp', 'youtube_reserved', 'youtube_wp',
+      'threads_post_date', 'post_text', 'post_reserved',
+    ]
+    fields.forEach((field) => { void refreshSnsPropertyOptions(field) })
   }, [activePage, currentUserEmail])
 
   const yearOptions = Array.from(

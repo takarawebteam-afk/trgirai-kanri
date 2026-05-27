@@ -195,7 +195,7 @@ const INITIAL_SELECT_OPTIONS: Record<SelectOptionGroup, string[]> = {
   register_wp: REGISTER_OPTIONS.map((option) => option.label),
   register_aos: REGISTER_OPTIONS.map((option) => option.label),
   register_youtube: REGISTER_OPTIONS.map((option) => option.label),
-  post_text: ['未設定', '作成中', '完了'],
+  post_text: ['O-泉', 'O-坂本', 'O-吉田'],
   acquisition_source: ['リアプロ', 'イタンジ', 'レインズ', '管理会社HP', 'その他'],
 }
 
@@ -421,6 +421,13 @@ function saveStoredSelectOptions(group: SelectOptionGroup, options: string[]) {
     `${SELECT_OPTION_STORAGE_PREFIX}${group}`,
     JSON.stringify(group.startsWith('register') ? normalizeRegisterOptions(options) : normalizeSelectOptions(options)),
   )
+}
+
+async function saveProgressOptionsToDatabase(group: SelectOptionGroup, options: string[]) {
+  const field = `progress_${group}`
+  await supabase.from('sns_property_select_options').delete().eq('field', field)
+  const rows = options.map((label, index) => ({ field, label, sort_order: index }))
+  await supabase.from('sns_property_select_options').insert(rows)
 }
 
 function getUrlParts(value: string) {
@@ -968,6 +975,27 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   useEffect(() => {
     fetchRecords()
+  }, [])
+
+  useEffect(() => {
+    async function loadOptionsFromDB() {
+      const { data } = await supabase
+        .from('sns_property_select_options')
+        .select('field, label, sort_order')
+        .like('field', 'progress_%')
+        .order('sort_order', { ascending: true })
+      if (!data || data.length === 0) return
+      const grouped: Partial<Record<SelectOptionGroup, string[]>> = {}
+      for (const row of data) {
+        const group = row.field.replace('progress_', '') as SelectOptionGroup
+        if (!grouped[group]) grouped[group] = []
+        grouped[group]!.push(row.label)
+      }
+      if (Object.keys(grouped).length > 0) {
+        setSelectOptions((prev) => ({ ...prev, ...grouped }))
+      }
+    }
+    void loadOptionsFromDB()
   }, [])
 
   async function openHistory() {
@@ -1581,7 +1609,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     })
   }
 
-  function saveSelectOptionItems() {
+  async function saveSelectOptionItems() {
     if (!selectOptionEditor) return
 
     const nextOptions = selectOptionEditor.group.startsWith('register')
@@ -1593,6 +1621,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
 
     saveStoredSelectOptions(selectOptionEditor.group, nextOptions)
+    await saveProgressOptionsToDatabase(selectOptionEditor.group, nextOptions)
     setSelectOptions((prev) => ({ ...prev, [selectOptionEditor.group]: nextOptions }))
     setSelectOptionEditor(null)
   }
