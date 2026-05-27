@@ -254,12 +254,12 @@ h1 {
 }
 
 .dashboard-list-panel {
-  grid-column: span 6;
+  grid-column: span 4;
   min-width: 0;
 }
 
 .dashboard-full-panel {
-  grid-column: span 12;
+  grid-column: span 4;
 }
 
 .chart-panel {
@@ -459,7 +459,7 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 }
 
 .dashboard-schedule-item {
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 3px 8px;
@@ -470,6 +470,7 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 .dashboard-schedule-main {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
   flex: 1;
@@ -477,7 +478,7 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .dashboard-schedule-date {
   flex: 0 0 auto;
-  min-width: 140px;
+  min-width: auto;
   text-align: right;
 }
 
@@ -485,6 +486,9 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   font-size: 0.7rem;
   line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .dashboard-schedule-item p,
