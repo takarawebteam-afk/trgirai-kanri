@@ -18,6 +18,10 @@ const STORE_DESTINATION_CONFIG = {
     destinationName: '西北店',
     tableName: 'sns_nishikita_properties',
   },
+  '西宮北店': {
+    destinationName: '西北店',
+    tableName: 'sns_nishikita_properties',
+  },
   '枚方店': {
     destinationName: '京阪',
     tableName: 'sns_keihan_karilun_properties',
@@ -47,6 +51,7 @@ type SheetImportBody = {
   propertyName?: unknown
   roomNumber?: unknown
   destinationName?: unknown
+  sourceMonth?: unknown
   spreadsheetId?: unknown
   sheetName?: unknown
   rowNumber?: unknown
@@ -55,6 +60,7 @@ type SheetImportBody = {
 type ExistingPropertyRow = {
   id: string
   property_number: string | null
+  source_month?: string | null
 }
 
 function json(res: VercelResponse, status: number, body: Record<string, unknown>) {
@@ -81,6 +87,16 @@ function getQueryParam(req: VercelRequest, name: string) {
   const host = getHeaderValue(req.headers.host) || 'localhost'
   const url = new URL(req.url || '/', `https://${host}`)
   return text(url.searchParams.get(name))
+}
+
+function normalizeSourceMonth(value: string) {
+  const trimmed = text(value)
+  const match = trimmed.match(/^(\d{4})[-/](\d{1,2})/)
+  if (!match) return ''
+
+  const year = match[1]
+  const month = match[2].padStart(2, '0')
+  return `${year}-${month}`
 }
 
 function wantsJsonResponse(req: VercelRequest) {
@@ -158,15 +174,65 @@ async function addProperty(
   tableName: StoreSnsPropertyTableName,
   propertyName: string,
   roomNumber: string,
+  sourceMonth: string,
 ) {
-  const propertyNumber = await getNextPropertyNumber(tableName)
   const supabase = getSupabaseClient()
+
+  if (sourceMonth) {
+    const { data: existingRows, error: existingError } = await supabase
+      .from(tableName)
+      .select('id, property_number, source_month')
+      .eq('source_month', sourceMonth)
+      .eq('property_name', propertyName)
+      .eq('room_number', roomNumber)
+      .limit(1)
+
+    if (existingError) throw new Error(existingError.message)
+
+    const existing = (existingRows || [])[0] as ExistingPropertyRow | undefined
+    if (existing) {
+      return {
+        action: 'already_exists',
+        id: existing.id,
+        propertyNumber: String(existing.property_number || ''),
+      }
+    }
+
+    const { data: legacyRows, error: legacyError } = await supabase
+      .from(tableName)
+      .select('id, property_number, source_month')
+      .is('source_month', null)
+      .eq('property_name', propertyName)
+      .eq('room_number', roomNumber)
+      .limit(1)
+
+    if (legacyError) throw new Error(legacyError.message)
+
+    const legacy = (legacyRows || [])[0] as ExistingPropertyRow | undefined
+    if (legacy) {
+      const { error: updateLegacyError } = await supabase
+        .from(tableName)
+        .update({ source_month: sourceMonth })
+        .eq('id', legacy.id)
+
+      if (updateLegacyError) throw new Error(updateLegacyError.message)
+
+      return {
+        action: 'already_exists',
+        id: legacy.id,
+        propertyNumber: String(legacy.property_number || ''),
+      }
+    }
+  }
+
+  const propertyNumber = await getNextPropertyNumber(tableName)
   const { data, error } = await supabase
     .from(tableName)
     .insert([{
       property_name: propertyName,
       room_number: roomNumber,
       property_number: propertyNumber,
+      source_month: sourceMonth || null,
     }])
     .select('id, property_number')
     .single()
@@ -197,6 +263,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const storeName = normalizeStoreName(getQueryParam(req, 'storeName'))
     const propertyName = getQueryParam(req, 'propertyName')
     const roomNumber = getQueryParam(req, 'roomNumber')
+    const sourceMonth = normalizeSourceMonth(getQueryParam(req, 'sourceMonth'))
 
     if (!storeName || !propertyName || !roomNumber || !isStoreName(storeName)) {
       if (csvMode) return sendCsv(res, 'SKIP')
@@ -214,7 +281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       const config = STORE_DESTINATION_CONFIG[storeName]
-      const result = await addProperty(config.tableName, propertyName, roomNumber)
+      const result = await addProperty(config.tableName, propertyName, roomNumber, sourceMonth)
       if (csvMode) return sendCsv(res, `OK,${result.propertyNumber}`)
       if (jsonMode) {
         return json(res, 200, {
@@ -223,6 +290,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           destinationName: config.destinationName,
           propertyName,
           roomNumber,
+          sourceMonth,
           action: result.action,
           propertyNumber: result.propertyNumber,
           id: result.id,
@@ -255,6 +323,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const propertyName = text(body.propertyName)
   const roomNumber = text(body.roomNumber)
   const requestedDestinationName = text(body.destinationName)
+  const sourceMonth = normalizeSourceMonth(text(body.sourceMonth))
 
   if (!storeName || !propertyName || !roomNumber) {
     return json(res, 400, {
@@ -279,7 +348,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const result = await addProperty(config.tableName, propertyName, roomNumber)
+    const result = await addProperty(config.tableName, propertyName, roomNumber, sourceMonth)
 
     return json(res, 200, {
       success: true,
@@ -290,6 +359,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       destinationName: config.destinationName,
       propertyName,
       roomNumber,
+      sourceMonth,
       propertyNumber: result.propertyNumber,
       action: result.action,
       id: result.id,
