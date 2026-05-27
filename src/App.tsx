@@ -6696,7 +6696,7 @@ function App() {
           }
           for (let d = 1; d <= lastDay.getDate(); d++) {
             const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: [...incompleteStockRecords.filter(r => r.deadline === dateStr), ...incompleteTiktokDerivedStocks.filter(r => r.deadline === dateStr)] })
+            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: [...stockRecords.filter(r => r.deadline === dateStr), ...tiktokDerivedStocks.filter(r => r.deadline === dateStr)] })
           }
           const remaining = (7 - (cells.length % 7)) % 7
           for (let i = 1; i <= remaining; i++) cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, stocks: [] })
