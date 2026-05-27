@@ -1923,7 +1923,7 @@ function App() {
       .order('created_at', { ascending: false })
 
     if (normalizedSearch) {
-      query = query.ilike('property_number', `%${normalizedSearch}%`)
+      query = query.or(`property_number.ilike.%${normalizedSearch}%,property_name.ilike.%${normalizedSearch}%`)
     }
 
     const { data, count, error } = await query.range(
@@ -2630,7 +2630,7 @@ function App() {
               className="sns-property-search-input"
               value={snsPropertySearch[platform]}
               onChange={(e) => updateSnsPropertySearch(platform, e.target.value)}
-              placeholder="番号で検索"
+              placeholder="物件番号・物件名で検索"
             />
             {snsPropertySearch[platform] && (
               <button type="button" className="secondary" onClick={() => updateSnsPropertySearch(platform, '')}>×</button>
@@ -5756,7 +5756,7 @@ function App() {
                       className="sns-property-search-input"
                       value={snsPropertySearch.tiktok}
                       onChange={(e) => updateSnsPropertySearch('tiktok', e.target.value)}
-                      placeholder="物件番号で検索"
+                      placeholder="物件番号・物件名で検索"
                     />
                     {snsPropertySearch.tiktok && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('tiktok', '')}>×</button>
@@ -5843,7 +5843,7 @@ function App() {
                       className="sns-property-search-input"
                       value={snsPropertySearch.instagram}
                       onChange={(e) => updateSnsPropertySearch('instagram', e.target.value)}
-                      placeholder="物件番号で検索"
+                      placeholder="物件番号・物件名で検索"
                     />
                     {snsPropertySearch.instagram && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('instagram', '')}>×</button>
@@ -5923,7 +5923,7 @@ function App() {
                       className="sns-property-search-input"
                       value={snsPropertySearch.youtube}
                       onChange={(e) => updateSnsPropertySearch('youtube', e.target.value)}
-                      placeholder="物件番号で検索"
+                      placeholder="物件番号・物件名で検索"
                     />
                     {snsPropertySearch.youtube && (
                       <button type="button" className="secondary" onClick={() => updateSnsPropertySearch('youtube', '')}>×</button>
