@@ -8,6 +8,14 @@ import { supabase } from './supabase'
 import ManualsPage from './ManualsPage'
 import ProgressPage from './ProgressPage'
 import OfficeNetworkGate from './OfficeNetworkGate'
+import {
+  type ChangeHistoryEntry,
+  fetchChangeHistory,
+  formatHistoryDate,
+  getHistoryTitle,
+  restoreChangeHistory,
+  saveUndoSnapshot,
+} from './undoHistory'
 
 type Department = '人事' | '総務' | '仲介' | '管理' | '売買' | '本社' | 'その他'
 type TaskType = '単発' | '継続'
@@ -736,6 +744,13 @@ const storeSnsPropertyTableMap: Record<StoreSnsPropertyPlatform, SnsPropertyTabl
   nishikita: 'sns_nishikita_properties',
   yao: 'sns_yao_properties',
 }
+const snsPropertyHistoryTables: SnsPropertyTableName[] = [
+  'sns_tiktok_properties',
+  'sns_instagram_properties',
+  'sns_youtube_properties',
+  'sns_recruitment_properties',
+  ...Object.values(storeSnsPropertyTableMap),
+]
 
 type SnsPropertySelectField =
   | 'wp_registered'
@@ -1675,6 +1690,9 @@ function App() {
   const [snsPropertyOptionEditor, setSnsPropertyOptionEditor] = useState<SnsPropertyOptionEditorState | null>(null)
   const [snsPropertyCreatePlatform, setSnsPropertyCreatePlatform] = useState<SnsPropertyPlatform | null>(null)
   const [snsPropertyCreateSaving, setSnsPropertyCreateSaving] = useState(false)
+  const [snsPropertyHistoryOpen, setSnsPropertyHistoryOpen] = useState(false)
+  const [snsPropertyHistoryLoading, setSnsPropertyHistoryLoading] = useState(false)
+  const [snsPropertyHistoryEntries, setSnsPropertyHistoryEntries] = useState<ChangeHistoryEntry[]>([])
   const [tiktokPropertyForm, setTiktokPropertyForm] = useState(defaultTiktokPropertyForm)
   const [instagramPropertyForm, setInstagramPropertyForm] = useState(defaultInstagramPropertyForm)
   const [youtubePropertyForm, setYoutubePropertyForm] = useState(defaultYoutubePropertyForm)
@@ -1982,6 +2000,61 @@ function App() {
       },
     )
   }, [snsPropertyPage, snsPropertySearch])
+
+  function getActiveSnsPropertyHistoryTables() {
+    if (activeSnsPropertyPlatform === 'sokanri') return snsPropertyHistoryTables
+    if (isStoreSnsPropertyPlatform(activeSnsPropertyPlatform)) {
+      return [storeSnsPropertyTableMap[activeSnsPropertyPlatform]]
+    }
+    if (activeSnsPropertyPlatform === 'tiktok') return ['sns_tiktok_properties']
+    if (activeSnsPropertyPlatform === 'instagram') return ['sns_instagram_properties']
+    if (activeSnsPropertyPlatform === 'youtube') return ['sns_youtube_properties']
+    if (activeSnsPropertyPlatform === 'recruitment') return ['sns_recruitment_properties']
+    return snsPropertyHistoryTables
+  }
+
+  async function openSnsPropertyHistory() {
+    setSnsPropertyHistoryOpen(true)
+    setSnsPropertyHistoryLoading(true)
+    try {
+      const entries = await fetchChangeHistory('snsproperty', getActiveSnsPropertyHistoryTables())
+      setSnsPropertyHistoryEntries(entries)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '履歴を読み込めませんでした'
+      alert(`変更履歴を読み込めませんでした。\n\n${message}`)
+    } finally {
+      setSnsPropertyHistoryLoading(false)
+    }
+  }
+
+  async function restoreSnsPropertyEntry(entry: ChangeHistoryEntry) {
+    const confirmed = window.confirm('この履歴の内容に戻しますか？')
+    if (!confirmed) return
+
+    try {
+      await restoreChangeHistory(entry)
+      if (entry.table_name === 'sns_tiktok_properties') {
+        await fetchTiktokProperties()
+      } else if (entry.table_name === 'sns_instagram_properties') {
+        await fetchInstagramProperties()
+      } else if (entry.table_name === 'sns_youtube_properties') {
+        await fetchYoutubeProperties()
+      } else if (entry.table_name === 'sns_recruitment_properties') {
+        await fetchRecruitmentSnsProperties()
+      } else {
+        const platform = getSnsPropertyPlatformByTable(entry.table_name as SnsPropertyTableName)
+        if (platform && storeSnsPropertyPlatforms.includes(platform as StoreSnsPropertyPlatform)) {
+          await fetchStoreSnsProperties(platform as StoreSnsPropertyPlatform)
+        }
+      }
+
+      scheduleSnsPropertySheetSyncByTable(entry.table_name as SnsPropertyTableName)
+      await openSnsPropertyHistory()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '元に戻せませんでした'
+      alert(`元に戻せませんでした。\n\n${message}`)
+    }
+  }
 
   const handleSnsPropertyPromoted = useCallback((target: 'tiktok' | 'instagram' | 'youtube' | 'recruitment' | StoreSnsPropertyPlatform) => {
     if (target === 'tiktok') {
@@ -2450,6 +2523,16 @@ function App() {
     const payload = field === 'post_date'
       ? { [field]: value || null }
       : { [field]: value }
+    const current = recruitmentSnsProperties.find((item) => item.id === id)
+    await saveUndoSnapshot({
+      feature: 'snsproperty',
+      tableName: 'sns_recruitment_properties',
+      recordId: id,
+      action: 'update',
+      changedField: String(field),
+      oldValue: current?.[field],
+      newValue: value,
+    })
     const { error } = await supabase.from('sns_recruitment_properties').update(payload).eq('id', id)
 
     if (error) {
@@ -2473,6 +2556,16 @@ function App() {
     const payload = field === 'post_date'
       ? { [field]: value || null }
       : { [field]: value }
+    const current = storeSnsProperties[platform].find((item) => item.id === id)
+    await saveUndoSnapshot({
+      feature: 'snsproperty',
+      tableName,
+      recordId: id,
+      action: 'update',
+      changedField: String(field),
+      oldValue: current?.[field],
+      newValue: value,
+    })
     const { error } = await supabase.from(tableName).update(payload).eq('id', id)
 
     if (error) {
@@ -2832,6 +2925,14 @@ function App() {
     setter: React.Dispatch<React.SetStateAction<T[]>>,
   ) {
     const payload = field === 'post_date' ? { [field]: value || null } : { [field]: value }
+    await saveUndoSnapshot({
+      feature: 'snsproperty',
+      tableName,
+      recordId: id,
+      action: 'update',
+      changedField: field,
+      newValue: value,
+    })
     const { error } = await supabase.from(tableName).update(payload).eq('id', id)
 
     if (error) {
@@ -2917,6 +3018,16 @@ function App() {
         .find((key) => storeSnsPropertyTableMap[key] === snsMemoEditor.tableName)
 
       if (platform) {
+        const current = storeSnsProperties[platform].find((item) => item.id === snsMemoEditor.id)
+        await saveUndoSnapshot({
+          feature: 'snsproperty',
+          tableName: snsMemoEditor.tableName,
+          recordId: snsMemoEditor.id,
+          action: 'update',
+          changedField: 'memo',
+          oldValue: current?.memo,
+          newValue: nextValue,
+        })
         const { error } = await supabase
           .from(snsMemoEditor.tableName)
           .update({ memo: nextValue })
@@ -2960,6 +3071,16 @@ function App() {
 
     const tableName = storeSnsPropertyTableMap[platform]
     const value = nextValue.trim()
+    const current = storeSnsProperties[platform].find((item) => item.id === id)
+    await saveUndoSnapshot({
+      feature: 'snsproperty',
+      tableName,
+      recordId: id,
+      action: 'update',
+      changedField: 'document_url',
+      oldValue: current?.document_url,
+      newValue: value,
+    })
     const { error } = await supabase.from(tableName).update({ document_url: value }).eq('id', id)
 
     if (error) {
@@ -4529,6 +4650,14 @@ function App() {
     const confirmed = window.confirm(message)
     if (!confirmed) return
 
+    if (snsPropertyHistoryTables.includes(tableName as SnsPropertyTableName)) {
+      await saveUndoSnapshot({
+        feature: 'snsproperty',
+        tableName,
+        recordId: id,
+        action: 'delete',
+      })
+    }
     await supabase.from(tableName).delete().eq('id', id)
     refresh()
     await afterDelete?.()
@@ -4770,26 +4899,8 @@ function App() {
   return (
     <OfficeNetworkGate allowOutsideOffice={canUseOutsideOffice}>
       <div className={`app-shell${isPrimaryNavCollapsed ? ' nav-collapsed' : ''}`}>
-      <div className="auth-topbar">
-        <div className="auth-user-box auth-user-box-top">
-          <span className="auth-user-email">{currentUserEmail}</span>
-          {isMasterUser && (
-            <button
-              className="auth-master-button"
-              onClick={() => {
-                setAllowedAccountMessage('')
-                void fetchAllowedIps()
-                setShowAllowedAccountsModal(true)
-              }}
-            >
-              マスター
-            </button>
-          )}
-          <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
-        </div>
-      </div>
-      <div className="app-sticky-header">
-        <header className="app-header">
+        <div className="app-sticky-header">
+          <header className="app-header">
           <div>
             <p className="eyebrow">WEB Strategic Team</p>
             <h1>WEB戦略チーム管理表</h1>
@@ -4824,7 +4935,18 @@ function App() {
             </label>
             <div className="auth-user-box">
               <span className="auth-user-email">{currentUserEmail}</span>
-              {isMasterUser && <span className="auth-master-badge">マスター</span>}
+              {isMasterUser && (
+                <button
+                  className="auth-master-button"
+                  onClick={() => {
+                    setAllowedAccountMessage('')
+                    void fetchAllowedIps()
+                    setShowAllowedAccountsModal(true)
+                  }}
+                >
+                  マスター
+                </button>
+              )}
               <button className="secondary" onClick={logoutFromApp}>ログアウト</button>
             </div>
           </div>
@@ -5431,6 +5553,11 @@ function App() {
                 >{tab.label}</button>
               ))}
             </div>
+            <div className="history-toolbar">
+              <button type="button" className="secondary" onClick={() => void openSnsPropertyHistory()}>
+                変更履歴
+              </button>
+            </div>
 
             {activeSnsPropertyPlatform === 'sokanri' && (
               <section className="panel table-panel sokanri-panel">
@@ -5977,6 +6104,46 @@ function App() {
               </div>
             </section>
           </>
+        )}
+
+        {snsPropertyHistoryOpen && (
+          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSnsPropertyHistoryOpen(false) }}>
+            <div className="modal-content history-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">変更履歴</h3>
+                <button type="button" className="secondary" onClick={() => setSnsPropertyHistoryOpen(false)}>閉じる</button>
+              </div>
+              {snsPropertyHistoryLoading ? (
+                <p className="history-empty">読み込み中...</p>
+              ) : snsPropertyHistoryEntries.length === 0 ? (
+                <p className="history-empty">まだ戻せる履歴がありません。</p>
+              ) : (
+                <div className="history-list">
+                  {snsPropertyHistoryEntries.map((entry) => (
+                    <div key={entry.id} className="history-item">
+                      <div>
+                        <strong>{getHistoryTitle(entry)}</strong>
+                        <p>
+                          {formatHistoryDate(entry.created_at)}
+                          {' / '}
+                          {entry.action === 'delete' ? '削除前' : entry.action === 'restore' ? '復元' : '編集前'}
+                          {entry.changed_field ? ` / ${entry.changed_field}` : ''}
+                        </p>
+                        {entry.changed_field && (
+                          <p className="history-diff">
+                            {entry.old_value || '空欄'} → {entry.new_value || '空欄'}
+                          </p>
+                        )}
+                      </div>
+                      <button type="button" className="primary" onClick={() => void restoreSnsPropertyEntry(entry)}>
+                        戻す
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {snsPropertyCreatePlatform && snsPropertyCreatePlatform !== 'recruitment' && (

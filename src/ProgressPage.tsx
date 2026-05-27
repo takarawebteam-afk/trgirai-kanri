@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import {
+  type ChangeHistoryEntry,
+  fetchChangeHistory,
+  formatHistoryDate,
+  getHistoryTitle,
+  restoreChangeHistory,
+  saveUndoSnapshot,
+} from './undoHistory'
 
 type ProductionStatus = '' | '撮影済' | '制作中' | 'チェック中' | '完了'
 type ProcessStatus = string
@@ -850,6 +858,9 @@ function LinkIcon() {
 export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProps) {
   const [records, setRecords] = useState<ProductionRecord[]>([])
   const [loading, setLoading] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState<ChangeHistoryEntry[]>([])
   const [showModal, setShowModal] = useState(false)
   const [formTab, setFormTab] = useState<FormTabKey>('basic')
   const [form, setForm] = useState<Omit<ProductionRecord, 'id' | 'created_at'>>({ ...defaultForm })
@@ -958,6 +969,34 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   useEffect(() => {
     fetchRecords()
   }, [])
+
+  async function openHistory() {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    try {
+      const entries = await fetchChangeHistory('progress', ['production_records'])
+      setHistoryEntries(entries)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '履歴を読み込めませんでした'
+      alert(`変更履歴を読み込めませんでした。\n\n${message}`)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  async function restoreProgressEntry(entry: ChangeHistoryEntry) {
+    const confirmed = window.confirm('この履歴の内容に戻しますか？')
+    if (!confirmed) return
+
+    try {
+      await restoreChangeHistory(entry)
+      await fetchRecords({ keepScroll: true, showLoading: false })
+      await openHistory()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '元に戻せませんでした'
+      alert(`元に戻せませんでした。\n\n${message}`)
+    }
+  }
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -1137,6 +1176,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
 
     if (window.confirm('反映できたので、進捗管理からこの行を削除しますか？')) {
+      await saveUndoSnapshot({
+        feature: 'progress',
+        tableName: 'production_records',
+        recordId: record.id,
+        action: 'delete',
+      })
       const { error } = await supabase.from('production_records').delete().eq('id', record.id)
       if (!error) {
         setRecords((prev) => prev.filter((item) => item.id !== record.id))
@@ -1194,6 +1239,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
       const existingId = existingRows?.[0]?.id
       if (existingId) {
+        await saveUndoSnapshot({
+          feature: 'snsproperty',
+          tableName: 'sns_instagram_properties',
+          recordId: existingId,
+          action: 'update',
+          changedField: 'progress_reflect',
+        })
         const { error } = await supabase
           .from('sns_instagram_properties')
           .update(rowData)
@@ -1334,6 +1386,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
 
     if (window.confirm('反映できたので、この行を進捗管理から削除しますか？')) {
+      await saveUndoSnapshot({
+        feature: 'progress',
+        tableName: 'production_records',
+        recordId: record.id,
+        action: 'delete',
+      })
       const { error } = await supabase.from('production_records').delete().eq('id', record.id)
       if (!error) {
         setRecords((prev) => prev.filter((item) => item.id !== record.id))
@@ -1385,13 +1443,22 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     // 既存レコードの UPDATE
     const dbField = field === 'material_saved' ? 'shooting_date' : field
     const normalizedValue = normalizeProgressFieldValue(field, value)
+    const currentRecord = records.find((record) => record.id === id) || null
+    await saveUndoSnapshot({
+      feature: 'progress',
+      tableName: 'production_records',
+      recordId: id,
+      action: 'update',
+      changedField: String(field),
+      oldValue: currentRecord?.[field as keyof ProductionRecord],
+      newValue: normalizedValue,
+    })
     const { error } = await supabase.from('production_records').update({ [dbField]: normalizedValue }).eq('id', id)
     if (error) {
       alert(`更新に失敗しました。\n${error.message}`)
       return false
     }
 
-    const currentRecord = records.find((record) => record.id === id) || null
     const localValue = normalizedValue ?? ''
     const updatedRecord: ProductionRecord | null = currentRecord
       ? {
@@ -1559,6 +1626,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     let errorMessage = ''
 
     if (editId) {
+      await saveUndoSnapshot({
+        feature: 'progress',
+        tableName: 'production_records',
+        recordId: editId,
+        action: 'update',
+        changedField: 'form',
+      })
       const { error } = await supabase.from('production_records').update(submissionData).eq('id', editId)
       errorMessage = error?.message || ''
     } else {
@@ -1641,6 +1715,13 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       contact_info: source.contact_info || '',
     }
 
+    await saveUndoSnapshot({
+      feature: 'progress',
+      tableName: 'production_records',
+      recordId: targetId,
+      action: 'update',
+      changedField: 'copy',
+    })
     const { error } = await supabase.from('production_records').update(patch).eq('id', targetId)
     if (error) {
       alert(`コピーに失敗しました。\n${error.message}`)
@@ -1655,6 +1736,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   async function deleteRecord(id: string) {
     if (!window.confirm('この行を削除しますか？')) return
+    await saveUndoSnapshot({
+      feature: 'progress',
+      tableName: 'production_records',
+      recordId: id,
+      action: 'delete',
+    })
     const { error } = await supabase.from('production_records').delete().eq('id', id)
     if (!error) {
       fetchRecords()
@@ -2607,6 +2694,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
       <section className="panel progress-table-panel">
         <div className="panel-heading progress-table-heading">
+          <button type="button" className="secondary" onClick={() => void openHistory()}>
+            変更履歴
+          </button>
           <div>
             <h2>動画制作進捗一覧</h2>
           </div>
@@ -2648,6 +2738,46 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           </div>
         ))}
       </section>
+
+      {historyOpen && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setHistoryOpen(false) }}>
+          <div className="modal-content history-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">変更履歴</h3>
+              <button type="button" className="secondary" onClick={() => setHistoryOpen(false)}>閉じる</button>
+            </div>
+            {historyLoading ? (
+              <p className="history-empty">読み込み中...</p>
+            ) : historyEntries.length === 0 ? (
+              <p className="history-empty">まだ戻せる履歴がありません。</p>
+            ) : (
+              <div className="history-list">
+                {historyEntries.map((entry) => (
+                  <div key={entry.id} className="history-item">
+                    <div>
+                      <strong>{getHistoryTitle(entry)}</strong>
+                      <p>
+                        {formatHistoryDate(entry.created_at)}
+                        {' / '}
+                        {entry.action === 'delete' ? '削除前' : entry.action === 'restore' ? '復元' : '編集前'}
+                        {entry.changed_field ? ` / ${entry.changed_field}` : ''}
+                      </p>
+                      {entry.changed_field && (
+                        <p className="history-diff">
+                          {entry.old_value || '空欄'} → {entry.new_value || '空欄'}
+                        </p>
+                      )}
+                    </div>
+                    <button type="button" className="primary" onClick={() => void restoreProgressEntry(entry)}>
+                      戻す
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {selectMenu && (
         <div

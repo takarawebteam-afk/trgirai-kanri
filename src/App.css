@@ -5506,6 +5506,52 @@ button.secondary.small {
   cursor: not-allowed;
 }
 
+.history-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 12px;
+}
+
+.history-modal {
+  max-width: 720px;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+  max-height: 62vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.history-item p {
+  margin: 4px 0 0;
+  color: var(--gray-600);
+  font-size: 0.82rem;
+}
+
+.history-diff {
+  word-break: break-word;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: var(--gray-400);
+}
+
 .sns-property-page-info {
   color: var(--gray-600);
   font-size: 0.85rem;
