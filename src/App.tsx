@@ -27,7 +27,7 @@ type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
 type TaskItemRecurrence = 'none' | 'monthly'
 type RecurringDateRule = 'same_day' | 'month_end'
-type PageKey = 'dashboard' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
+type PageKey = 'dashboard' | 'analysis' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
 
 type StockRecord = {
   id: string
@@ -483,6 +483,7 @@ const TASK_REPORT_CHART_COLORS = ['#005AFF', '#03AF7A', '#F6AA00', '#4DC4FF', '#
 
 const TAB_ITEMS: { key: PageKey; label: string }[] = [
   { key: 'dashboard', label: 'ダッシュボード' },
+  { key: 'analysis', label: '分析' },
   { key: 'busho', label: '部署予定' },
   { key: 'tasks', label: '案件管理' },
   { key: 'taskmanagement', label: 'タスク管理' },
@@ -5119,6 +5120,18 @@ function App() {
                 ))}
               </div>
             </section>
+          </section>
+        )}
+
+        {/* ===== 分析 ===== */}
+        {activePage === 'analysis' && (
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>分析</h2>
+                <p>中身はこれから追加します。</p>
+              </div>
+            </div>
           </section>
         )}
 
