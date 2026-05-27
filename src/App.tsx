@@ -847,6 +847,11 @@ const storeSnsPropertyPlatforms: StoreSnsPropertyPlatform[] = [
   'nishikita',
   'yao',
 ]
+const storeThreadsDateInputPlatforms = new Set<StoreSnsPropertyPlatform>([
+  'keihan-karilun',
+  'nagase',
+  'yao',
+])
 
 const storeSnsPropertyTableMap: Record<StoreSnsPropertyPlatform, SnsPropertyTableName> = {
   'keihan-karilun': 'sns_keihan_karilun_properties',
@@ -2824,6 +2829,7 @@ function App() {
     const isKeihanKarilun = platform === 'keihan-karilun'
     const isNishinomiyaKarilun = platform === 'nishinomiya-karilun'
     const hidesThreadsPostDate = isNishinomiyaKarilun || platform === 'nishikita'
+    const usesThreadsDateInput = storeThreadsDateInputPlatforms.has(platform)
     const emptyColSpan = 16 - (isKeihanKarilun ? 2 : 0) - (hidesThreadsPostDate ? 1 : 0)
 
     return (
@@ -2929,7 +2935,12 @@ function App() {
                       <td className="sns-col-check">{renderSnsSelect(r.youtube_wp, getSnsPropertySelectOptions('youtube_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'youtube_wp', value), () => openSnsPropertyOptionEditor('youtube_wp', 'YouTube WP'))}</td>
                     </>
                   )}
-                  {!hidesThreadsPostDate && (
+                  {!hidesThreadsPostDate && usesThreadsDateInput && (
+                    <td className="sns-col-date">
+                      {renderSnsTextInput(`${r.id}:threads_post_date`, r.threads_post_date, (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value), { type: 'date' })}
+                    </td>
+                  )}
+                  {!hidesThreadsPostDate && !usesThreadsDateInput && (
                     <td className="sns-col-date">{renderSnsSelect(r.threads_post_date, getSnsPropertySelectOptions('threads_post_date'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'threads_post_date', value), () => openSnsPropertyOptionEditor('threads_post_date', 'threads投稿日'))}</td>
                   )}
                   <td className="sns-col-post-text">{renderSnsSelect(r.post_text, getSnsPropertySelectOptions('post_text'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'post_text', value), () => openSnsPropertyOptionEditor('post_text', '投稿文'))}</td>
@@ -3158,17 +3169,20 @@ function App() {
     onSave: (value: string) => void,
     options?: { type?: 'text' | 'date'; placeholder?: string },
   ) {
+    const isDateInput = options?.type === 'date'
+    const inputValue = isDateInput && !/^\d{4}-\d{2}-\d{2}$/.test(value || '') ? '' : value || ''
+
     return (
       <input
-        key={`${cellKey}:${value}`}
-        className={`progress-cell-input sns-cell-input${options?.type === 'date' ? ' is-date' : ''}`}
+        key={`${cellKey}:${inputValue}`}
+        className={`progress-cell-input sns-cell-input${isDateInput ? ' is-date' : ''}`}
         type={options?.type || 'text'}
-        defaultValue={value || ''}
+        defaultValue={inputValue}
         title={value || options?.placeholder || ''}
         placeholder={options?.placeholder}
         onBlur={(event) => {
           const nextValue = event.target.value
-          if (nextValue !== (value || '')) onSave(nextValue)
+          if (nextValue !== inputValue) onSave(nextValue)
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
