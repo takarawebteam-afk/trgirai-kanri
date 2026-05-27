@@ -43,6 +43,7 @@ type TiktokProgressRecord = {
   id: string
   shooting_start_date: string | null
   shooting_date: string | null
+  material_processing: string | null
   property_name: string
   media: string
 }
@@ -1733,18 +1734,27 @@ function App() {
     const validRecords = tiktokProgressForStock.filter(r => r.shooting_start_date && r.property_name && r.property_name.trim())
     const grouped: Record<string, TiktokProgressRecord[]> = {}
     for (const r of validRecords) {
-      const key = r.shooting_start_date!
+      const isRecruitment = r.media === '採用'
+      const label = isRecruitment ? '採用' : 'TikTok'
+      const key = `${label}::${r.shooting_start_date!}`
       if (!grouped[key]) grouped[key] = []
       grouped[key].push(r)
     }
-    return Object.entries(grouped).map(([date, recs]) => ({
-      id: `tiktok-${date}`,
-      deadline: date,
-      label: 'TikTok',
-      required_count: recs.length,
-      achieved_count: recs.filter(r => r.shooting_date && r.shooting_date.trim()).length,
-      note: '',
-    })).sort((a, b) => a.deadline.localeCompare(b.deadline))
+    return Object.entries(grouped).map(([key, recs]) => {
+      const [label, date] = key.split('::')
+      const isRecruitment = label === '採用'
+      const achieved_count = isRecruitment
+        ? recs.filter(r => r.material_processing && r.material_processing.trim()).length
+        : recs.filter(r => r.shooting_date && r.shooting_date.trim()).length
+      return {
+        id: `derived-${key}`,
+        deadline: date,
+        label,
+        required_count: recs.length,
+        achieved_count,
+        note: '',
+      }
+    }).sort((a, b) => a.deadline.localeCompare(b.deadline))
   }, [tiktokProgressForStock])
   const [weatherMap, setWeatherMap] = useState<Record<string, number>>({})
   const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
@@ -2286,8 +2296,8 @@ function App() {
   async function fetchTiktokProgressForStock() {
     const { data } = await supabase
       .from('production_records')
-      .select('id,shooting_start_date,shooting_date,property_name,media')
-      .ilike('media', '%TikTok%')
+      .select('id,shooting_start_date,shooting_date,material_processing,property_name,media')
+      .or('media.ilike.%TikTok%,media.eq.採用')
       .not('shooting_start_date', 'is', null)
     if (data) setTiktokProgressForStock(data as TiktokProgressRecord[])
   }
