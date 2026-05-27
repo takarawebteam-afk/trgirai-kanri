@@ -130,7 +130,6 @@ h1 {
 }
 
 .nav-collapse-button {
-  align-self: flex-end;
   min-height: 0;
   padding: 5px 10px;
   border: 1px solid rgba(255,255,255,0.28);
@@ -804,7 +803,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 
 .header-panel-auth {
   gap: 8px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .auth-topbar {
