@@ -1731,7 +1731,7 @@ function App() {
   const [stockAttendanceMap, setStockAttendanceMap] = useState<Record<string, string[]>>({})
   const [stockHonmachiDateMap, setStockHonmachiDateMap] = useState<Record<string, boolean>>({})
   const tiktokDerivedStocks = useMemo(() => {
-    const validRecords = tiktokProgressForStock.filter(r => r.shooting_start_date && r.property_name && r.property_name.trim())
+    const validRecords = tiktokProgressForStock.filter(r => r.shooting_start_date)
     const grouped: Record<string, TiktokProgressRecord[]> = {}
     for (const r of validRecords) {
       const isRecruitment = r.media === '採用'
