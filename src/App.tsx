@@ -1756,6 +1756,14 @@ function App() {
       }
     }).sort((a, b) => a.deadline.localeCompare(b.deadline))
   }, [tiktokProgressForStock])
+  const incompleteStockRecords = useMemo(
+    () => stockRecords.filter(r => Number(r.achieved_count) < Number(r.required_count)),
+    [stockRecords],
+  )
+  const incompleteTiktokDerivedStocks = useMemo(
+    () => tiktokDerivedStocks.filter(r => Number(r.achieved_count) < Number(r.required_count)),
+    [tiktokDerivedStocks],
+  )
   const [weatherMap, setWeatherMap] = useState<Record<string, number>>({})
   const [bushoSchedules, setBushoSchedules] = useState<BushoSchedule[]>([])
   const [bushoForm, setBushoForm] = useState(defaultBushoForm)
@@ -6688,7 +6696,7 @@ function App() {
           }
           for (let d = 1; d <= lastDay.getDate(); d++) {
             const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: [...stockRecords.filter(r => r.deadline === dateStr), ...tiktokDerivedStocks.filter(r => r.deadline === dateStr)] })
+            cells.push({ day: d, date: dateStr, isOtherMonth: false, isToday: dateStr === today2, stocks: [...incompleteStockRecords.filter(r => r.deadline === dateStr), ...incompleteTiktokDerivedStocks.filter(r => r.deadline === dateStr)] })
           }
           const remaining = (7 - (cells.length % 7)) % 7
           for (let i = 1; i <= remaining; i++) cells.push({ day: i, date: '', isOtherMonth: true, isToday: false, stocks: [] })
@@ -6760,8 +6768,8 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stockRecords.length === 0 && tiktokDerivedStocks.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
-                      {stockRecords.map(r => {
+                      {incompleteStockRecords.length === 0 && incompleteTiktokDerivedStocks.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
+                      {incompleteStockRecords.map(r => {
                         const isEditing = stockInlineId === r.id
                         const f = stockInlineForm
                         return (
@@ -6793,7 +6801,7 @@ function App() {
                           </tr>
                         )
                       })}
-                      {tiktokDerivedStocks.map(r => (
+                      {incompleteTiktokDerivedStocks.map(r => (
                         <tr key={r.id} style={{ background: '#f0f9ff' }}>
                           <td>{r.deadline}</td>
                           <td><span style={{ fontSize: '0.78rem', background: r.label === '採用' ? '#1a73e8' : '#010101', color: '#fff', borderRadius: 3, padding: '1px 6px', display: 'inline-block', minWidth: '3.2rem', textAlign: 'center' }}>{r.label}</span></td>
