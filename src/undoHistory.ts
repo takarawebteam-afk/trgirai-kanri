@@ -98,11 +98,23 @@ export async function fetchChangeHistory(
 
 export async function restoreChangeHistory(entry: ChangeHistoryEntry) {
   const snapshot = { ...entry.snapshot, id: entry.record_id }
-  const { error } = await supabase
-    .from(entry.table_name)
-    .upsert(snapshot, { onConflict: 'id' })
 
-  if (error) throw error
+  const { data: updated, error: updateError } = await supabase
+    .from(entry.table_name)
+    .update(snapshot)
+    .eq('id', entry.record_id)
+    .select('id')
+    .maybeSingle()
+
+  if (updateError) throw updateError
+
+  if (!updated) {
+    const { error: insertError } = await supabase
+      .from(entry.table_name)
+      .insert(snapshot)
+
+    if (insertError) throw insertError
+  }
 
   await supabase.from('change_history').insert({
     feature: entry.feature,
