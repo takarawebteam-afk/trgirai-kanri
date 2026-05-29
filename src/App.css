@@ -4309,50 +4309,43 @@ button.secondary.small {
   color: #5f6368;
 }
 
-.task-report-filter {
+.task-report-period-filter {
   display: flex;
-  gap: 12px;
-  align-items: end;
+  gap: 8px;
+  align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 760px;
 }
 
-.task-report-filter label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 0.86rem;
-  font-weight: 700;
-  color: #3c4043;
-}
-
-.task-report-filter input {
-  min-width: 180px;
-  padding: 13px 14px;
+.task-report-period-button {
+  min-width: 58px;
+  padding: 10px 14px;
   border: 1px solid #dadce0;
   border-radius: 8px;
   background: #ffffff;
   color: #202124;
-  font-size: 0.98rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
   box-shadow: none;
+  cursor: pointer;
 }
 
-.task-report-filter input:focus {
+.task-report-period-button:hover {
   border-color: #1a73e8;
-  box-shadow: none;
+  background: #f8fafd;
 }
 
-.task-report-filter .primary {
-  min-height: 47px;
-  border-radius: 8px;
+.task-report-period-button.active {
+  border-color: #1a73e8;
   background: #1a73e8;
-  box-shadow: none;
-  transform: none;
+  color: #ffffff;
 }
 
-.task-report-filter .primary:hover {
-  background: #1765cc;
-  transform: none;
-  box-shadow: none;
+.task-report-period-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .task-report-error {
@@ -5024,13 +5017,15 @@ button.secondary.small {
   }
 
   .task-report-hero-top,
-  .task-report-filter {
+  .task-report-period-filter {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .task-report-filter input {
-    min-width: 0;
+  .task-report-period-filter {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-width: none;
   }
 
   .task-report-title-block h2 {

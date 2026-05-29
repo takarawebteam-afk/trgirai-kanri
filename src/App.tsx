@@ -9079,8 +9079,10 @@ function getTaskReportWorkMinutes(memberName: string, events: TaskReportCalendar
 function TaskReportPanel() {
   const today = new Date().toISOString().slice(0, 10)
   const firstDayOfMonth = `${today.slice(0, 8)}01`
+  const currentYear = today.slice(0, 4)
   const [startDate, setStartDate] = useState(firstDayOfMonth)
   const [endDate, setEndDate] = useState(today)
+  const [selectedReportPeriod, setSelectedReportPeriod] = useState(today.slice(0, 7))
   const [rows, setRows] = useState<TaskReportRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -9099,6 +9101,44 @@ function TaskReportPanel() {
   const [categoryDraft, setCategoryDraft] = useState({ id: '', name: '', keywords: '' })
   const [workMinutesByDate, setWorkMinutesByDate] = useState<Record<string, Record<string, number>>>({})
   const categoryOptions = getTaskReportCategoryOptions(categoryMasters)
+  const reportPeriodOptions = [
+    { key: 'total', label: '累計' },
+    ...Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1
+      return {
+        key: `${currentYear}-${String(month).padStart(2, '0')}`,
+        label: `${month}月`,
+      }
+    }),
+  ]
+
+  const getReportPeriodRange = (periodKey: string) => {
+    if (periodKey === 'total') {
+      return {
+        start: `${currentYear}-01-01`,
+        end: today,
+      }
+    }
+
+    const [year, month] = periodKey.split('-').map(Number)
+    const monthLastDay = new Date(year, month, 0).getDate()
+    const monthEnd = `${periodKey}-${String(monthLastDay).padStart(2, '0')}`
+
+    return {
+      start: `${periodKey}-01`,
+      end: periodKey === today.slice(0, 7) ? today : monthEnd,
+    }
+  }
+
+  const selectReportPeriod = (periodKey: string) => {
+    const range = getReportPeriodRange(periodKey)
+    setSelectedReportPeriod(periodKey)
+    setStartDate(range.start)
+    setEndDate(range.end)
+    const nextListDate = periodKey === 'total' ? today : range.end
+    setListMonth(nextListDate.slice(0, 7))
+    setListDate(nextListDate)
+  }
 
   const loadCategoryMasters = useCallback(async () => {
     setCategoryModalLoading(true)
@@ -9640,18 +9680,18 @@ function TaskReportPanel() {
             <h2>WEBチームの業務棚卸し</h2>
             <p>期間を選択すると、実行した業務と時間をまとめて見られます。</p>
           </div>
-          <div className="task-report-filter">
-            <label>
-              開始日
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </label>
-            <label>
-              終了日
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </label>
-            <button className="primary" onClick={fetchReport} disabled={loading}>
-              {loading ? '読み込み中...' : '集計する'}
-            </button>
+          <div className="task-report-period-filter" role="group" aria-label="集計期間">
+            {reportPeriodOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={`task-report-period-button ${selectedReportPeriod === option.key ? 'active' : ''}`}
+                onClick={() => selectReportPeriod(option.key)}
+                disabled={loading}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
         {error && <p className="task-report-error">{error}</p>}
