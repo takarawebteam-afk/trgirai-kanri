@@ -1269,7 +1269,7 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
 
 function isSokanriDoneValue(value: string | null | undefined) {
   const normalized = String(value || '').trim()
-  return normalized.includes('〇') || normalized.includes('○')
+  return /^[〇○OＯ]/i.test(normalized)
 }
 
 function sortSnsPropertyRowsByPropertyNumber<T extends { property_number: string; created_at?: string }>(rows: T[]) {
