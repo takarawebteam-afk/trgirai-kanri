@@ -2773,8 +2773,8 @@ function App() {
 
         const doneDates: string[] = []
         for (const [date, dateRows] of Object.entries(byDate)) {
-          const allDone = dateRows.every((row) => isSokanriDoneValue(row[col]))
-          if (allDone) doneDates.push(date)
+          const hasDone = dateRows.some((row) => isSokanriDoneValue(row[col]))
+          if (hasDone) doneDates.push(date)
         }
         result[apKey] = doneDates
       }
