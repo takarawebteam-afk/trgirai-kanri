@@ -5423,6 +5423,20 @@ button.secondary.small {
   max-width: 84px;
 }
 
+.sns-property-table-recruitment th.sns-col-plan,
+.sns-property-table-recruitment td.sns-col-plan {
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
+}
+
+.sns-property-table-recruitment th.sns-col-property-name,
+.sns-property-table-recruitment td.sns-col-property-name {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+}
+
 .sns-property-table th.sns-col-memo,
 .sns-property-table td.sns-col-memo {
   width: 56px;
