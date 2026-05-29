@@ -1267,6 +1267,11 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
   return `${propertyYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
 }
 
+function isSokanriDoneValue(value: string | null | undefined) {
+  const normalized = String(value || '').trim()
+  return normalized.includes('〇') || normalized.includes('○')
+}
+
 function sortSnsPropertyRowsByPropertyNumber<T extends { property_number: string; created_at?: string }>(rows: T[]) {
   return [...rows].sort((a, b) => {
     if (!a.property_number && !b.property_number) {
@@ -2720,33 +2725,40 @@ function App() {
       youtube: 'youtube_reserved',
       threads: 'threads_post_date',
     }
+    type SokanriStoreRow = {
+      post_date?: string | null
+      property_number?: string | null
+      tiktok_reserved?: string | null
+      instagram_reserved?: string | null
+      youtube_reserved?: string | null
+      threads_post_date?: string | null
+    }
 
-    const prevYearTodayStr = `${Number(todayStr.slice(0, 4)) - 1}${todayStr.slice(4)}`
-    const prevYearEndStr = `${Number(endStr.slice(0, 4)) - 1}${endStr.slice(4)}`
+    async function fetchStoreRowsForSokanri(table: string) {
+      const rows: SokanriStoreRow[] = []
+      const pageSize = 1000
+
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from(table)
+          .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
+          .range(from, from + pageSize - 1)
+
+        if (error) {
+          console.error('SNS総管理の店舗データ読み込みに失敗しました', table, error)
+          break
+        }
+
+        const pageRows = (data || []) as SokanriStoreRow[]
+        rows.push(...pageRows)
+        if (pageRows.length < pageSize) break
+      }
+
+      return rows
+    }
 
     for (const { accountKey, table, platforms } of storeMap) {
-      const [{ data: rowsCurrent }, { data: rowsPrev }] = await Promise.all([
-        supabase
-          .from(table)
-          .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
-          .gte('post_date', todayStr)
-          .lte('post_date', endStr),
-        supabase
-          .from(table)
-          .select('post_date,property_number,tiktok_reserved,instagram_reserved,youtube_reserved,threads_post_date')
-          .gte('post_date', prevYearTodayStr)
-          .lte('post_date', prevYearEndStr),
-      ])
-      const rows = [...(rowsCurrent || []), ...(rowsPrev || [])]
-
-      const typedRows = (rows || []) as {
-        post_date?: string | null
-        property_number?: string | null
-        tiktok_reserved?: string | null
-        instagram_reserved?: string | null
-        youtube_reserved?: string | null
-        threads_post_date?: string | null
-      }[]
+      const typedRows = await fetchStoreRowsForSokanri(table)
 
       for (const platform of platforms) {
         const apKey = `${accountKey}-${platform}`
@@ -2761,7 +2773,7 @@ function App() {
 
         const doneDates: string[] = []
         for (const [date, dateRows] of Object.entries(byDate)) {
-          const allDone = dateRows.every((row) => row[col] && String(row[col]).includes('〇'))
+          const allDone = dateRows.every((row) => isSokanriDoneValue(row[col]))
           if (allDone) doneDates.push(date)
         }
         result[apKey] = doneDates
