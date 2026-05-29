@@ -9086,6 +9086,7 @@ function TaskReportPanel() {
   const [error, setError] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<string[]>([])
   const [chartMetric, setChartMetric] = useState<'count' | 'minutes'>('count')
+  const [selectedReportMember, setSelectedReportMember] = useState<string | null>(null)
   const [savingRowId, setSavingRowId] = useState('')
   const [listMonth, setListMonth] = useState(today.slice(0, 7))
   const [listDate, setListDate] = useState(today)
@@ -9335,7 +9336,14 @@ function TaskReportPanel() {
     }
     return dates
   })()
-  const totalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0)
+  const reportRows = selectedReportMember
+    ? rows.filter((row) => row.member_name === selectedReportMember)
+    : rows
+  const visibleMemberOptions = selectedReportMember
+    ? TEAM_MEMBER_OPTIONS.filter((member) => member.name === selectedReportMember)
+    : TEAM_MEMBER_OPTIONS
+  const visibleMemberIndexes = new Map(TEAM_MEMBER_OPTIONS.map((member, index) => [member.name, index]))
+  const allTotalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0)
   const perMember = TEAM_MEMBER_OPTIONS.map((member) => {
     const memberRows = rows.filter((row) => row.member_name === member.name)
     const minutes = memberRows.reduce((sum, row) => sum + row.minutes, 0)
@@ -9349,16 +9357,16 @@ function TaskReportPanel() {
       utilization: workMinutes > 0 ? Math.round((minutes / workMinutes) * 100) : null,
     }
   })
-  const totalWorkMinutes = perMember.reduce((sum, member) => sum + member.workMinutes, 0)
+  const allTotalWorkMinutes = perMember.reduce((sum, member) => sum + member.workMinutes, 0)
 
   const summaryCards = [
     {
       name: 'WEBチーム全体',
       count: rows.length,
-      minutes: totalMinutes,
-      workMinutes: totalWorkMinutes,
-      averageMinutes: rows.length > 0 ? Math.round(totalMinutes / rows.length) : 0,
-      utilization: totalWorkMinutes > 0 ? Math.round((totalMinutes / totalWorkMinutes) * 100) : null,
+      minutes: allTotalMinutes,
+      workMinutes: allTotalWorkMinutes,
+      averageMinutes: rows.length > 0 ? Math.round(allTotalMinutes / rows.length) : 0,
+      utilization: allTotalWorkMinutes > 0 ? Math.round((allTotalMinutes / allTotalWorkMinutes) * 100) : null,
       tone: 'total',
     },
     ...perMember.map((member, index) => ({
@@ -9378,7 +9386,7 @@ function TaskReportPanel() {
     }
   >()
 
-  rows.forEach((row) => {
+  reportRows.forEach((row) => {
     const category = row.category || classifyTaskReportName(row.task_name, categoryMasters).category
     const detail = row.task_name.trim() || 'タイトルなし'
 
@@ -9457,7 +9465,8 @@ function TaskReportPanel() {
   })
 
   const metricLabel = chartMetric === 'count' ? '件数' : '時間'
-  const loadBalanceChartData = [...perMember]
+  const loadBalanceChartData = perMember
+    .filter((member) => !selectedReportMember || member.name === selectedReportMember)
     .sort((a, b) => {
       const diff = chartMetric === 'count' ? b.count - a.count : b.minutes - a.minutes
       if (diff !== 0) return diff
@@ -9468,7 +9477,7 @@ function TaskReportPanel() {
       value: chartMetric === 'count' ? member.count : member.minutes,
     }))
 
-  const categoryBreakdownChartData = TEAM_MEMBER_OPTIONS.map((member) => {
+  const categoryBreakdownChartData = visibleMemberOptions.map((member) => {
     const item: Record<string, string | number> = { name: member.name }
     categorySections.forEach((section) => {
       item[section.category] = chartMetric === 'count'
@@ -9479,7 +9488,7 @@ function TaskReportPanel() {
   })
 
   const monthlyMap = new Map<string, { month: string; count: number; minutes: number }>()
-  rows.forEach((row) => {
+  reportRows.forEach((row) => {
     const monthKey = row.event_date.slice(0, 7)
     if (!monthlyMap.has(monthKey)) {
       monthlyMap.set(monthKey, { month: monthKey.replace('-', '/'), count: 0, minutes: 0 })
@@ -9496,8 +9505,8 @@ function TaskReportPanel() {
   const monthOptions = Array.from(new Set([today.slice(0, 7), ...rows.map((row) => row.event_date.slice(0, 7))]))
     .sort((a, b) => b.localeCompare(a, 'ja'))
 
-  const filteredRows = rows.filter((row) => row.event_date === listDate)
-  const filteredRowMemberSummaries = TEAM_MEMBER_OPTIONS.map((member) => {
+  const filteredRows = reportRows.filter((row) => row.event_date === listDate)
+  const filteredRowMemberSummaries = visibleMemberOptions.map((member) => {
     const totalMinutes = filteredRows
       .filter((row) => row.member_name === member.name)
       .reduce((sum, row) => sum + row.minutes, 0)
@@ -9648,7 +9657,14 @@ function TaskReportPanel() {
         {error && <p className="task-report-error">{error}</p>}
         <div className="task-report-member-grid">
           {summaryCards.map((member) => (
-            <article key={member.name} className={`task-report-member-card ${member.tone}`}>
+            <button
+              key={member.name}
+              type="button"
+              className={`task-report-member-card ${member.tone} ${
+                (member.tone === 'total' && !selectedReportMember) || selectedReportMember === member.name ? 'active' : ''
+              }`}
+              onClick={() => setSelectedReportMember(member.tone === 'total' ? null : member.name)}
+            >
               <span>{member.name}</span>
               <strong>{member.count}件</strong>
               <p>
@@ -9669,7 +9685,7 @@ function TaskReportPanel() {
                   </>
                 )}
               </small>
-            </article>
+            </button>
           ))}
         </div>
       </div>
@@ -9686,17 +9702,23 @@ function TaskReportPanel() {
             <thead>
               <tr>
                 <th>カテゴリ / 細分類業務</th>
-                {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                {visibleMemberOptions.map((member) => {
+                  const index = visibleMemberIndexes.get(member.name) || 0
+                  return (
                   <Fragment key={`count-${member.name}`}>
                     <th className={`task-report-member-head member-${index}`}>件数: {member.name}</th>
                   </Fragment>
-                ))}
+                  )
+                })}
                 <th>件数: 合計</th>
-                {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                {visibleMemberOptions.map((member) => {
+                  const index = visibleMemberIndexes.get(member.name) || 0
+                  return (
                   <Fragment key={`hours-${member.name}`}>
                     <th className={`task-report-member-head member-${index}`}>時間(h): {member.name}</th>
                   </Fragment>
-                ))}
+                  )
+                })}
                 <th>時間(h): 合計</th>
                 <th>平均(分/件)</th>
               </tr>
@@ -9704,7 +9726,7 @@ function TaskReportPanel() {
             <tbody>
               {categorySections.length === 0 && (
                 <tr>
-                  <td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>
+                  <td colSpan={visibleMemberOptions.length * 2 + 4} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>
                     この期間のタスクはまだありません
                   </td>
                 </tr>
@@ -9721,17 +9743,23 @@ function TaskReportPanel() {
                           <span>{section.category}</span>
                         </button>
                       </td>
-                      {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                      {visibleMemberOptions.map((member) => {
+                        const index = visibleMemberIndexes.get(member.name) || 0
+                        return (
                         <td key={`${section.category}-count-${member.name}`} className={`member-${index}`}>
                           {section.total.memberCounts[member.name] > 0 ? section.total.memberCounts[member.name] : '-'}
                         </td>
-                      ))}
+                        )
+                      })}
                       <td>{section.total.totalCount}</td>
-                      {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                      {visibleMemberOptions.map((member) => {
+                        const index = visibleMemberIndexes.get(member.name) || 0
+                        return (
                         <td key={`${section.category}-minutes-${member.name}`} className={`member-${index}`}>
                           {section.total.memberMinutes[member.name] > 0 ? formatTaskReportHours(section.total.memberMinutes[member.name]) : '-'}
                         </td>
-                      ))}
+                        )
+                      })}
                       <td>{formatTaskReportHours(section.total.totalMinutes)}</td>
                       <td>{section.total.averageMinutes}</td>
                     </tr>
@@ -9740,17 +9768,23 @@ function TaskReportPanel() {
                         <td className="task-report-detail-label">
                           <span className="task-report-detail-text" title={row.detail}>{row.detail}</span>
                         </td>
-                        {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                        {visibleMemberOptions.map((member) => {
+                          const index = visibleMemberIndexes.get(member.name) || 0
+                          return (
                           <td key={`${row.category}-${row.detail}-count-${member.name}`} className={`member-${index}`}>
                             {row.memberCounts[member.name] > 0 ? row.memberCounts[member.name] : '-'}
                           </td>
-                        ))}
+                          )
+                        })}
                         <td>{row.totalCount}</td>
-                        {TEAM_MEMBER_OPTIONS.map((member, index) => (
+                        {visibleMemberOptions.map((member) => {
+                          const index = visibleMemberIndexes.get(member.name) || 0
+                          return (
                           <td key={`${row.category}-${row.detail}-minutes-${member.name}`} className={`member-${index}`}>
                             {row.memberMinutes[member.name] > 0 ? formatTaskReportHours(row.memberMinutes[member.name]) : '-'}
                           </td>
-                        ))}
+                          )
+                        })}
                         <td>{formatTaskReportHours(row.totalMinutes)}</td>
                         <td>{row.averageMinutes}</td>
                       </tr>
