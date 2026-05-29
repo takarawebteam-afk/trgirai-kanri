@@ -630,6 +630,14 @@ type AnalysisTiktokSheetData = {
   fetchedAt?: string
 }
 
+type AnalysisTiktokSavedRow = {
+  year: number
+  month: number
+  account: string
+  metric: string
+  value: string | null
+}
+
 type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta'
 
 const ANALYSIS_YEAR = 2026
@@ -639,6 +647,29 @@ const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
   { key: 'tiktok', label: 'TikTok' },
   { key: 'insta', label: 'INSTA' },
 ]
+
+const ANALYSIS_TIKTOK_COLUMNS: AnalysisTiktokColumn[] = [
+  ...Array.from({ length: 11 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2025', month, label: `2025年${month}月` }
+  }),
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2026', month, label: `2026年${month}月` }
+  }),
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2027', month, label: `2027年${month}月` }
+  }),
+]
+
+const ANALYSIS_TIKTOK_GROUP_DEFINITIONS = [
+  { account: '長瀬', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', '電話クリック', 'URLクリック率', '電話クリック率'] },
+  { account: '西北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', '電話クリック', 'URLクリック率', '電話クリック率'] },
+  { account: '西宮市', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', '電話クリック', 'URLクリック率', '電話クリック率'] },
+  { account: '八尾', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', '電話クリック', 'URLクリック率', '電話クリック率'] },
+  { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '総視聴者数', 'プロフ閲覧'] },
+] as const
 
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
   {
@@ -720,6 +751,51 @@ function buildAnalysisGroupsFromImportedRows(rows: AnalysisSessionImportRow[]) {
       )),
     })),
   }))
+}
+
+function createEmptyAnalysisTiktokData(): AnalysisTiktokSheetData {
+  return {
+    columns: ANALYSIS_TIKTOK_COLUMNS,
+    groups: ANALYSIS_TIKTOK_GROUP_DEFINITIONS.map((group) => ({
+      account: group.account,
+      rows: group.metrics.map((metric) => ({
+        metric,
+        values: ANALYSIS_TIKTOK_COLUMNS.map(() => ''),
+      })),
+    })),
+  }
+}
+
+function applyAnalysisTiktokSavedRows(rows: AnalysisTiktokSavedRow[]) {
+  const baseData = createEmptyAnalysisTiktokData()
+  const valueMap = new Map(rows.map((row) => [`${row.account}::${row.metric}::${row.year}::${row.month}`, row.value || '']))
+
+  return {
+    ...baseData,
+    groups: baseData.groups.map((group) => ({
+      ...group,
+      rows: group.rows.map((metricRow) => ({
+        ...metricRow,
+        values: baseData.columns.map((column) => (
+          valueMap.get(`${group.account}::${metricRow.metric}::${Number(column.year)}::${Number(column.month)}`) || ''
+        )),
+      })),
+    })),
+  }
+}
+
+function buildAnalysisTiktokRowsToSave(data: AnalysisTiktokSheetData) {
+  return data.groups.flatMap((group) => (
+    group.rows.flatMap((row) => (
+      data.columns.map((column, index) => ({
+        year: Number(column.year),
+        month: Number(column.month),
+        account: group.account,
+        metric: row.metric,
+        value: row.values[index] || '',
+      }))
+    ))
+  ))
 }
 const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
 const jobTypes: JobType[] = ['正社員', 'パート']
@@ -1949,6 +2025,7 @@ function App() {
   const [analysisTiktokData, setAnalysisTiktokData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisTiktokLoading, setAnalysisTiktokLoading] = useState(false)
   const [analysisTiktokMessage, setAnalysisTiktokMessage] = useState('')
+  const [analysisTiktokSavingCell, setAnalysisTiktokSavingCell] = useState('')
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
@@ -2026,11 +2103,23 @@ function App() {
 
   async function fetchAnalysisTiktokSheet() {
     setAnalysisTiktokLoading(true)
-    setAnalysisTiktokMessage('')
+    setAnalysisTiktokMessage('読込中...')
 
     try {
+      const { data: savedRows, error } = await supabase
+        .from('analysis_tiktok_metrics')
+        .select('year, month, account, metric, value')
+
+      if (error) throw error
+
+      if (savedRows && savedRows.length > 0) {
+        setAnalysisTiktokData(applyAnalysisTiktokSavedRows(savedRows as AnalysisTiktokSavedRow[]))
+        setAnalysisTiktokMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        return
+      }
+
       const response = await fetch('/api/analysis-tiktok')
-      const data = await response.json() as {
+      const sheetData = await response.json() as {
         ok?: boolean
         message?: string
         columns?: AnalysisTiktokColumn[]
@@ -2038,21 +2127,79 @@ function App() {
         fetchedAt?: string
       }
 
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || 'TikTokの数字を取れませんでした。')
+      if (!response.ok || !sheetData.ok || !sheetData.columns || !sheetData.groups) {
+        setAnalysisTiktokData(createEmptyAnalysisTiktokData())
+        setAnalysisTiktokMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        return
       }
 
-      setAnalysisTiktokData({
-        columns: data.columns || [],
-        groups: data.groups || [],
-        fetchedAt: data.fetchedAt,
+      const importedData = {
+        columns: sheetData.columns,
+        groups: sheetData.groups,
+        fetchedAt: sheetData.fetchedAt,
+      }
+      setAnalysisTiktokData(importedData)
+
+      const rowsToSave = buildAnalysisTiktokRowsToSave(importedData)
+      await supabase.from('analysis_tiktok_metrics').upsert(rowsToSave, {
+        onConflict: 'year,month,account,metric',
       })
-      setAnalysisTiktokMessage(`最終更新: ${new Date(data.fetchedAt || Date.now()).toLocaleString('ja-JP')}`)
+      setAnalysisTiktokMessage('初回だけスプレッドシートの数字を取り込みました。これからはこの画面で直接入力できます。')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'TikTokの数字を取れませんでした。'
       setAnalysisTiktokMessage(message)
     } finally {
       setAnalysisTiktokLoading(false)
+    }
+  }
+
+  function updateAnalysisTiktokCell(groupIndex: number, rowIndex: number, valueIndex: number, value: string) {
+    setAnalysisTiktokData((current) => ({
+      ...current,
+      groups: current.groups.map((group, nextGroupIndex) => (
+        nextGroupIndex !== groupIndex
+          ? group
+          : {
+              ...group,
+              rows: group.rows.map((row, nextRowIndex) => (
+                nextRowIndex !== rowIndex
+                  ? row
+                  : {
+                      ...row,
+                      values: row.values.map((currentValue, nextValueIndex) => (
+                        nextValueIndex === valueIndex ? value : currentValue
+                      )),
+                    }
+              )),
+            }
+      )),
+    }))
+  }
+
+  async function saveAnalysisTiktokCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
+    const value = row.values[valueIndex] || ''
+    const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+    setAnalysisTiktokSavingCell(cellKey)
+
+    try {
+      const { error } = await supabase.from('analysis_tiktok_metrics').upsert({
+        year: Number(column.year),
+        month: Number(column.month),
+        account: group.account,
+        metric: row.metric,
+        value,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'year,month,account,metric',
+      })
+
+      if (error) throw error
+      setAnalysisTiktokMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '保存に失敗しました。'
+      setAnalysisTiktokMessage(`保存に失敗しました: ${message}`)
+    } finally {
+      setAnalysisTiktokSavingCell('')
     }
   }
 
@@ -5461,17 +5608,14 @@ function App() {
                 <div className="panel-heading">
                   <div>
                     <h2>TikTok</h2>
-                    <p>スプレッドシート「TikTok｜営業店」のリストと数字を表示します。</p>
+                    <p>セルをクリックして、スプレッドシートのように直接入力できます。</p>
                   </div>
                   <div className="analysis-actions">
                     {analysisTiktokMessage && (
-                      <span className={`analysis-import-message ${analysisTiktokMessage.includes('取れません') || analysisTiktokMessage.includes('読めません') || analysisTiktokMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
+                      <span className={`analysis-import-message ${analysisTiktokMessage.includes('失敗') || analysisTiktokMessage.includes('取れません') || analysisTiktokMessage.includes('読めません') || analysisTiktokMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
                         {analysisTiktokMessage}
                       </span>
                     )}
-                    <button className="primary" onClick={() => void fetchAnalysisTiktokSheet()} disabled={analysisTiktokLoading}>
-                      {analysisTiktokLoading ? '読込中...' : '再読込'}
-                    </button>
                   </div>
                 </div>
                 <div className="table-wrap analysis-monthly-table-wrap">
@@ -5489,11 +5633,11 @@ function App() {
                       {analysisTiktokData.groups.length === 0 && (
                         <tr>
                           <td colSpan={analysisTiktokData.columns.length + 2} className="analysis-empty-cell">
-                            表示できる数字がありません。
+                            {analysisTiktokLoading ? '読込中...' : '表示できる数字がありません。'}
                           </td>
                         </tr>
                       )}
-                      {analysisTiktokData.groups.map((group) => (
+                      {analysisTiktokData.groups.map((group, groupIndex) => (
                         <Fragment key={group.account}>
                           {group.rows.map((row, rowIndex) => (
                             <tr
@@ -5506,9 +5650,27 @@ function App() {
                                 </th>
                               )}
                               <th className="analysis-media-cell">{row.metric}</th>
-                              {row.values.map((value, valueIndex) => (
-                                <td key={valueIndex}>{value}</td>
-                              ))}
+                              {row.values.map((value, valueIndex) => {
+                                const column = analysisTiktokData.columns[valueIndex]
+                                const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+                                return (
+                                  <td key={valueIndex} className={analysisTiktokSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
+                                    <input
+                                      className="analysis-sheet-input"
+                                      value={value}
+                                      onChange={(e) => updateAnalysisTiktokCell(groupIndex, rowIndex, valueIndex, e.target.value)}
+                                      onBlur={() => void saveAnalysisTiktokCell(group, row, column, valueIndex)}
+                                      onFocus={(e) => e.target.select()}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.currentTarget.blur()
+                                        }
+                                      }}
+                                      aria-label={`${group.account} ${row.metric} ${column.label}`}
+                                    />
+                                  </td>
+                                )
+                              })}
                             </tr>
                           ))}
                         </Fragment>
