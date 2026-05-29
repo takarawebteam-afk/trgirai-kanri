@@ -5496,7 +5496,10 @@ function App() {
                       {analysisTiktokData.groups.map((group) => (
                         <Fragment key={group.account}>
                           {group.rows.map((row, rowIndex) => (
-                            <tr key={`${group.account}-${row.metric}`}>
+                            <tr
+                              key={`${group.account}-${row.metric}`}
+                              className={rowIndex === group.rows.length - 1 ? 'analysis-group-end-row' : ''}
+                            >
                               {rowIndex === 0 && (
                                 <th className="analysis-account-cell" rowSpan={group.rows.length}>
                                   {group.account}
