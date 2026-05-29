@@ -5583,6 +5583,25 @@ button.secondary.small {
   max-width: 160px;
 }
 
+.sns-property-table-recruitment th.sns-col-plan,
+.sns-property-table-recruitment td.sns-col-plan {
+  width: 104px;
+  min-width: 104px;
+  max-width: 104px;
+}
+
+.sns-property-table-recruitment th.sns-col-property-name,
+.sns-property-table-recruitment td.sns-col-property-name {
+  width: 360px;
+  min-width: 360px;
+  max-width: 360px;
+}
+
+.sns-row-number {
+  display: block;
+  text-align: center;
+}
+
 .sns-property-table th.sns-col-post-text,
 .sns-property-table td.sns-col-post-text {
   width: 220px;

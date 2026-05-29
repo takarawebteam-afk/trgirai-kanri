@@ -6900,14 +6900,16 @@ function App() {
                       {recruitmentSnsProperties.length === 0 && (
                         <tr><td colSpan={10} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                       )}
-                      {recruitmentSnsProperties.map((r) => (
+                      {recruitmentSnsProperties.map((r, index) => (
                         <tr key={r.id} className="row-hoverable">
                           <td className="sns-col-memo">{renderSnsMemoCell('sns_recruitment_properties', r.id, r.memo)}</td>
                           <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, ''), (value) => updateRecruitmentSnsPropertyRow(r.id, 'post_date', value), { type: 'date' })}</td>
                           <td className="sns-col-weekday">{getWeekdayLabel(r.post_date)}</td>
                           <td className="sns-col-plan">{renderSnsSelect(r.category, ['リール', 'フィード'], (value) => updateRecruitmentSnsPropertyRow(r.id, 'category', value))}</td>
                           <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:title`, r.title, (value) => updateRecruitmentSnsPropertyRow(r.id, 'title', value))}</td>
-                          <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateRecruitmentSnsPropertyRow(r.id, 'property_number', value))}</td>
+                          <td className="sns-col-code">
+                            <span className="sns-row-number">{String((snsPropertyPage.recruitment - 1) * SNS_PROPERTY_PAGE_SIZE + index + 1).padStart(3, '0')}</span>
+                          </td>
                           <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'tiktok_reserved', value), () => openSnsPropertyOptionEditor('tiktok_reserved', 'TikTok予約'))}</td>
                           <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'instagram_reserved', value), () => openSnsPropertyOptionEditor('instagram_reserved', 'INSTA予約'))}</td>
                           <td className="sns-col-check">{renderSnsSelect(r.youtube_reserved, getSnsPropertySelectOptions('youtube_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'youtube_reserved', value), () => openSnsPropertyOptionEditor('youtube_reserved', 'YouTube予約'))}</td>
