@@ -523,6 +523,27 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   border-bottom: 2px solid #1f2937;
 }
 
+.analysis-tiktok-sheet-table .analysis-account-cell {
+  background: #f8fafc;
+  border-bottom: 2px solid #1f2937;
+}
+
+.analysis-tiktok-sheet-table .analysis-media-cell {
+  background: #ffffff;
+}
+
+.analysis-tiktok-sheet-table tbody tr:last-child th,
+.analysis-tiktok-sheet-table tbody tr:last-child td {
+  border-bottom: 2px solid #1f2937;
+}
+
+.analysis-empty-cell {
+  padding: 24px;
+  color: var(--gray-500);
+  font-weight: 700;
+  text-align: center;
+}
+
 /* ===== 進行中案件 ===== */
 .ongoing-list { display: grid; gap: 10px; }
 

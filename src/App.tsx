@@ -608,6 +608,28 @@ type AnalysisSessionSavedRow = AnalysisSessionImportRow & {
   year: number
 }
 
+type AnalysisTiktokColumn = {
+  year: string
+  month: string
+  label: string
+}
+
+type AnalysisTiktokMetricRow = {
+  metric: string
+  values: string[]
+}
+
+type AnalysisTiktokGroup = {
+  account: string
+  rows: AnalysisTiktokMetricRow[]
+}
+
+type AnalysisTiktokSheetData = {
+  columns: AnalysisTiktokColumn[]
+  groups: AnalysisTiktokGroup[]
+  fetchedAt?: string
+}
+
 type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta'
 
 const ANALYSIS_YEAR = 2026
@@ -1924,6 +1946,9 @@ function App() {
   const [analysisImporting, setAnalysisImporting] = useState(false)
   const [analysisImportMessage, setAnalysisImportMessage] = useState('')
   const [analysisImportMessageType, setAnalysisImportMessageType] = useState<'success' | 'error'>('success')
+  const [analysisTiktokData, setAnalysisTiktokData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
+  const [analysisTiktokLoading, setAnalysisTiktokLoading] = useState(false)
+  const [analysisTiktokMessage, setAnalysisTiktokMessage] = useState('')
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
@@ -1996,6 +2021,38 @@ function App() {
     if (error) return
     if (data && data.length > 0) {
       setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(data as AnalysisSessionImportRow[]))
+    }
+  }
+
+  async function fetchAnalysisTiktokSheet() {
+    setAnalysisTiktokLoading(true)
+    setAnalysisTiktokMessage('')
+
+    try {
+      const response = await fetch('/api/analysis-tiktok')
+      const data = await response.json() as {
+        ok?: boolean
+        message?: string
+        columns?: AnalysisTiktokColumn[]
+        groups?: AnalysisTiktokGroup[]
+        fetchedAt?: string
+      }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'TikTokの数字を取れませんでした。')
+      }
+
+      setAnalysisTiktokData({
+        columns: data.columns || [],
+        groups: data.groups || [],
+        fetchedAt: data.fetchedAt,
+      })
+      setAnalysisTiktokMessage(`最終更新: ${new Date(data.fetchedAt || Date.now()).toLocaleString('ja-JP')}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'TikTokの数字を取れませんでした。'
+      setAnalysisTiktokMessage(message)
+    } finally {
+      setAnalysisTiktokLoading(false)
     }
   }
 
@@ -3863,6 +3920,7 @@ function App() {
     fetchBusho()
     fetchJishaShukyaku()
     fetchAnalysisSessions()
+    fetchAnalysisTiktokSheet()
 
     const channel = supabase
       .channel('db-changes')
@@ -5398,9 +5456,69 @@ function App() {
               </section>
             )}
 
-            {activeAnalysisSubTab !== 'analytics' && (
+            {activeAnalysisSubTab === 'tiktok' && (
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>TikTok</h2>
+                    <p>スプレッドシート「TikTok｜営業店」のリストと数字を表示します。</p>
+                  </div>
+                  <div className="analysis-actions">
+                    {analysisTiktokMessage && (
+                      <span className={`analysis-import-message ${analysisTiktokMessage.includes('取れません') || analysisTiktokMessage.includes('読めません') || analysisTiktokMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
+                        {analysisTiktokMessage}
+                      </span>
+                    )}
+                    <button className="primary" onClick={() => void fetchAnalysisTiktokSheet()} disabled={analysisTiktokLoading}>
+                      {analysisTiktokLoading ? '読込中...' : '再読込'}
+                    </button>
+                  </div>
+                </div>
+                <div className="table-wrap analysis-monthly-table-wrap">
+                  <table className="analysis-monthly-table analysis-tiktok-sheet-table">
+                    <thead>
+                      <tr>
+                        <th>リスト</th>
+                        <th>項目</th>
+                        {analysisTiktokData.columns.map((column) => (
+                          <th key={column.label}>{column.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisTiktokData.groups.length === 0 && (
+                        <tr>
+                          <td colSpan={analysisTiktokData.columns.length + 2} className="analysis-empty-cell">
+                            表示できる数字がありません。
+                          </td>
+                        </tr>
+                      )}
+                      {analysisTiktokData.groups.map((group) => (
+                        <Fragment key={group.account}>
+                          {group.rows.map((row, rowIndex) => (
+                            <tr key={`${group.account}-${row.metric}`}>
+                              {rowIndex === 0 && (
+                                <th className="analysis-account-cell" rowSpan={group.rows.length}>
+                                  {group.account}
+                                </th>
+                              )}
+                              <th className="analysis-media-cell">{row.metric}</th>
+                              {row.values.map((value, valueIndex) => (
+                                <td key={valueIndex}>{value}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeAnalysisSubTab === 'insta' && (
               <section className="panel analysis-coming-soon-panel">
-                <h2>{activeAnalysisSubTab === 'tiktok' ? 'TikTok' : 'INSTA'}</h2>
+                <h2>INSTA</h2>
                 <p>今後作成予定です。</p>
               </section>
             )}
