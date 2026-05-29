@@ -604,6 +604,11 @@ type AnalysisSessionImportRow = {
   sessions: number
 }
 
+type AnalysisSessionSavedRow = AnalysisSessionImportRow & {
+  year: number
+}
+
+const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
@@ -1948,7 +1953,21 @@ function App() {
         throw new Error(data.message || 'GA4から数字を取れませんでした。')
       }
 
-      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(data.rows))
+      const importedRows = data.rows || []
+      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(importedRows))
+
+      const rowsToSave: AnalysisSessionSavedRow[] = importedRows.map((row) => ({
+        year: ANALYSIS_YEAR,
+        account: row.account,
+        media: row.media,
+        month: row.month,
+        sessions: row.sessions,
+      }))
+      const { error } = await supabase.from('analysis_sessions').upsert(rowsToSave, {
+        onConflict: 'year,account,media,month',
+      })
+      if (error) throw error
+
       setAnalysisImportMessageType('success')
       setAnalysisImportMessage(`最終更新: ${new Date(data.fetchedAt || Date.now()).toLocaleString('ja-JP')}`)
     } catch (error) {
@@ -1957,6 +1976,18 @@ function App() {
       setAnalysisImportMessage(message)
     } finally {
       setAnalysisImporting(false)
+    }
+  }
+
+  async function fetchAnalysisSessions() {
+    const { data, error } = await supabase
+      .from('analysis_sessions')
+      .select('account, media, month, sessions')
+      .eq('year', ANALYSIS_YEAR)
+
+    if (error) return
+    if (data && data.length > 0) {
+      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(data as AnalysisSessionImportRow[]))
     }
   }
 
@@ -3823,6 +3854,7 @@ function App() {
     fetchTiktokProgressForStock()
     fetchBusho()
     fetchJishaShukyaku()
+    fetchAnalysisSessions()
 
     const channel = supabase
       .channel('db-changes')
@@ -3830,6 +3862,7 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posts' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, () => { void fetchTaskItems() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_sessions' }, () => { void fetchAnalysisSessions() })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
