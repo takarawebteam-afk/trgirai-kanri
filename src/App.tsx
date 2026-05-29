@@ -671,6 +671,27 @@ const ANALYSIS_TIKTOK_GROUP_DEFINITIONS = [
   { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '総視聴者数', 'プロフ閲覧'] },
 ] as const
 
+const ANALYSIS_INSTA_COLUMNS: AnalysisTiktokColumn[] = [
+  { year: '2024', month: '12', label: '2024年12月' },
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2025', month, label: `2025年${month}月` }
+  }),
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2026', month, label: `2026年${month}月` }
+  }),
+]
+
+const ANALYSIS_INSTA_GROUP_DEFINITIONS = [
+  { account: 'Karilun', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
+  { account: '長瀬', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
+  { account: '西北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
+  { account: '西宮市', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
+  { account: '八尾', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
+  { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
+] as const
+
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
   {
     account: 'Karilun',
@@ -796,6 +817,37 @@ function buildAnalysisTiktokRowsToSave(data: AnalysisTiktokSheetData) {
       }))
     ))
   ))
+}
+
+function createEmptyAnalysisInstaData(): AnalysisTiktokSheetData {
+  return {
+    columns: ANALYSIS_INSTA_COLUMNS,
+    groups: ANALYSIS_INSTA_GROUP_DEFINITIONS.map((group) => ({
+      account: group.account,
+      rows: group.metrics.map((metric) => ({
+        metric,
+        values: ANALYSIS_INSTA_COLUMNS.map(() => ''),
+      })),
+    })),
+  }
+}
+
+function applyAnalysisInstaSavedRows(rows: AnalysisTiktokSavedRow[]) {
+  const baseData = createEmptyAnalysisInstaData()
+  const valueMap = new Map(rows.map((row) => [`${row.account}::${row.metric}::${row.year}::${row.month}`, row.value || '']))
+
+  return {
+    ...baseData,
+    groups: baseData.groups.map((group) => ({
+      ...group,
+      rows: group.rows.map((metricRow) => ({
+        ...metricRow,
+        values: baseData.columns.map((column) => (
+          valueMap.get(`${group.account}::${metricRow.metric}::${Number(column.year)}::${Number(column.month)}`) || ''
+        )),
+      })),
+    })),
+  }
 }
 const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
 const jobTypes: JobType[] = ['正社員', 'パート']
@@ -2026,6 +2078,10 @@ function App() {
   const [analysisTiktokLoading, setAnalysisTiktokLoading] = useState(false)
   const [analysisTiktokMessage, setAnalysisTiktokMessage] = useState('')
   const [analysisTiktokSavingCell, setAnalysisTiktokSavingCell] = useState('')
+  const [analysisInstaData, setAnalysisInstaData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
+  const [analysisInstaLoading, setAnalysisInstaLoading] = useState(false)
+  const [analysisInstaMessage, setAnalysisInstaMessage] = useState('')
+  const [analysisInstaSavingCell, setAnalysisInstaSavingCell] = useState('')
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
@@ -2200,6 +2256,108 @@ function App() {
       setAnalysisTiktokMessage(`保存に失敗しました: ${message}`)
     } finally {
       setAnalysisTiktokSavingCell('')
+    }
+  }
+
+  async function fetchAnalysisInstaSheet() {
+    setAnalysisInstaLoading(true)
+    setAnalysisInstaMessage('読込中...')
+
+    try {
+      const { data: savedRows, error } = await supabase
+        .from('analysis_insta_metrics')
+        .select('year, month, account, metric, value')
+
+      if (error) throw error
+
+      if (savedRows && savedRows.length > 0) {
+        setAnalysisInstaData(applyAnalysisInstaSavedRows(savedRows as AnalysisTiktokSavedRow[]))
+        setAnalysisInstaMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        return
+      }
+
+      const response = await fetch('/api/analysis-insta')
+      const sheetData = await response.json() as {
+        ok?: boolean
+        message?: string
+        columns?: AnalysisTiktokColumn[]
+        groups?: AnalysisTiktokGroup[]
+        fetchedAt?: string
+      }
+
+      if (!response.ok || !sheetData.ok || !sheetData.columns || !sheetData.groups) {
+        setAnalysisInstaData(createEmptyAnalysisInstaData())
+        setAnalysisInstaMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        return
+      }
+
+      const importedData = {
+        columns: sheetData.columns,
+        groups: sheetData.groups,
+        fetchedAt: sheetData.fetchedAt,
+      }
+      setAnalysisInstaData(importedData)
+
+      const rowsToSave = buildAnalysisTiktokRowsToSave(importedData)
+      await supabase.from('analysis_insta_metrics').upsert(rowsToSave, {
+        onConflict: 'year,month,account,metric',
+      })
+      setAnalysisInstaMessage('初回だけスプレッドシートの数字を取り込みました。これからはこの画面で直接入力できます。')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'INSTAの数字を取れませんでした。'
+      setAnalysisInstaMessage(message)
+    } finally {
+      setAnalysisInstaLoading(false)
+    }
+  }
+
+  function updateAnalysisInstaCell(groupIndex: number, rowIndex: number, valueIndex: number, value: string) {
+    setAnalysisInstaData((current) => ({
+      ...current,
+      groups: current.groups.map((group, nextGroupIndex) => (
+        nextGroupIndex !== groupIndex
+          ? group
+          : {
+              ...group,
+              rows: group.rows.map((row, nextRowIndex) => (
+                nextRowIndex !== rowIndex
+                  ? row
+                  : {
+                      ...row,
+                      values: row.values.map((currentValue, nextValueIndex) => (
+                        nextValueIndex === valueIndex ? value : currentValue
+                      )),
+                    }
+              )),
+            }
+      )),
+    }))
+  }
+
+  async function saveAnalysisInstaCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
+    const value = row.values[valueIndex] || ''
+    const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+    setAnalysisInstaSavingCell(cellKey)
+
+    try {
+      const { error } = await supabase.from('analysis_insta_metrics').upsert({
+        year: Number(column.year),
+        month: Number(column.month),
+        account: group.account,
+        metric: row.metric,
+        value,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'year,month,account,metric',
+      })
+
+      if (error) throw error
+      setAnalysisInstaMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '保存に失敗しました。'
+      setAnalysisInstaMessage(`保存に失敗しました: ${message}`)
+    } finally {
+      setAnalysisInstaSavingCell('')
     }
   }
 
@@ -4068,6 +4226,7 @@ function App() {
     fetchJishaShukyaku()
     fetchAnalysisSessions()
     fetchAnalysisTiktokSheet()
+    fetchAnalysisInstaSheet()
 
     const channel = supabase
       .channel('db-changes')
@@ -5682,9 +5841,80 @@ function App() {
             )}
 
             {activeAnalysisSubTab === 'insta' && (
-              <section className="panel analysis-coming-soon-panel">
-                <h2>INSTA</h2>
-                <p>今後作成予定です。</p>
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>INSTA</h2>
+                    <p>セルをクリックして、スプレッドシートのように直接入力できます。</p>
+                  </div>
+                  <div className="analysis-actions">
+                    {analysisInstaMessage && (
+                      <span className={`analysis-import-message ${analysisInstaMessage.includes('失敗') || analysisInstaMessage.includes('取れません') || analysisInstaMessage.includes('読めません') || analysisInstaMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
+                        {analysisInstaMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="table-wrap analysis-monthly-table-wrap">
+                  <table className="analysis-monthly-table analysis-tiktok-sheet-table">
+                    <thead>
+                      <tr>
+                        <th>リスト</th>
+                        <th>項目</th>
+                        {analysisInstaData.columns.map((column) => (
+                          <th key={column.label}>{column.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisInstaData.groups.length === 0 && (
+                        <tr>
+                          <td colSpan={analysisInstaData.columns.length + 2} className="analysis-empty-cell">
+                            {analysisInstaLoading ? '読込中...' : '表示できる数字がありません。'}
+                          </td>
+                        </tr>
+                      )}
+                      {analysisInstaData.groups.map((group, groupIndex) => (
+                        <Fragment key={group.account}>
+                          {group.rows.map((row, rowIndex) => (
+                            <tr
+                              key={`${group.account}-${row.metric}`}
+                              className={rowIndex === group.rows.length - 1 ? 'analysis-group-end-row' : ''}
+                            >
+                              {rowIndex === 0 && (
+                                <th className="analysis-account-cell" rowSpan={group.rows.length}>
+                                  {group.account}
+                                </th>
+                              )}
+                              <th className="analysis-media-cell">{row.metric}</th>
+                              {row.values.map((value, valueIndex) => {
+                                const column = analysisInstaData.columns[valueIndex]
+                                const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+                                return (
+                                  <td key={valueIndex} className={analysisInstaSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
+                                    <input
+                                      className="analysis-sheet-input"
+                                      value={value}
+                                      onChange={(e) => updateAnalysisInstaCell(groupIndex, rowIndex, valueIndex, e.target.value)}
+                                      onBlur={() => void saveAnalysisInstaCell(group, row, column, valueIndex)}
+                                      onFocus={(e) => e.target.select()}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.currentTarget.blur()
+                                        }
+                                      }}
+                                      aria-label={`${group.account} ${row.metric} ${column.label}`}
+                                    />
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             )}
           </>
