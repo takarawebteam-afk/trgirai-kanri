@@ -392,6 +392,51 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 }
 
 /* ===== 分析ページ ===== */
+.analysis-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0 16px;
+}
+
+.analysis-subtabs button {
+  min-width: 118px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 2px solid var(--gray-400);
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.analysis-subtabs button:hover {
+  background: var(--gray-200);
+  border-color: var(--blue-600);
+}
+
+.analysis-subtabs button.active {
+  background: var(--blue-600);
+  color: var(--white);
+  border-color: var(--blue-600);
+  font-weight: 700;
+}
+
+.analysis-coming-soon-panel {
+  min-height: 220px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--gray-500);
+}
+
+.analysis-coming-soon-panel h2 {
+  color: var(--gray-800);
+}
+
 .analysis-actions {
   display: flex;
   align-items: center;
@@ -416,7 +461,7 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .analysis-monthly-table-wrap {
   border: 1px solid #cfd7e3;
-  max-height: calc(100vh - 210px);
+  overflow-y: visible;
 }
 
 .table-wrap table.analysis-monthly-table {

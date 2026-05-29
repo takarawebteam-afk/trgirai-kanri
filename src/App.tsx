@@ -608,8 +608,15 @@ type AnalysisSessionSavedRow = AnalysisSessionImportRow & {
   year: number
 }
 
+type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta'
+
 const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
+const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
+  { key: 'analytics', label: 'アナリティクス' },
+  { key: 'tiktok', label: 'TikTok' },
+  { key: 'insta', label: 'INSTA' },
+]
 
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
   {
@@ -1913,6 +1920,7 @@ function App() {
   const [allowedIpMessage, setAllowedIpMessage] = useState('')
   const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
   const [analysisTableGroups, setAnalysisTableGroups] = useState<AnalysisMonthlyAccountGroup[]>(ANALYSIS_MONTHLY_TABLE_GROUPS)
+  const [activeAnalysisSubTab, setActiveAnalysisSubTab] = useState<AnalysisSubTab>('analytics')
   const [analysisImporting, setAnalysisImporting] = useState(false)
   const [analysisImportMessage, setAnalysisImportMessage] = useState('')
   const [analysisImportMessageType, setAnalysisImportMessageType] = useState<'success' | 'error'>('success')
@@ -5311,68 +5319,92 @@ function App() {
 
         {/* ===== 分析 ===== */}
         {activePage === 'analysis' && (
-          <section className="panel table-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>分析</h2>
-                <p>各サイトへの流入数（アカウント別・媒体別の月別数値）を確認できます。</p>
-              </div>
-              <div className="analysis-actions">
-                {analysisImportMessage && (
-                  <span className={`analysis-import-message ${analysisImportMessageType === 'error' ? 'is-error' : 'is-success'}`}>
-                    {analysisImportMessage}
-                  </span>
-                )}
-                <button className="primary" onClick={() => void importAnalysisSessions()} disabled={analysisImporting}>
-                  {analysisImporting ? '取込中...' : 'GA4から取込'}
+          <>
+            <div className="analysis-subtabs">
+              {analysisSubTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={activeAnalysisSubTab === tab.key ? 'active' : ''}
+                  onClick={() => setActiveAnalysisSubTab(tab.key)}
+                >
+                  {tab.label}
                 </button>
-              </div>
+              ))}
             </div>
-            <div className="table-wrap analysis-monthly-table-wrap">
-              <table className="analysis-monthly-table">
-                <thead>
-                  <tr>
-                    <th>アカウント</th>
-                    <th>媒体</th>
-                    {ANALYSIS_MONTHS.map((month) => (
-                      <th key={month}>2026年{month}月</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {analysisTableGroups.map((group) => (
-                    <Fragment key={group.account}>
-                      {group.rows.map((row, rowIndex) => (
-                        <tr key={`${group.account}-${row.media}`}>
-                          {rowIndex === 0 && (
-                            <th className="analysis-account-cell" rowSpan={group.rows.length + 2}>
-                              {group.account}
-                            </th>
-                          )}
-                          <th className="analysis-media-cell">{row.media}</th>
-                          {ANALYSIS_MONTHS.map((_, monthIndex) => (
-                            <td key={monthIndex}>{row.values[monthIndex] ?? ''}</td>
+
+            {activeAnalysisSubTab === 'analytics' && (
+              <section className="panel table-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>分析</h2>
+                    <p>各サイトへの流入数（アカウント別・媒体別の月別数値）を確認できます。</p>
+                  </div>
+                  <div className="analysis-actions">
+                    {analysisImportMessage && (
+                      <span className={`analysis-import-message ${analysisImportMessageType === 'error' ? 'is-error' : 'is-success'}`}>
+                        {analysisImportMessage}
+                      </span>
+                    )}
+                    <button className="primary" onClick={() => void importAnalysisSessions()} disabled={analysisImporting}>
+                      {analysisImporting ? '取込中...' : 'GA4から取込'}
+                    </button>
+                  </div>
+                </div>
+                <div className="table-wrap analysis-monthly-table-wrap">
+                  <table className="analysis-monthly-table">
+                    <thead>
+                      <tr>
+                        <th>アカウント</th>
+                        <th>媒体</th>
+                        {ANALYSIS_MONTHS.map((month) => (
+                          <th key={month}>2026年{month}月</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisTableGroups.map((group) => (
+                        <Fragment key={group.account}>
+                          {group.rows.map((row, rowIndex) => (
+                            <tr key={`${group.account}-${row.media}`}>
+                              {rowIndex === 0 && (
+                                <th className="analysis-account-cell" rowSpan={group.rows.length + 2}>
+                                  {group.account}
+                                </th>
+                              )}
+                              <th className="analysis-media-cell">{row.media}</th>
+                              {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                                <td key={monthIndex}>{row.values[monthIndex] ?? ''}</td>
+                              ))}
+                            </tr>
                           ))}
-                        </tr>
+                          <tr className="analysis-total-row">
+                            <th className="analysis-media-cell">計</th>
+                            {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                              <td key={monthIndex}>{getAnalysisMonthlyTotal(group, monthIndex)}</td>
+                            ))}
+                          </tr>
+                          <tr className="analysis-diff-row">
+                            <th className="analysis-media-cell">前月比</th>
+                            {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                              <td key={monthIndex}>{getAnalysisMonthlyDiff(group, monthIndex)}</td>
+                            ))}
+                          </tr>
+                        </Fragment>
                       ))}
-                      <tr className="analysis-total-row">
-                        <th className="analysis-media-cell">計</th>
-                        {ANALYSIS_MONTHS.map((_, monthIndex) => (
-                          <td key={monthIndex}>{getAnalysisMonthlyTotal(group, monthIndex)}</td>
-                        ))}
-                      </tr>
-                      <tr className="analysis-diff-row">
-                        <th className="analysis-media-cell">前月比</th>
-                        {ANALYSIS_MONTHS.map((_, monthIndex) => (
-                          <td key={monthIndex}>{getAnalysisMonthlyDiff(group, monthIndex)}</td>
-                        ))}
-                      </tr>
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeAnalysisSubTab !== 'analytics' && (
+              <section className="panel analysis-coming-soon-panel">
+                <h2>{activeAnalysisSubTab === 'tiktok' ? 'TikTok' : 'INSTA'}</h2>
+                <p>今後作成予定です。</p>
+              </section>
+            )}
+          </>
         )}
 
         {/* ===== 案件管理 ===== */}
