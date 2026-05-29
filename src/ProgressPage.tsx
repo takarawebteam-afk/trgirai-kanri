@@ -26,6 +26,7 @@ interface ProductionRecord {
   status: ProductionStatus
   material_saved: string
   shooting_start_date: string
+  shooting_scheduled_date: string
   shooting_end_date: string
   scheduled_post_date: string
   aos_registered: string
@@ -322,6 +323,7 @@ type ProgressDateField =
   | 'material_saved'
   | 'shooting_date'
   | 'shooting_start_date'
+  | 'shooting_scheduled_date'
   | 'shooting_end_date'
   | 'scheduled_post_date'
 
@@ -329,6 +331,7 @@ function isProgressDateField(field: keyof ProductionRecord | 'shooting_date'): f
   return field === 'material_saved'
     || field === 'shooting_date'
     || field === 'shooting_start_date'
+    || field === 'shooting_scheduled_date'
     || field === 'shooting_end_date'
     || field === 'scheduled_post_date'
 }
@@ -752,6 +755,7 @@ const defaultForm: Omit<ProductionRecord, 'id' | 'created_at'> = {
   status: '',
   material_saved: '',
   shooting_start_date: '',
+  shooting_scheduled_date: '',
   shooting_end_date: '',
   scheduled_post_date: '',
   aos_registered: '',
@@ -938,6 +942,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           media: getMediaDisplayName(sanitizeSelectText(record.media, defaultForm.media)),
           material_saved: sanitizeSelectText(record.shooting_date),
           shooting_start_date: sanitizeSelectText(record.shooting_start_date),
+          shooting_scheduled_date: sanitizeSelectText(record.shooting_scheduled_date),
           shooting_end_date: sanitizeSelectText(record.shooting_end_date),
           scheduled_post_date: sanitizeSelectText(record.scheduled_post_date),
           post_type: sanitizeSelectText(record.post_type),
@@ -1449,6 +1454,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         media,
         shooting_date: null,
         shooting_start_date: null,
+        shooting_scheduled_date: null,
         shooting_end_date: null,
         scheduled_post_date: null,
         [dbField]: normalizedValue || null,
@@ -1646,6 +1652,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       media: getMediaDisplayName(form.media),
       shooting_date: form.material_saved || null,
       shooting_start_date: form.shooting_start_date || null,
+      shooting_scheduled_date: form.shooting_scheduled_date || null,
       shooting_end_date: null,
       scheduled_post_date: form.scheduled_post_date || null,
     }
@@ -1779,7 +1786,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   function renderDateCell(
     record: ProductionRecord,
-    field: 'material_saved' | 'shooting_start_date' | 'shooting_end_date' | 'scheduled_post_date',
+    field: 'material_saved' | 'shooting_start_date' | 'shooting_scheduled_date' | 'shooting_end_date' | 'scheduled_post_date',
     delayed = false,
   ) {
     return (
@@ -2257,6 +2264,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <colgroup>
           <col style={{ width: 90 }} />
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 72 }} />
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: 42 }} />
@@ -2276,6 +2284,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <tr>
             <th className="ptcol-group-1">素材保存</th>
             <th className="ptcol-group-1">撮影期日</th>
+            <th className="ptcol-group-1">撮影予定日</th>
             <th className="ptcol-group-1">撮影</th>
             <th className="ptcol-group-1">投稿予定日</th>
             <th className="ptcol-group-1">曜日</th>
@@ -2297,6 +2306,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'material_processing', 'recruitment_material_saved', '素材保存')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'shooting_start_date')}</td>
+              <td className="ptcell-group-1">{renderDateCell(record, 'shooting_scheduled_date')}</td>
               <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'status', 'recruitment_shooting', '撮影')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
               <td className="ptcell-group-1">{getWeekdayLabel(record.scheduled_post_date)}</td>
@@ -2317,6 +2327,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <tr key={record.id} className="row-hoverable row-draft">
               <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'material_processing', 'recruitment_material_saved', '素材保存')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'shooting_start_date')}</td>
+              <td className="ptcell-group-1">{renderDateCell(record, 'shooting_scheduled_date')}</td>
               <td className="ptcell-group-1">{renderRecruitmentSelectCell(record, 'status', 'recruitment_shooting', '撮影')}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date')}</td>
               <td className="ptcell-group-1">{getWeekdayLabel(record.scheduled_post_date)}</td>
@@ -2419,7 +2430,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               ))}
             </select>
           </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <label className="form-label">
               投稿予定日
               <input type="date" value={form.scheduled_post_date} onChange={(e) => setForm({ ...form, scheduled_post_date: e.target.value })} />
@@ -2427,6 +2438,10 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <label className="form-label">
               撮影期日
               <input type="date" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value, shooting_end_date: '' })} />
+            </label>
+            <label className="form-label">
+              撮影予定日
+              <input type="date" value={form.shooting_scheduled_date} onChange={(e) => setForm({ ...form, shooting_scheduled_date: e.target.value })} />
             </label>
           </div>
           <label className="form-label">
@@ -3020,6 +3035,12 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
                   <label className="form-label">
                     撮影期日
                     <input type="date" title="撮影期日" value={form.shooting_start_date} onChange={(e) => setForm({ ...form, shooting_start_date: e.target.value, shooting_end_date: '' })} />
+                  </label>
+                )}
+                {isRecruitmentMedia(form.media) && (
+                  <label className="form-label">
+                    撮影予定日
+                    <input type="date" value={form.shooting_scheduled_date} onChange={(e) => setForm({ ...form, shooting_scheduled_date: e.target.value })} />
                   </label>
                 )}
                 <label className="form-label">
