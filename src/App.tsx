@@ -1269,7 +1269,8 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
 
 function isSokanriDoneValue(value: string | null | undefined) {
   const normalized = String(value || '').trim()
-  return /^[〇○OＯ]/i.test(normalized)
+  const firstCode = normalized.codePointAt(0)
+  return firstCode === 0x3007 || firstCode === 0x25cb || firstCode === 0x4f || firstCode === 0x6f || firstCode === 0xff2f || firstCode === 0xff4f
 }
 
 function sortSnsPropertyRowsByPropertyNumber<T extends { property_number: string; created_at?: string }>(rows: T[]) {
