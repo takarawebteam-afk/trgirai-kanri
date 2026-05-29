@@ -2276,7 +2276,7 @@ function App() {
         return
       }
 
-      const response = await fetch('/api/analysis-insta')
+      const response = await fetch('/api/analysis-tiktok?sheet=insta')
       const sheetData = await response.json() as {
         ok?: boolean
         message?: string

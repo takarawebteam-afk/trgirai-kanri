@@ -1,8 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 const SPREADSHEET_ID = '1vgiE6-onVtpQP2mI44dj768FCi2Y9a0vSonB6tRBDCk'
-const SHEET_NAME = 'TikTok｜営業店'
-const SHEET_RANGE = 'A1:AK49'
+const SHEET_CONFIGS = {
+  tiktok: {
+    sheetName: 'TikTok｜営業店',
+    sheetRange: 'A1:AK49',
+  },
+  insta: {
+    sheetName: 'INSTA｜全アカ',
+    sheetRange: 'A1:AA56',
+  },
+} as const
 
 type SheetValue = string | number | boolean | null
 type SheetRow = SheetValue[]
@@ -97,6 +105,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ ok: false, message: 'GETで開いてください。' })
   }
 
+  const sheetType = req.query.sheet === 'insta' ? 'insta' : 'tiktok'
+  const config = SHEET_CONFIGS[sheetType]
+
   const apiKey = process.env.GOOGLE_SHEETS_API_KEY || process.env.VITE_GOOGLE_SHEETS_API_KEY
   if (!apiKey) {
     return res.status(200).json({
@@ -107,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
-  const range = encodeURIComponent(`'${SHEET_NAME}'!${SHEET_RANGE}`)
+  const range = encodeURIComponent(`'${config.sheetName}'!${config.sheetRange}`)
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`
 
   try {
@@ -121,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsed = parseSheetRows(data.values || [])
     return res.status(200).json({
       ok: true,
-      sheetName: SHEET_NAME,
+      sheetName: config.sheetName,
       fetchedAt: new Date().toISOString(),
       ...parsed,
     })
