@@ -5315,7 +5315,7 @@ function App() {
             <div className="panel-heading">
               <div>
                 <h2>分析</h2>
-                <p>アカウント別・媒体別の月別数値を確認できます。</p>
+                <p>各サイトへの流入数（アカウント別・媒体別の月別数値）を確認できます。</p>
               </div>
               <div className="analysis-actions">
                 {analysisImportMessage && (
