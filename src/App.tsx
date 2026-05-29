@@ -6908,7 +6908,7 @@ function App() {
                           <td className="sns-col-plan">{renderSnsSelect(r.category, ['リール', 'フィード'], (value) => updateRecruitmentSnsPropertyRow(r.id, 'category', value))}</td>
                           <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:title`, r.title, (value) => updateRecruitmentSnsPropertyRow(r.id, 'title', value))}</td>
                           <td className="sns-col-code">
-                            <span className="sns-row-number">{String((snsPropertyPage.recruitment - 1) * SNS_PROPERTY_PAGE_SIZE + index + 1).padStart(3, '0')}</span>
+                            <span className="sns-row-number">{String(snsPropertyTotalCount.recruitment - ((snsPropertyPage.recruitment - 1) * SNS_PROPERTY_PAGE_SIZE + index)).padStart(3, '0')}</span>
                           </td>
                           <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'tiktok_reserved', value), () => openSnsPropertyOptionEditor('tiktok_reserved', 'TikTok予約'))}</td>
                           <td className="sns-col-check">{renderSnsSelect(r.instagram_reserved, getSnsPropertySelectOptions('instagram_reserved'), (value) => updateRecruitmentSnsPropertyRow(r.id, 'instagram_reserved', value), () => openSnsPropertyOptionEditor('instagram_reserved', 'INSTA予約'))}</td>
