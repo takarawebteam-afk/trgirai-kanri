@@ -4311,16 +4311,19 @@ button.secondary.small {
 
 .task-report-period-filter {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  max-width: 760px;
+  max-width: none;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .task-report-period-button {
-  min-width: 58px;
-  padding: 10px 14px;
+  flex: 0 0 auto;
+  min-width: 52px;
+  padding: 9px 12px;
   border: 1px solid #dadce0;
   border-radius: 8px;
   background: #ffffff;
@@ -5023,8 +5026,6 @@ button.secondary.small {
   }
 
   .task-report-period-filter {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
     max-width: none;
   }
 
