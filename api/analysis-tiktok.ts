@@ -279,6 +279,19 @@ function getPrevYearMonth(year: number, month: number): { year: number; month: n
   return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 }
 
+function getCurrentYearMonthJst(): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: 'numeric',
+  }).formatToParts(new Date())
+
+  return {
+    year: Number(parts.find((part) => part.type === 'year')?.value),
+    month: Number(parts.find((part) => part.type === 'month')?.value),
+  }
+}
+
 async function fetchPreviousFollowers(
   supabase: ReturnType<typeof createClient>,
   accountNames: string[],
@@ -391,26 +404,37 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
   }
 }
 
-function buildInstagramRows(year: number, month: number, accountName: string, insights: InsightResult, previousFollowers: number | null) {
+function buildInstagramRows(
+  year: number,
+  month: number,
+  accountName: string,
+  insights: InsightResult,
+  previousFollowers: number | null,
+  includeFollowerMetrics: boolean,
+) {
   const { followers, mediaCountInPeriod, views, reach, urlClicks, profileViews } = insights
 
   const rows: Array<{ metric: string; value: number | string | null }> = [
-    { metric: 'フォロワー数', value: followers },
     { metric: '視聴回数(閲覧数)', value: views },
     { metric: '視聴者リーチ', value: reach },
     { metric: 'URLクリック', value: urlClicks },
     { metric: 'プロフ閲覧', value: profileViews },
   ]
 
+  if (includeFollowerMetrics) {
+    rows.unshift({ metric: 'フォロワー数', value: followers })
+  }
+
   if (mediaCountInPeriod !== null) {
     rows.push({ metric: '投稿数', value: mediaCountInPeriod })
   }
 
-  if (followers !== null && previousFollowers !== null) {
+  if (includeFollowerMetrics && followers !== null && previousFollowers !== null) {
     rows.push({ metric: 'フォロワー増加数', value: followers - previousFollowers })
   }
 
   if (
+    includeFollowerMetrics &&
     followers !== null &&
     previousFollowers !== null &&
     mediaCountInPeriod !== null &&
@@ -461,6 +485,8 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
     }
 
     const { year: prevYear, month: prevMonth } = getPrevYearMonth(year, month)
+    const currentYearMonth = getCurrentYearMonthJst()
+    const includeFollowerMetrics = year === currentYearMonth.year && month === currentYearMonth.month
     let previousFollowersMap: Record<string, number | null> = {}
     try {
       const supabaseForRead = getSupabaseClient()
@@ -497,7 +523,14 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
             ? insights.followers - previousFollowers
             : null,
         })
-        rowsToSave.push(...buildInstagramRows(year, month, account.account, insights, previousFollowers))
+        rowsToSave.push(...buildInstagramRows(
+          year,
+          month,
+          account.account,
+          insights,
+          previousFollowers,
+          includeFollowerMetrics,
+        ))
       } catch (error) {
         failures.push({
           key: account.key,
