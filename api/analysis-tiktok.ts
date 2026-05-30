@@ -331,10 +331,11 @@ async function fetchViewsForPeriod(
   accessToken: string,
   since: number,
   until: number,
-): Promise<number> {
+): Promise<{ total: number; chunks: Array<{ since: number; until: number; val: number | null; error?: string }> }> {
   const MAX_WINDOW = 30 * 24 * 60 * 60 // 30 days in seconds
   let total = 0
   let cursor = since
+  const chunks: Array<{ since: number; until: number; val: number | null; error?: string }> = []
 
   while (cursor < until) {
     const chunkUntil = Math.min(cursor + MAX_WINDOW, until)
@@ -345,13 +346,15 @@ async function fetchViewsForPeriod(
       )
       const val = sumInsightValues(data.data?.[0])
       if (val !== null) total += val
-    } catch {
-      // skip chunk on error
+      chunks.push({ since: cursor, until: chunkUntil, val })
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e)
+      chunks.push({ since: cursor, until: chunkUntil, val: null, error: errMsg })
     }
     cursor = chunkUntil
   }
 
-  return total
+  return { total, chunks }
 }
 
 async function fetchInstagramInsights(account: InstagramAccountConfig, accessToken: string, year: number, month: number): Promise<InsightResult> {
@@ -378,7 +381,8 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     }
   }
 
-  const accountViewsTotal = await fetchViewsForPeriod(account.instagramUserId, accessToken, since, until)
+  const viewsResult = await fetchViewsForPeriod(account.instagramUserId, accessToken, since, until)
+  const accountViewsTotal = viewsResult.total
 
   return {
     username: accountFields.username,
@@ -391,7 +395,7 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     profileViews: insights.profileViews,
     debugMediaItems: mediaStats.debugItems,
     aggregatedViewsDebug,
-    accountViewsDebug: accountViewsTotal,
+    accountViewsDebug: viewsResult,
   }
 }
 
