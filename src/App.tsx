@@ -2274,6 +2274,7 @@ function App() {
       const { data: savedRows, error } = await supabase
         .from('analysis_insta_metrics')
         .select('year, month, account, metric, value')
+        .limit(10000)
 
       if (error) throw error
 
