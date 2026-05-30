@@ -1572,6 +1572,29 @@ const currency = new Intl.NumberFormat('ja-JP', {
 
 const integer = new Intl.NumberFormat('ja-JP')
 
+function formatInteger(value: number | string | null | undefined): string {
+  const numericValue = typeof value === 'string' ? Number(value.replace(/,/g, '')) : Number(value ?? 0)
+  return integer.format(Number.isFinite(numericValue) ? numericValue : 0)
+}
+
+function formatNumericText(value: string | number | null | undefined): string {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+
+  const suffix = text.endsWith('%') ? '%' : ''
+  const body = suffix ? text.slice(0, -1) : text
+  const normalized = body.replace(/,/g, '')
+  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return text
+
+  const [integerPart, decimalPart] = normalized.split('.')
+  const formattedInteger = integer.format(Number(integerPart))
+  return `${formattedInteger}${decimalPart ? `.${decimalPart}` : ''}${suffix}`
+}
+
+function stripNumberCommas(value: string): string {
+  return value.replace(/,/g, '')
+}
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
@@ -2255,7 +2278,7 @@ function App() {
                   : {
                       ...row,
                       values: row.values.map((currentValue, nextValueIndex) => (
-                        nextValueIndex === valueIndex ? value : currentValue
+                        nextValueIndex === valueIndex ? stripNumberCommas(value) : currentValue
                       )),
                     }
               )),
@@ -2265,7 +2288,7 @@ function App() {
   }
 
   async function saveAnalysisTiktokCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
-    const value = row.values[valueIndex] || ''
+    const value = stripNumberCommas(row.values[valueIndex] || '')
     const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
     setAnalysisTiktokSavingCell(cellKey)
 
@@ -2367,7 +2390,7 @@ function App() {
                   : {
                       ...row,
                       values: row.values.map((currentValue, nextValueIndex) => (
-                        nextValueIndex === valueIndex ? value : currentValue
+                        nextValueIndex === valueIndex ? stripNumberCommas(value) : currentValue
                       )),
                     }
               )),
@@ -2377,7 +2400,7 @@ function App() {
   }
 
   async function saveAnalysisInstaCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
-    const value = row.values[valueIndex] || ''
+    const value = stripNumberCommas(row.values[valueIndex] || '')
     const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
     setAnalysisInstaSavingCell(cellKey)
 
@@ -3194,10 +3217,10 @@ function App() {
         <span className="sns-property-page-info">
           {activeSnsPropertyTotalCount === 0
             ? '0件'
-            : `${activeSnsPropertyPageInfo.from}-${activeSnsPropertyPageInfo.to}件 / 全${activeSnsPropertyTotalCount}件`}
+            : `${formatInteger(activeSnsPropertyPageInfo.from)}-${formatInteger(activeSnsPropertyPageInfo.to)}件 / 全${formatInteger(activeSnsPropertyTotalCount)}件`}
         </span>
         <span className="sns-property-page-info">
-          {activeSnsPropertyPageInfo.currentPage} / {activeSnsPropertyPageInfo.totalPages}ページ
+          {formatInteger(activeSnsPropertyPageInfo.currentPage)} / {formatInteger(activeSnsPropertyPageInfo.totalPages)}ページ
         </span>
       </div>
     )
@@ -3324,7 +3347,7 @@ function App() {
       }
 
       if (!options?.silent) {
-        alert(`スプレッドシート「${data.sheetName || ''}」へ反映しました。\n反映件数: ${data.count ?? 0}件`)
+        alert(`スプレッドシート「${data.sheetName || ''}」へ反映しました。\n反映件数: ${formatInteger(data.count ?? 0)}件`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
@@ -3849,7 +3872,7 @@ function App() {
       }
 
       if (!options?.silent) {
-        alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+        alert(`スプレッドシートへ反映しました。\n反映件数: ${formatInteger(data.count ?? 0)}件`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
@@ -3879,7 +3902,7 @@ function App() {
       }
 
       if (!options?.silent) {
-        alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+        alert(`スプレッドシートへ反映しました。\n反映件数: ${formatInteger(data.count ?? 0)}件`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
@@ -3909,7 +3932,7 @@ function App() {
       }
 
       if (!options?.silent) {
-        alert(`スプレッドシートへ反映しました。\n反映件数: ${data.count ?? 0}件`)
+        alert(`スプレッドシートへ反映しました。\n反映件数: ${formatInteger(data.count ?? 0)}件`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映に失敗しました。'
@@ -5882,20 +5905,20 @@ function App() {
                               )}
                               <th className="analysis-media-cell">{row.media}</th>
                               {ANALYSIS_MONTHS.map((_, monthIndex) => (
-                                <td key={monthIndex}>{row.values[monthIndex] ?? ''}</td>
+                                <td key={monthIndex}>{formatInteger(row.values[monthIndex] ?? 0)}</td>
                               ))}
                             </tr>
                           ))}
                           <tr className="analysis-total-row">
                             <th className="analysis-media-cell">計</th>
                             {ANALYSIS_MONTHS.map((_, monthIndex) => (
-                              <td key={monthIndex}>{getAnalysisMonthlyTotal(group, monthIndex)}</td>
+                              <td key={monthIndex}>{formatInteger(getAnalysisMonthlyTotal(group, monthIndex))}</td>
                             ))}
                           </tr>
                           <tr className="analysis-diff-row">
                             <th className="analysis-media-cell">前月比</th>
                             {ANALYSIS_MONTHS.map((_, monthIndex) => (
-                              <td key={monthIndex}>{getAnalysisMonthlyDiff(group, monthIndex)}</td>
+                              <td key={monthIndex}>{formatInteger(getAnalysisMonthlyDiff(group, monthIndex))}</td>
                             ))}
                           </tr>
                         </Fragment>
@@ -5978,7 +6001,7 @@ function App() {
                                   <td key={valueIndex} className={analysisTiktokSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
                                     <input
                                       className="analysis-sheet-input"
-                                      value={value}
+                                      value={formatNumericText(value)}
                                       onChange={(e) => updateAnalysisTiktokCell(groupIndex, rowIndex, valueIndex, e.target.value)}
                                       onBlur={() => void saveAnalysisTiktokCell(group, row, column, valueIndex)}
                                       onFocus={(e) => e.target.select()}
@@ -6082,7 +6105,7 @@ function App() {
                                   <td key={valueIndex} className={analysisInstaSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
                                     <input
                                       className="analysis-sheet-input"
-                                      value={value}
+                                      value={formatNumericText(value)}
                                       onChange={(e) => updateAnalysisInstaCell(groupIndex, rowIndex, valueIndex, e.target.value)}
                                       onBlur={() => void saveAnalysisInstaCell(group, row, column, valueIndex)}
                                       onFocus={(e) => e.target.select()}
@@ -6322,7 +6345,7 @@ function App() {
                                   }}
                                 >
                                   <span className="tm-child-toggle-label">{showChildren ? '閉じる' : '子タスク'}</span>
-                                  <span className="tm-child-badge">{childItems.length}</span>
+                                  <span className="tm-child-badge">{formatInteger(childItems.length)}</span>
                                 </button>
                               )}
                             </div>
@@ -7284,7 +7307,7 @@ function App() {
             {/* 一覧テーブル */}
             <section className="panel hankyo-table-panel">
               <div className="panel-heading">
-                <div><h2>反響一覧</h2><p>全{filteredHankyo.length}件 / {hankyoRecords.length}件中</p></div>
+                <div><h2>反響一覧</h2><p>全{formatInteger(filteredHankyo.length)}件 / {formatInteger(hankyoRecords.length)}件中</p></div>
               </div>
 
               {/* 検索・フィルター */}
@@ -7311,7 +7334,7 @@ function App() {
                       className={`hankyo-multiselect-btn${selected.length > 0 ? ' active' : ''}`}
                       onClick={() => setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)}
                     >
-                      {selected.length === 0 ? `全${label}` : `${label}(${selected.length})`}
+                      {selected.length === 0 ? `全${label}` : `${label}(${formatInteger(selected.length)})`}
                       <span className="hankyo-multiselect-arrow">▾</span>
                     </button>
                     {hankyoOpenFilter === key && (
@@ -7479,7 +7502,7 @@ function App() {
           <>
             <section className="panel table-panel">
               <div className="panel-heading">
-                <div><h2>DM一覧</h2><p>全{filteredDm.length}件 / {dmRecords.length}件中</p></div>
+                <div><h2>DM一覧</h2><p>全{formatInteger(filteredDm.length)}件 / {formatInteger(dmRecords.length)}件中</p></div>
               </div>
 
               {/* フィルター */}
@@ -7577,7 +7600,7 @@ function App() {
                     ))}
                   <button onClick={() => setDmPage(p => Math.min(dmTotalPages, p + 1))} disabled={dmPage === dmTotalPages}>›</button>
                   <button onClick={() => setDmPage(dmTotalPages)} disabled={dmPage === dmTotalPages}>»</button>
-                  <span className="hankyo-page-info">{dmPage} / {dmTotalPages}ページ</span>
+                  <span className="hankyo-page-info">{formatInteger(dmPage)} / {formatInteger(dmTotalPages)}ページ</span>
                 </div>
               )}
             </section>
@@ -7735,7 +7758,7 @@ function App() {
                             return (
                               <div key={s.id} className={`stock-badge${done ? ' done' : ''}`} title={s.note}>
                                 <span className="stock-badge-label">{s.label}</span>
-                                <span className="stock-badge-count">{s.required_count - s.achieved_count}/{s.required_count}件</span>
+                                <span className="stock-badge-count">{formatInteger(s.required_count - s.achieved_count)}/{formatInteger(s.required_count)}件</span>
                               </div>
                             )
                           })}
@@ -7770,10 +7793,10 @@ function App() {
                               {isEditing ? <input className="inline-input" value={f.label} onChange={e => setStockInlineForm({ ...f, label: e.target.value })} /> : r.label}
                             </td>
                             <td onClick={e => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" type="number" min="1" value={f.required_count} onChange={e => setStockInlineForm({ ...f, required_count: Number(e.target.value) })} /> : `${r.required_count}件`}
+                              {isEditing ? <input className="inline-input" type="number" min="1" value={f.required_count} onChange={e => setStockInlineForm({ ...f, required_count: Number(e.target.value) })} /> : `${formatInteger(r.required_count)}件`}
                             </td>
                             <td onClick={e => isEditing && e.stopPropagation()}>
-                              {isEditing ? <input className="inline-input" type="number" min="0" value={f.achieved_count} onChange={e => setStockInlineForm({ ...f, achieved_count: Number(e.target.value) })} /> : `${r.achieved_count}件`}
+                              {isEditing ? <input className="inline-input" type="number" min="0" value={f.achieved_count} onChange={e => setStockInlineForm({ ...f, achieved_count: Number(e.target.value) })} /> : `${formatInteger(r.achieved_count)}件`}
                             </td>
                             <td onClick={e => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" value={f.note} onChange={e => setStockInlineForm({ ...f, note: e.target.value })} /> : r.note}
@@ -7794,8 +7817,8 @@ function App() {
                         <tr key={r.id} style={{ background: '#f0f9ff' }}>
                           <td>{r.deadline}</td>
                           <td><span style={{ fontSize: '0.78rem', background: r.label === '採用' ? '#1a73e8' : '#010101', color: '#fff', borderRadius: 3, padding: '1px 6px', display: 'inline-block', minWidth: '3.2rem', textAlign: 'center' }}>{r.label}</span></td>
-                          <td>{r.required_count}件</td>
-                          <td>{r.achieved_count}件</td>
+                          <td>{formatInteger(r.required_count)}件</td>
+                          <td>{formatInteger(r.achieved_count)}件</td>
                           <td>{r.note}</td>
                           <td></td>
                         </tr>
@@ -9212,21 +9235,21 @@ function classifyTaskReportName(taskName: string, categories: TaskReportCategory
 }
 
 function formatTaskReportHours(minutes: number) {
-  return (minutes / 60).toFixed(1).replace(/\.0$/, '')
+  return formatNumericText((minutes / 60).toFixed(1).replace(/\.0$/, ''))
 }
 
 function formatTaskReportTime(minutes: number) {
   const safeMinutes = Math.max(0, minutes)
   const hours = Math.floor(safeMinutes / 60)
   const remainMinutes = safeMinutes % 60
-  if (hours === 0) return `${remainMinutes}分`
-  if (remainMinutes === 0) return `${hours}時間`
-  return `${hours}時間${remainMinutes}分`
+  if (hours === 0) return `${formatInteger(remainMinutes)}分`
+  if (remainMinutes === 0) return `${formatInteger(hours)}時間`
+  return `${formatInteger(hours)}時間${formatInteger(remainMinutes)}分`
 }
 
 function formatTaskReportChartAxis(value: number, metric: 'count' | 'minutes') {
-  if (metric === 'count') return `${value}件`
-  return `${Math.round((value / 60) * 10) / 10}h`
+  if (metric === 'count') return `${formatInteger(value)}件`
+  return `${formatNumericText(Math.round((value / 60) * 10) / 10)}h`
 }
 
 function getTaskReportMonthKeys(startDate: string, endDate: string) {
@@ -9896,7 +9919,7 @@ function TaskReportPanel() {
               onClick={() => setSelectedReportMember(member.tone === 'total' ? null : member.name)}
             >
               <span>{member.name}</span>
-              <strong>{member.count}件</strong>
+              <strong>{formatInteger(member.count)}件</strong>
               <p>
                 仕事時間{' '}
                 <b className={member.workMinutes > 0 && member.minutes > member.workMinutes ? 'task-report-alert-value' : undefined}>
@@ -9905,12 +9928,12 @@ function TaskReportPanel() {
               </p>
               <small>勤務時間 {formatTaskReportTime(member.workMinutes)}</small>
               <small>
-                平均 {member.averageMinutes}分/件
+                平均 {formatInteger(member.averageMinutes)}分/件
                 {member.utilization != null && (
                   <>
                     {' / 業務占有率 '}
                     <b className={member.utilization > 100 ? 'task-report-alert-value' : undefined}>
-                      {member.utilization}%
+                      {formatInteger(member.utilization)}%
                     </b>
                   </>
                 )}
@@ -9977,11 +10000,11 @@ function TaskReportPanel() {
                         const index = visibleMemberIndexes.get(member.name) || 0
                         return (
                         <td key={`${section.category}-count-${member.name}`} className={`member-${index}`}>
-                          {section.total.memberCounts[member.name] > 0 ? section.total.memberCounts[member.name] : '-'}
+                          {section.total.memberCounts[member.name] > 0 ? formatInteger(section.total.memberCounts[member.name]) : '-'}
                         </td>
                         )
                       })}
-                      <td>{section.total.totalCount}</td>
+                      <td>{formatInteger(section.total.totalCount)}</td>
                       {visibleMemberOptions.map((member) => {
                         const index = visibleMemberIndexes.get(member.name) || 0
                         return (
@@ -9991,7 +10014,7 @@ function TaskReportPanel() {
                         )
                       })}
                       <td>{formatTaskReportHours(section.total.totalMinutes)}</td>
-                      <td>{section.total.averageMinutes}</td>
+                      <td>{formatInteger(section.total.averageMinutes)}</td>
                     </tr>
                     {isExpanded && section.details.map((row, rowIndex) => (
                       <tr key={`${row.category}-${row.detail}-${rowIndex}`} className={`task-report-detail-row ${categoryTone}`}>
@@ -10002,11 +10025,11 @@ function TaskReportPanel() {
                           const index = visibleMemberIndexes.get(member.name) || 0
                           return (
                           <td key={`${row.category}-${row.detail}-count-${member.name}`} className={`member-${index}`}>
-                            {row.memberCounts[member.name] > 0 ? row.memberCounts[member.name] : '-'}
+                            {row.memberCounts[member.name] > 0 ? formatInteger(row.memberCounts[member.name]) : '-'}
                           </td>
                           )
                         })}
-                        <td>{row.totalCount}</td>
+                        <td>{formatInteger(row.totalCount)}</td>
                         {visibleMemberOptions.map((member) => {
                           const index = visibleMemberIndexes.get(member.name) || 0
                           return (
@@ -10016,7 +10039,7 @@ function TaskReportPanel() {
                           )
                         })}
                         <td>{formatTaskReportHours(row.totalMinutes)}</td>
-                        <td>{row.averageMinutes}</td>
+                        <td>{formatInteger(row.averageMinutes)}</td>
                       </tr>
                     ))}
                   </Fragment>
@@ -10053,7 +10076,7 @@ function TaskReportPanel() {
                   <YAxis type="category" dataKey="name" width={64} stroke="#334155" />
                   <Tooltip
                     formatter={(value) => (
-                      chartMetric === 'count' ? [`${Number(value || 0)}件`, '件数'] : [formatTaskReportTime(Number(value || 0)), '時間']
+                      chartMetric === 'count' ? [`${formatInteger(Number(value || 0))}件`, '件数'] : [formatTaskReportTime(Number(value || 0)), '時間']
                     )}
                     labelFormatter={(label) => `担当: ${label}`}
                   />
@@ -10076,7 +10099,7 @@ function TaskReportPanel() {
                   <YAxis type="category" dataKey="name" width={64} stroke="#334155" />
                   <Tooltip
                     formatter={(value) => (
-                      chartMetric === 'count' ? [`${Number(value || 0)}件`, metricLabel] : [formatTaskReportTime(Number(value || 0)), metricLabel]
+                      chartMetric === 'count' ? [`${formatInteger(Number(value || 0))}件`, metricLabel] : [formatTaskReportTime(Number(value || 0)), metricLabel]
                     )}
                   />
                   <Legend />
@@ -10107,7 +10130,7 @@ function TaskReportPanel() {
                   <YAxis tickFormatter={(value) => formatTaskReportChartAxis(Number(value), chartMetric)} stroke="#64748b" />
                   <Tooltip
                     formatter={(value) => (
-                      chartMetric === 'count' ? [`${Number(value || 0)}件`, '件数'] : [formatTaskReportTime(Number(value || 0)), '時間']
+                      chartMetric === 'count' ? [`${formatInteger(Number(value || 0))}件`, '件数'] : [formatTaskReportTime(Number(value || 0)), '時間']
                     )}
                     labelFormatter={(label) => `${label}の合計`}
                   />
@@ -10218,7 +10241,7 @@ function TaskReportPanel() {
                     </select>
                   </td>
                   <td>{row.task_name}</td>
-                  <td>{row.minutes}分</td>
+                  <td>{formatInteger(row.minutes)}分</td>
                 </tr>
               ))}
             </tbody>
@@ -10254,7 +10277,7 @@ function TaskReportPanel() {
                     <strong>{category.name}</strong>
                     <span>
                       {category.keywords
-                        ? `${category.keywords.split(/\r?\n/).filter(Boolean).length}個の手がかり`
+                        ? `${formatInteger(category.keywords.split(/\r?\n/).filter(Boolean).length)}個の手がかり`
                         : '手がかり未設定'}
                     </span>
                   </button>
@@ -10851,7 +10874,7 @@ function TodayTasksPanel() {
               <div key={member.calendarId} className="member-task-card">
                 <div className="member-task-header" style={{ borderLeft: `4px solid ${member.color}` }}>
                   <span className="member-name">{member.name}</span>
-                  <span className="member-event-count">{totalCount}件</span>
+                  <span className="member-event-count">{formatInteger(totalCount)}件</span>
                 </div>
                 <button
                   type="button"
@@ -10975,7 +10998,7 @@ function TodayTasksPanel() {
                       >
                         <span className="event-checkbox">{task.checked ? '✓' : ''}</span>
                         <span className="event-time">追加</span>
-                        {task.minutes != null && <span className="event-minutes">{task.minutes}分</span>}
+                        {task.minutes != null && <span className="event-minutes">{formatInteger(task.minutes)}分</span>}
                         <span className="event-title" title={task.task_name}>{task.task_name}</span>
                         <button
                           type="button"
@@ -11004,7 +11027,7 @@ function TodayTasksPanel() {
                           <span className="event-checkbox">{checked ? '✓' : ''}</span>
                           <span className="event-time">{time}</span>
                           {checked && minutesMap[key] != null && (
-                            <span className="event-minutes">{minutesMap[key]}分</span>
+                            <span className="event-minutes">{formatInteger(minutesMap[key])}分</span>
                           )}
                           <span className="event-title" title={ev.summary}>{ev.summary}</span>
                         </li>

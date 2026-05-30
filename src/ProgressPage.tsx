@@ -9,6 +9,13 @@ import {
   saveUndoSnapshot,
 } from './undoHistory'
 
+const integer = new Intl.NumberFormat('ja-JP')
+
+function formatInteger(value: number | string | null | undefined): string {
+  const numericValue = typeof value === 'string' ? Number(value.replace(/,/g, '')) : Number(value ?? 0)
+  return integer.format(Number.isFinite(numericValue) ? numericValue : 0)
+}
+
 type ProductionStatus = '' | '撮影済' | '制作中' | 'チェック中' | '完了'
 type ProcessStatus = string
 type StorePromoteTarget = 'keihan-karilun' | 'nishinomiya-karilun' | 'nagase' | 'nishikita' | 'yao'
@@ -2722,17 +2729,17 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <div className="progress-summary">
         <div className="progress-stat">
           <span className="progress-stat-label">全件数</span>
-          <strong className="progress-stat-value">{stockedRecords.length}</strong>
+          <strong className="progress-stat-value">{formatInteger(stockedRecords.length)}</strong>
         </div>
         {MEDIA_OPTIONS.map((media, index) => (
           <div key={media} className="progress-stat">
             <span className="progress-stat-label">{SUMMARY_LABELS[index] || media}</span>
-            <strong className="progress-stat-value">{stockedRecords.filter((record) => getMediaDisplayName(record.media) === media).length}</strong>
+            <strong className="progress-stat-value">{formatInteger(stockedRecords.filter((record) => getMediaDisplayName(record.media) === media).length)}</strong>
           </div>
         ))}
         <div className="progress-stat progress-stat--delay">
           <span className="progress-stat-label">遅延合計</span>
-          <strong className="progress-stat-value" style={{ color: '#dc2626' }}>{delayedCount}</strong>
+          <strong className="progress-stat-value" style={{ color: '#dc2626' }}>{formatInteger(delayedCount)}</strong>
         </div>
       </div>
 
@@ -2756,7 +2763,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <div key={media} className="progress-media-section">
             <div className="progress-media-section-header">
               <h3>{media}一覧</h3>
-              <span>{mediaRecords.length} 件</span>
+              <span>{formatInteger(mediaRecords.length)} 件</span>
             </div>
             <div className="progress-table-wrap">
               {mediaRecords.length === 0 && !ALWAYS_SHOW_MEDIA.has(media) ? (

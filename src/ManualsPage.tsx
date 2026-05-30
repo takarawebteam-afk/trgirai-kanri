@@ -32,6 +32,13 @@ import StarterKit from '@tiptap/starter-kit'
 import { supabase } from './supabase'
 import './ManualsPage.css'
 
+const integer = new Intl.NumberFormat('ja-JP')
+
+function formatInteger(value: number | string | null | undefined): string {
+  const numericValue = typeof value === 'string' ? Number(value.replace(/,/g, '')) : Number(value ?? 0)
+  return integer.format(Number.isFinite(numericValue) ? numericValue : 0)
+}
+
 type NoteRecord = {
   id: string
   title: string
@@ -1401,13 +1408,13 @@ function ManualsPage({
                   onClick={() => setAccessMenuOpen((current) => !current)}
                 >
                   閲覧設定
-                  <span>{draft.accessMode === 'all' ? '全員' : `${selectedAccessCount}人`}</span>
+                  <span>{draft.accessMode === 'all' ? '全員' : `${formatInteger(selectedAccessCount)}人`}</span>
                 </button>
                 {accessMenuOpen && (
                   <div className="note-access-popover">
                     <div className="note-access-popover-head">
                       <strong>閲覧できるGoogleアカウント</strong>
-                      <span>{selectedAccessCount}人</span>
+                      <span>{formatInteger(selectedAccessCount)}人</span>
                     </div>
                     <div className="note-access-list">
                       {allowedAccounts.map((account) => {
