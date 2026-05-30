@@ -439,6 +439,7 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .analysis-actions {
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
