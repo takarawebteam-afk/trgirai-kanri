@@ -46,15 +46,17 @@ type InstagramAccountConfig = {
   instagramUserId: string
 }
 
-type InsightMetricKey = 'views' | 'reach' | 'urlClicks'
+type InsightMetricKey = 'views' | 'reach' | 'urlClicks' | 'profileViews'
 
 type InsightResult = {
   username?: string
   followers: number | null
   mediaCount: number | null
+  mediaCountInPeriod: number | null
   views: number | null
   reach: number | null
   urlClicks: number | null
+  profileViews: number | null
 }
 
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
@@ -195,12 +197,14 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
     views: ['views'],
     reach: ['reach'],
     urlClicks: ['website_clicks', 'profile_links_taps'],
+    profileViews: ['profile_views'],
   }
 
   const results: Record<InsightMetricKey, number | null> = {
     views: null,
     reach: null,
     urlClicks: null,
+    profileViews: null,
   }
 
   for (const metricKey of Object.keys(metricMap) as InsightMetricKey[]) {
@@ -227,30 +231,111 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
   return results
 }
 
+function parseStoredNumber(value: string | null | undefined): number | null {
+  if (!value) return null
+  const cleaned = String(value).replace(/,/g, '').trim()
+  const num = Number(cleaned)
+  return Number.isFinite(num) && cleaned !== '' ? num : null
+}
+
+function getPrevYearMonth(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+}
+
+async function fetchPreviousFollowers(
+  supabase: ReturnType<typeof createClient>,
+  accountNames: string[],
+  prevYear: number,
+  prevMonth: number,
+): Promise<Record<string, number | null>> {
+  try {
+    const { data } = await supabase
+      .from('analysis_insta_metrics')
+      .select('account, value')
+      .eq('metric', 'フォロワー数')
+      .eq('year', prevYear)
+      .eq('month', prevMonth)
+      .in('account', accountNames)
+    const result: Record<string, number | null> = {}
+    for (const name of accountNames) {
+      const row = data?.find((r) => r.account === name)
+      result[name] = parseStoredNumber(row?.value ?? null)
+    }
+    return result
+  } catch {
+    return Object.fromEntries(accountNames.map((name) => [name, null]))
+  }
+}
+
+async function fetchInstagramMediaCountInPeriod(
+  instagramUserId: string,
+  accessToken: string,
+  since: number,
+  until: number,
+): Promise<number | null> {
+  try {
+    const data = await fetchGraphJson<{ data?: unknown[] }>(
+      `/${instagramUserId}/media?fields=id&since=${since}&until=${until}&limit=100`,
+      accessToken,
+    )
+    return Array.isArray(data.data) ? data.data.length : null
+  } catch {
+    return null
+  }
+}
+
 async function fetchInstagramInsights(account: InstagramAccountConfig, accessToken: string, year: number, month: number): Promise<InsightResult> {
   const { since, until } = getMonthRange(year, month)
-  const accountFields = await fetchInstagramAccountFields(account.instagramUserId, accessToken)
-  const insights = await fetchInstagramInsightMetrics(account.instagramUserId, accessToken, since, until)
+  const [accountFields, insights, mediaCountInPeriod] = await Promise.all([
+    fetchInstagramAccountFields(account.instagramUserId, accessToken),
+    fetchInstagramInsightMetrics(account.instagramUserId, accessToken, since, until),
+    fetchInstagramMediaCountInPeriod(account.instagramUserId, accessToken, since, until),
+  ])
 
   return {
     username: accountFields.username,
     followers: numberOrNull(accountFields.followers_count),
     mediaCount: numberOrNull(accountFields.media_count),
+    mediaCountInPeriod,
     ...insights,
   }
 }
 
-function buildInstagramRows(year: number, month: number, accountName: string, insights: InsightResult) {
-  const rows = [
-    { metric: INSTAGRAM_METRIC_LABELS.followers, value: insights.followers },
-    { metric: INSTAGRAM_METRIC_LABELS.mediaCount, value: insights.mediaCount },
-    { metric: INSTAGRAM_METRIC_LABELS.views, value: insights.views },
-    { metric: INSTAGRAM_METRIC_LABELS.reach, value: insights.reach },
-    { metric: INSTAGRAM_METRIC_LABELS.urlClicks, value: insights.urlClicks },
+function buildInstagramRows(year: number, month: number, accountName: string, insights: InsightResult, previousFollowers: number | null) {
+  const { followers, mediaCountInPeriod, views, reach, urlClicks, profileViews } = insights
+
+  const rows: Array<{ metric: string; value: number | string | null }> = [
+    { metric: 'フォロワー数', value: followers },
+    { metric: '視聴回数(閲覧数)', value: views },
+    { metric: '視聴者リーチ', value: reach },
+    { metric: 'URLクリック', value: urlClicks },
+    { metric: 'プロフ閲覧', value: profileViews },
   ]
 
+  if (mediaCountInPeriod !== null) {
+    rows.push({ metric: '投稿数', value: mediaCountInPeriod })
+  }
+
+  if (followers !== null && previousFollowers !== null) {
+    rows.push({ metric: 'フォロワー増加数', value: followers - previousFollowers })
+  }
+
+  if (
+    followers !== null &&
+    previousFollowers !== null &&
+    mediaCountInPeriod !== null &&
+    mediaCountInPeriod > 0
+  ) {
+    const growth = followers - previousFollowers
+    rows.push({ metric: 'フォロワー/投稿', value: Math.round((growth / mediaCountInPeriod) * 10) / 10 })
+  }
+
+  if (urlClicks !== null && profileViews !== null && profileViews > 0) {
+    rows.push({ metric: 'URLクリック率', value: `${Math.round((urlClicks / profileViews) * 100)}%` })
+  }
+
   return rows
-    .filter((row) => row.value !== null)
+    .filter((row) => row.value !== null && row.value !== '')
     .map((row) => ({
       year,
       month,
@@ -282,21 +367,47 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
   try {
     const accounts = parseAccountsConfig()
     if (accounts.length === 0) {
-      return res.status(200).json({
-        ok: false,
-        message: 'InstagramアカウントIDが設定されていません。',
-      })
+      return res.status(200).json({ ok: false, message: 'InstagramアカウントIDが設定されていません。' })
     }
 
-    const summaries = []
-    const failures = []
-    const rowsToSave = []
+    const { year: prevYear, month: prevMonth } = getPrevYearMonth(year, month)
+    let previousFollowersMap: Record<string, number | null> = {}
+    try {
+      const supabaseForRead = getSupabaseClient()
+      previousFollowersMap = await fetchPreviousFollowers(
+        supabaseForRead,
+        accounts.map((a) => a.account),
+        prevYear,
+        prevMonth,
+      )
+    } catch {
+      // computed metrics will be skipped
+    }
+
+    const summaries: object[] = []
+    const failures: object[] = []
+    const rowsToSave: object[] = []
 
     for (const account of accounts) {
       try {
         const insights = await fetchInstagramInsights(account, accessToken, year, month)
-        summaries.push({ key: account.key, account: account.account, username: insights.username, ...insights })
-        rowsToSave.push(...buildInstagramRows(year, month, account.account, insights))
+        const previousFollowers = previousFollowersMap[account.account] ?? null
+        summaries.push({
+          key: account.key,
+          account: account.account,
+          username: insights.username,
+          followers: insights.followers,
+          mediaCountInPeriod: insights.mediaCountInPeriod,
+          views: insights.views,
+          reach: insights.reach,
+          urlClicks: insights.urlClicks,
+          profileViews: insights.profileViews,
+          previousFollowers,
+          followerGrowth: insights.followers !== null && previousFollowers !== null
+            ? insights.followers - previousFollowers
+            : null,
+        })
+        rowsToSave.push(...buildInstagramRows(year, month, account.account, insights, previousFollowers))
       } catch (error) {
         failures.push({
           key: account.key,
@@ -311,7 +422,6 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
       const { error } = await supabase
         .from('analysis_insta_metrics')
         .upsert(rowsToSave, { onConflict: 'year,month,account,metric' })
-
       if (error) throw new Error(error.message)
     }
 
@@ -323,7 +433,7 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
       summaries,
       failures,
       message: failures.length > 0
-        ? `一部のInstagramは取得できませんでした: ${failures.map((failure) => failure.key).join(', ')}`
+        ? `一部のInstagramは取得できませんでした: ${failures.map((f) => (f as { key: string; message: string }).key).join(', ')}`
         : undefined,
     })
   } catch (error) {
@@ -331,7 +441,6 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: false, message })
   }
 }
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST' && req.query.action === 'sync-instagram-insights') {
     return syncInstagramInsights(req, res)
