@@ -58,6 +58,7 @@ type InsightResult = {
   urlClicks: number | null
   profileViews: number | null
   debugMediaItems?: unknown
+  aggregatedViewsDebug?: unknown
 }
 
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
@@ -332,6 +333,22 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     fetchInstagramMediaStats(account.instagramUserId, accessToken, since, until),
   ])
 
+  let aggregatedViewsDebug: unknown = null
+  const testPaths = [
+    `/${account.instagramUserId}/insights?metric=aggregated_views&period=day&metric_type=total_value&since=${since}&until=${until}`,
+    `/${account.instagramUserId}/insights?metric=aggregated_views&period=month&since=${since}&until=${until}`,
+    `/${account.instagramUserId}/insights?metric=aggregated_views&since=${since}&until=${until}`,
+  ]
+  for (const path of testPaths) {
+    try {
+      const raw = await fetchGraphJson<unknown>(path, accessToken)
+      aggregatedViewsDebug = { path, raw }
+      break
+    } catch (e) {
+      aggregatedViewsDebug = { path, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   return {
     username: accountFields.username,
     followers: numberOrNull(accountFields.followers_count),
@@ -342,6 +359,7 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     urlClicks: insights.urlClicks,
     profileViews: insights.profileViews,
     debugMediaItems: mediaStats.debugItems,
+    aggregatedViewsDebug,
   }
 }
 
@@ -447,6 +465,7 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
           urlClicks: insights.urlClicks,
           profileViews: insights.profileViews,
           debugMediaItems: insights.debugMediaItems,
+          aggregatedViewsDebug: insights.aggregatedViewsDebug,
           previousFollowers,
           followerGrowth: insights.followers !== null && previousFollowers !== null
             ? insights.followers - previousFollowers
