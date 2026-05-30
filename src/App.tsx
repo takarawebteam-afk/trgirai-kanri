@@ -2376,7 +2376,7 @@ function App() {
     setAnalysisInstaMessage('Instagramから数字を取得中...')
 
     try {
-      const response = await fetch('/api/sync-instagram-insights', {
+      const response = await fetch('/api/analysis-tiktok?action=sync-instagram-insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ year, month }),
