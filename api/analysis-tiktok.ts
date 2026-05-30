@@ -165,7 +165,23 @@ function numberOrNull(value: unknown) {
 function sumInsightValues(metricData: unknown) {
   if (!metricData || typeof metricData !== 'object') return null
 
-  const item = metricData as { total_value?: { value?: unknown }, values?: Array<{ value?: unknown }> }
+  const item = metricData as {
+    total_value?: {
+      value?: unknown
+      breakdowns?: Array<{ results?: Array<{ value?: unknown }> }>
+    }
+    values?: Array<{ value?: unknown }>
+  }
+
+  // If breakdown results exist, sum them across all content types (feed, story, reel, ad)
+  const breakdownResults = item.total_value?.breakdowns?.[0]?.results
+  if (Array.isArray(breakdownResults) && breakdownResults.length > 0) {
+    return breakdownResults.reduce(
+      (sum, r) => sum + (numberOrNull((r as { value?: unknown }).value) || 0),
+      0,
+    )
+  }
+
   const totalValue = numberOrNull(item.total_value?.value)
   if (totalValue !== null) return totalValue
 
@@ -209,11 +225,19 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
 
   for (const metricKey of Object.keys(metricMap) as InsightMetricKey[]) {
     for (const metricName of metricMap[metricKey]) {
-      const paths = [
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&since=${since}&until=${until}`,
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
-      ]
+      const paths =
+        metricName === 'views'
+          ? [
+              `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&breakdown=media_product_type&since=${since}&until=${until}`,
+              `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&since=${since}&until=${until}`,
+              `/${instagramUserId}/insights?metric=views&period=day&since=${since}&until=${until}`,
+              `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value`,
+            ]
+          : [
+              `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
+              `/${instagramUserId}/insights?metric=${metricName}&period=day&since=${since}&until=${until}`,
+              `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
+            ]
 
       for (const path of paths) {
         try {
