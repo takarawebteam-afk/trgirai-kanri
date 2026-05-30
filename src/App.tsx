@@ -2371,28 +2371,38 @@ function App() {
 
   async function syncAnalysisInstaMetrics() {
     const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
     setAnalysisInstaSyncing(true)
     setAnalysisInstaMessage('Instagramから数字を取得中...')
 
     try {
-      const response = await fetch('/api/analysis-tiktok?action=sync-instagram-insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month }),
-      })
-      const data = await response.json() as { ok?: boolean, message?: string, saved?: number }
+      await Promise.all([
+        fetch('/api/analysis-tiktok?action=sync-instagram-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: currentYear, month: currentMonth }),
+        }),
+        fetch('/api/analysis-tiktok?action=sync-instagram-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: prevYear, month: prevMonth }),
+        }),
+      ].map(async (responsePromise) => {
+        const response = await responsePromise
+        const data = await response.json() as { ok?: boolean, message?: string, saved?: number }
 
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || 'Instagramの数字を取得できませんでした。')
-      }
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || 'Instagramの数字を取得できませんでした。')
+        }
+      }))
 
       const { data: freshRows } = await supabase
         .from('analysis_insta_metrics')
         .select('year, month, account, metric, value')
-        .eq('year', year)
-        .eq('month', month)
+        .or(`and(year.eq.${currentYear},month.eq.${currentMonth}),and(year.eq.${prevYear},month.eq.${prevMonth})`)
 
       if (freshRows && freshRows.length > 0) {
         const newValueMap = new Map(
@@ -2416,7 +2426,7 @@ function App() {
           })),
         }))
       }
-      setAnalysisInstaMessage(`Instagramから${year}年${month}月の数字を反映しました。`)
+      setAnalysisInstaMessage(`Instagramから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Instagramの自動反映に失敗しました。'
       setAnalysisInstaMessage(message)
@@ -4306,6 +4316,35 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, () => { void fetchTaskItems() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_sessions' }, () => { void fetchAnalysisSessions() })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'analysis_insta_metrics' },
+        (payload) => {
+          const row = payload.new as { year: number; month: number; account: string; metric: string; value: string }
+          if (!row?.account || !row?.metric) return
+          setAnalysisInstaData((current) => ({
+            ...current,
+            groups: current.groups.map((group) => ({
+              ...group,
+              rows: group.rows.map((metricRow) => ({
+                ...metricRow,
+                values: metricRow.values.map((val, i) => {
+                  const col = current.columns[i]
+                  if (
+                    group.account === row.account &&
+                    metricRow.metric === row.metric &&
+                    Number(col.year) === Number(row.year) &&
+                    Number(col.month) === Number(row.month)
+                  ) {
+                    return row.value || ''
+                  }
+                  return val
+                }),
+              })),
+            })),
+          }))
+        }
+      )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
