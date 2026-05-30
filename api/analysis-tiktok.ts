@@ -293,7 +293,7 @@ function getCurrentYearMonthJst(): { year: number; month: number } {
 }
 
 async function fetchPreviousFollowers(
-  supabase: ReturnType<typeof createClient>,
+  supabase: { from: (table: string) => any },
   accountNames: string[],
   prevYear: number,
   prevMonth: number,
@@ -307,8 +307,9 @@ async function fetchPreviousFollowers(
       .eq('month', prevMonth)
       .in('account', accountNames)
     const result: Record<string, number | null> = {}
+    const rows = (data ?? []) as Array<{ account: string; value: string | null }>
     for (const name of accountNames) {
-      const row = data?.find((r) => r.account === name)
+      const row = rows.find((r) => r.account === name)
       result[name] = parseStoredNumber(row?.value ?? null)
     }
     return result
