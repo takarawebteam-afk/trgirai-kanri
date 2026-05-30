@@ -59,6 +59,7 @@ type InsightResult = {
   profileViews: number | null
   debugMediaItems?: unknown
   aggregatedViewsDebug?: unknown
+  viewsRawDebug?: unknown
 }
 
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
@@ -349,6 +350,29 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     }
   }
 
+  let viewsRawDebug: unknown = null
+  try {
+    const rawWithTotal = await fetchGraphJson<unknown>(
+      `/${account.instagramUserId}/insights?metric=views&period=day&metric_type=total_value&since=${since}&until=${until}`,
+      accessToken,
+    )
+    const rawDaily = await fetchGraphJson<unknown>(
+      `/${account.instagramUserId}/insights?metric=views&period=day&since=${since}&until=${until}`,
+      accessToken,
+    )
+    const dailyData = (rawDaily as { data?: Array<{ values?: Array<{ value?: unknown }> }> }).data?.[0]
+    const dailyValues = dailyData?.values ?? []
+    const dailySum = dailyValues.reduce((sum: number, v: { value?: unknown }) => sum + (Number(v.value) || 0), 0)
+    viewsRawDebug = {
+      withTotalValue: rawWithTotal,
+      dailyRaw: rawDaily,
+      dailyCount: dailyValues.length,
+      dailySum,
+    }
+  } catch (e) {
+    viewsRawDebug = { error: e instanceof Error ? e.message : String(e) }
+  }
+
   return {
     username: accountFields.username,
     followers: numberOrNull(accountFields.followers_count),
@@ -360,6 +384,7 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     profileViews: insights.profileViews,
     debugMediaItems: mediaStats.debugItems,
     aggregatedViewsDebug,
+    viewsRawDebug,
   }
 }
 
@@ -466,6 +491,7 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
           profileViews: insights.profileViews,
           debugMediaItems: insights.debugMediaItems,
           aggregatedViewsDebug: insights.aggregatedViewsDebug,
+          viewsRawDebug: insights.viewsRawDebug,
           previousFollowers,
           followerGrowth: insights.followers !== null && previousFollowers !== null
             ? insights.followers - previousFollowers
