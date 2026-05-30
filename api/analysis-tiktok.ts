@@ -228,6 +228,7 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
       const paths =
         metricName === 'views'
           ? [
+              `/${instagramUserId}/insights?metric=views&period=month&since=${since}&until=${until}`,
               `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&breakdown=media_product_type&since=${since}&until=${until}`,
               `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&since=${since}&until=${until}`,
               `/${instagramUserId}/insights?metric=views&period=day&since=${since}&until=${until}`,
