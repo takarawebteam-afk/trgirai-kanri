@@ -64,6 +64,7 @@ const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
 
 const INSTAGRAM_METRIC_LABELS = {
   followers: 'フォロワー数',
+  mediaCount: '投稿数',
   views: '視聴回数(閲覧数)',
   reach: '視聴者リーチ',
   urlClicks: 'URLクリック',
@@ -204,16 +205,22 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
 
   for (const metricKey of Object.keys(metricMap) as InsightMetricKey[]) {
     for (const metricName of metricMap[metricKey]) {
-      try {
-        const data = await fetchGraphJson<{ data?: unknown[] }>(
-          `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
-          accessToken,
-        )
-        results[metricKey] = sumInsightValues(data.data?.[0])
-        break
-      } catch {
-        // Meta側の指標名は変わることがあるので、次の候補名で試します。
+      const paths = [
+        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
+        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
+      ]
+
+      for (const path of paths) {
+        try {
+          const data = await fetchGraphJson<{ data?: unknown[] }>(path, accessToken)
+          results[metricKey] = sumInsightValues(data.data?.[0])
+          break
+        } catch {
+          // Meta側の指標名や期間指定は変わることがあるので、次の候補で試します。
+        }
       }
+
+      if (results[metricKey] !== null) break
     }
   }
 
@@ -236,6 +243,7 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
 function buildInstagramRows(year: number, month: number, accountName: string, insights: InsightResult) {
   const rows = [
     { metric: INSTAGRAM_METRIC_LABELS.followers, value: insights.followers },
+    { metric: INSTAGRAM_METRIC_LABELS.mediaCount, value: insights.mediaCount },
     { metric: INSTAGRAM_METRIC_LABELS.views, value: insights.views },
     { metric: INSTAGRAM_METRIC_LABELS.reach, value: insights.reach },
     { metric: INSTAGRAM_METRIC_LABELS.urlClicks, value: insights.urlClicks },
