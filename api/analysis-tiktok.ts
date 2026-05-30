@@ -210,8 +210,8 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
   for (const metricKey of Object.keys(metricMap) as InsightMetricKey[]) {
     for (const metricName of metricMap[metricKey]) {
       const paths = [
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
         `/${instagramUserId}/insights?metric=${metricName}&period=day&since=${since}&until=${until}`,
+        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
         `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
       ]
 
