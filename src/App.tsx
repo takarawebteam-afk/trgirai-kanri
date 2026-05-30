@@ -638,6 +638,8 @@ type AnalysisTiktokSavedRow = {
   value: string | null
 }
 
+type AnalysisYearFilter = 'total' | string
+
 type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta'
 
 const ANALYSIS_YEAR = 2026
@@ -817,6 +819,16 @@ function buildAnalysisTiktokRowsToSave(data: AnalysisTiktokSheetData) {
       }))
     ))
   ))
+}
+
+function getAnalysisYearOptions(columns: AnalysisTiktokColumn[]) {
+  return Array.from(new Set(columns.map((column) => column.year))).sort((a, b) => Number(a) - Number(b))
+}
+
+function getAnalysisVisibleColumnIndexes(columns: AnalysisTiktokColumn[], filter: AnalysisYearFilter) {
+  return columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ column }) => filter === 'total' || column.year === filter)
 }
 
 function createEmptyAnalysisInstaData(): AnalysisTiktokSheetData {
@@ -2084,11 +2096,24 @@ function App() {
   const [analysisTiktokLoading, setAnalysisTiktokLoading] = useState(false)
   const [analysisTiktokMessage, setAnalysisTiktokMessage] = useState('')
   const [analysisTiktokSavingCell, setAnalysisTiktokSavingCell] = useState('')
+  const [analysisTiktokYearFilter, setAnalysisTiktokYearFilter] = useState<AnalysisYearFilter>('total')
   const [analysisInstaData, setAnalysisInstaData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisInstaLoading, setAnalysisInstaLoading] = useState(false)
   const [analysisInstaMessage, setAnalysisInstaMessage] = useState('')
   const [analysisInstaSavingCell, setAnalysisInstaSavingCell] = useState('')
   const [analysisInstaSyncing, setAnalysisInstaSyncing] = useState(false)
+  const [analysisInstaYearFilter, setAnalysisInstaYearFilter] = useState<AnalysisYearFilter>('total')
+
+  const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
+  const analysisTiktokVisibleColumns = useMemo(
+    () => getAnalysisVisibleColumnIndexes(analysisTiktokData.columns, analysisTiktokYearFilter),
+    [analysisTiktokData.columns, analysisTiktokYearFilter]
+  )
+  const analysisInstaYearOptions = useMemo(() => getAnalysisYearOptions(analysisInstaData.columns), [analysisInstaData.columns])
+  const analysisInstaVisibleColumns = useMemo(
+    () => getAnalysisVisibleColumnIndexes(analysisInstaData.columns, analysisInstaYearFilter),
+    [analysisInstaData.columns, analysisInstaYearFilter]
+  )
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
@@ -2177,7 +2202,7 @@ function App() {
 
       if (savedRows && savedRows.length > 0) {
         setAnalysisTiktokData(applyAnalysisTiktokSavedRows(savedRows as AnalysisTiktokSavedRow[]))
-        setAnalysisTiktokMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        setAnalysisTiktokMessage('')
         return
       }
 
@@ -2192,7 +2217,7 @@ function App() {
 
       if (!response.ok || !sheetData.ok || !sheetData.columns || !sheetData.groups) {
         setAnalysisTiktokData(createEmptyAnalysisTiktokData())
-        setAnalysisTiktokMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        setAnalysisTiktokMessage('')
         return
       }
 
@@ -2207,7 +2232,7 @@ function App() {
       await supabase.from('analysis_tiktok_metrics').upsert(rowsToSave, {
         onConflict: 'year,month,account,metric',
       })
-      setAnalysisTiktokMessage('初回だけスプレッドシートの数字を取り込みました。これからはこの画面で直接入力できます。')
+      setAnalysisTiktokMessage('')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'TikTokの数字を取れませんでした。'
       setAnalysisTiktokMessage(message)
@@ -2271,16 +2296,25 @@ function App() {
     setAnalysisInstaMessage('読込中...')
 
     try {
-      const { data: savedRows, error } = await supabase
-        .from('analysis_insta_metrics')
-        .select('year, month, account, metric, value')
-        .limit(10000)
-
-      if (error) throw error
+      const PAGE_SIZE = 1000
+      let allRows: AnalysisTiktokSavedRow[] = []
+      let from = 0
+      while (true) {
+        const { data: page, error: pageError } = await supabase
+          .from('analysis_insta_metrics')
+          .select('year, month, account, metric, value')
+          .range(from, from + PAGE_SIZE - 1)
+        if (pageError) throw pageError
+        if (!page || page.length === 0) break
+        allRows = [...allRows, ...(page as AnalysisTiktokSavedRow[])]
+        if (page.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+      const savedRows = allRows
 
       if (savedRows && savedRows.length > 0) {
         setAnalysisInstaData(applyAnalysisInstaSavedRows(savedRows as AnalysisTiktokSavedRow[]))
-        setAnalysisInstaMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        setAnalysisInstaMessage('')
         return
       }
 
@@ -2295,7 +2329,7 @@ function App() {
 
       if (!response.ok || !sheetData.ok || !sheetData.columns || !sheetData.groups) {
         setAnalysisInstaData(createEmptyAnalysisInstaData())
-        setAnalysisInstaMessage('セルをクリックして直接入力できます。入力後、自動で保存されます。')
+        setAnalysisInstaMessage('')
         return
       }
 
@@ -2310,7 +2344,7 @@ function App() {
       await supabase.from('analysis_insta_metrics').upsert(rowsToSave, {
         onConflict: 'year,month,account,metric',
       })
-      setAnalysisInstaMessage('初回だけスプレッドシートの数字を取り込みました。これからはこの画面で直接入力できます。')
+      setAnalysisInstaMessage('')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'INSTAの数字を取れませんでした。'
       setAnalysisInstaMessage(message)
@@ -5874,12 +5908,30 @@ function App() {
 
             {activeAnalysisSubTab === 'tiktok' && (
               <section className="panel table-panel">
-                <div className="panel-heading">
+                <div className="panel-heading analysis-sheet-heading">
                   <div>
                     <h2>TikTok</h2>
-                    <p>セルをクリックして、スプレッドシートのように直接入力できます。</p>
                   </div>
                   <div className="analysis-actions">
+                    <div className="analysis-year-filter" aria-label="TikTokの表示期間">
+                      <button
+                        type="button"
+                        className={analysisTiktokYearFilter === 'total' ? 'active' : ''}
+                        onClick={() => setAnalysisTiktokYearFilter('total')}
+                      >
+                        累計
+                      </button>
+                      {analysisTiktokYearOptions.map((year) => (
+                        <button
+                          key={year}
+                          type="button"
+                          className={analysisTiktokYearFilter === year ? 'active' : ''}
+                          onClick={() => setAnalysisTiktokYearFilter(year)}
+                        >
+                          {year}年
+                        </button>
+                      ))}
+                    </div>
                     {analysisTiktokMessage && (
                       <span className={`analysis-import-message ${analysisTiktokMessage.includes('失敗') || analysisTiktokMessage.includes('取れません') || analysisTiktokMessage.includes('読めません') || analysisTiktokMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
                         {analysisTiktokMessage}
@@ -5888,20 +5940,20 @@ function App() {
                   </div>
                 </div>
                 <div className="table-wrap analysis-monthly-table-wrap">
-                  <table className="analysis-monthly-table analysis-tiktok-sheet-table">
+                  <table className={`analysis-monthly-table analysis-tiktok-sheet-table ${analysisTiktokYearFilter !== 'total' ? 'analysis-year-fit-table' : ''}`}>
                     <thead>
                       <tr>
                         <th>リスト</th>
                         <th>項目</th>
-                        {analysisTiktokData.columns.map((column) => (
-                          <th key={column.label}>{column.label}</th>
+                        {analysisTiktokVisibleColumns.map(({ column }) => (
+                          <th key={column.label}>{analysisTiktokYearFilter === 'total' ? column.label : `${column.month}月`}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {analysisTiktokData.groups.length === 0 && (
                         <tr>
-                          <td colSpan={analysisTiktokData.columns.length + 2} className="analysis-empty-cell">
+                          <td colSpan={analysisTiktokVisibleColumns.length + 2} className="analysis-empty-cell">
                             {analysisTiktokLoading ? '読込中...' : '表示できる数字がありません。'}
                           </td>
                         </tr>
@@ -5919,8 +5971,8 @@ function App() {
                                 </th>
                               )}
                               <th className="analysis-media-cell">{row.metric}</th>
-                              {row.values.map((value, valueIndex) => {
-                                const column = analysisTiktokData.columns[valueIndex]
+                              {analysisTiktokVisibleColumns.map(({ column, index: valueIndex }) => {
+                                const value = row.values[valueIndex] || ''
                                 const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
                                 return (
                                   <td key={valueIndex} className={analysisTiktokSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
@@ -5952,10 +6004,9 @@ function App() {
 
             {activeAnalysisSubTab === 'insta' && (
               <section className="panel table-panel">
-                <div className="panel-heading">
+                <div className="panel-heading analysis-sheet-heading">
                   <div>
                     <h2>INSTA</h2>
-                    <p>セルをクリックして、スプレッドシートのように直接入力できます。</p>
                   </div>
                   <div className="analysis-actions">
                     <button
@@ -5966,6 +6017,25 @@ function App() {
                     >
                       {analysisInstaSyncing ? '取得中...' : 'Instagramから自動取得'}
                     </button>
+                    <div className="analysis-year-filter" aria-label="INSTAの表示期間">
+                      <button
+                        type="button"
+                        className={analysisInstaYearFilter === 'total' ? 'active' : ''}
+                        onClick={() => setAnalysisInstaYearFilter('total')}
+                      >
+                        累計
+                      </button>
+                      {analysisInstaYearOptions.map((year) => (
+                        <button
+                          key={year}
+                          type="button"
+                          className={analysisInstaYearFilter === year ? 'active' : ''}
+                          onClick={() => setAnalysisInstaYearFilter(year)}
+                        >
+                          {year}年
+                        </button>
+                      ))}
+                    </div>
                     {analysisInstaMessage && (
                       <span className={`analysis-import-message ${analysisInstaMessage.includes('失敗') || analysisInstaMessage.includes('取れません') || analysisInstaMessage.includes('読めません') || analysisInstaMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
                         {analysisInstaMessage}
@@ -5974,20 +6044,20 @@ function App() {
                   </div>
                 </div>
                 <div className="table-wrap analysis-monthly-table-wrap">
-                  <table className="analysis-monthly-table analysis-tiktok-sheet-table">
+                  <table className={`analysis-monthly-table analysis-tiktok-sheet-table ${analysisInstaYearFilter !== 'total' ? 'analysis-year-fit-table' : ''}`}>
                     <thead>
                       <tr>
                         <th>リスト</th>
                         <th>項目</th>
-                        {analysisInstaData.columns.map((column) => (
-                          <th key={column.label}>{column.label}</th>
+                        {analysisInstaVisibleColumns.map(({ column }) => (
+                          <th key={column.label}>{analysisInstaYearFilter === 'total' ? column.label : `${column.month}月`}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {analysisInstaData.groups.length === 0 && (
                         <tr>
-                          <td colSpan={analysisInstaData.columns.length + 2} className="analysis-empty-cell">
+                          <td colSpan={analysisInstaVisibleColumns.length + 2} className="analysis-empty-cell">
                             {analysisInstaLoading ? '読込中...' : '表示できる数字がありません。'}
                           </td>
                         </tr>
@@ -6005,8 +6075,8 @@ function App() {
                                 </th>
                               )}
                               <th className="analysis-media-cell">{row.metric}</th>
-                              {row.values.map((value, valueIndex) => {
-                                const column = analysisInstaData.columns[valueIndex]
+                              {analysisInstaVisibleColumns.map(({ column, index: valueIndex }) => {
+                                const value = row.values[valueIndex] || ''
                                 const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
                                 return (
                                   <td key={valueIndex} className={analysisInstaSavingCell === cellKey ? 'analysis-cell-saving' : ''}>

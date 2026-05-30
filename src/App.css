@@ -446,6 +446,16 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   flex-wrap: wrap;
 }
 
+.analysis-sheet-heading {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.analysis-sheet-heading .analysis-actions {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+}
+
 .analysis-import-message {
   color: var(--gray-500);
   font-size: 0.78rem;
@@ -458,6 +468,41 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .analysis-import-message.is-error {
   color: var(--red-700);
+}
+
+.analysis-year-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.analysis-year-filter button {
+  min-width: 56px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.analysis-year-filter button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.analysis-year-filter button.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
 }
 
 .analysis-monthly-table-wrap {
@@ -569,6 +614,49 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .analysis-tiktok-sheet-table td {
   padding: 0;
+}
+
+.table-wrap table.analysis-year-fit-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.analysis-year-fit-table th,
+.analysis-year-fit-table td {
+  min-width: 0;
+  padding: 1px 4px;
+  font-size: 0.68rem;
+}
+
+.analysis-year-fit-table .analysis-account-cell,
+.analysis-year-fit-table thead th:nth-child(1) {
+  min-width: 64px;
+  width: 64px;
+}
+
+.analysis-year-fit-table .analysis-media-cell,
+.analysis-year-fit-table thead th:nth-child(2) {
+  left: 64px;
+  min-width: 108px;
+  width: 108px;
+}
+
+.analysis-tiktok-sheet-table.analysis-year-fit-table .analysis-media-cell {
+  left: 64px;
+}
+
+.analysis-year-fit-table th:nth-child(n + 3),
+.analysis-year-fit-table td:nth-child(n + 3) {
+  min-width: 0;
+  width: auto;
+  max-width: none;
+}
+
+.analysis-year-fit-table .analysis-sheet-input {
+  min-width: 0;
+  padding: 1px 3px;
+  font-size: 0.68rem;
 }
 
 .analysis-sheet-input {
