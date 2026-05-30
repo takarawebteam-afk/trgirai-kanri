@@ -60,10 +60,6 @@ type InsightResult = {
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
   { key: 'karilun_com', account: 'Karilun', instagramUserId: '17841411857507663' },
   { key: 'ap_nagase', account: '長瀬', instagramUserId: '17841408519154477' },
-  { key: 'nishinomiyakita', account: '西北', instagramUserId: '17841405801166646' },
-  { key: 'nishinomiya_karilun', account: '西宮市', instagramUserId: '17841469828438834' },
-  { key: 'apaman_yao', account: '八尾', instagramUserId: '17841470372894673' },
-  { key: 'keihan_karilun', account: '京北', instagramUserId: '17841408003177321' },
 ]
 
 const INSTAGRAM_METRIC_LABELS = {
@@ -285,12 +281,21 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
     }
 
     const summaries = []
+    const failures = []
     const rowsToSave = []
 
     for (const account of accounts) {
-      const insights = await fetchInstagramInsights(account, accessToken, year, month)
-      summaries.push({ key: account.key, account: account.account, username: insights.username, ...insights })
-      rowsToSave.push(...buildInstagramRows(year, month, account.account, insights))
+      try {
+        const insights = await fetchInstagramInsights(account, accessToken, year, month)
+        summaries.push({ key: account.key, account: account.account, username: insights.username, ...insights })
+        rowsToSave.push(...buildInstagramRows(year, month, account.account, insights))
+      } catch (error) {
+        failures.push({
+          key: account.key,
+          account: account.account,
+          message: error instanceof Error ? error.message : '取得できませんでした。',
+        })
+      }
     }
 
     if (!dryRun && rowsToSave.length > 0) {
@@ -303,11 +308,15 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(200).json({
-      ok: true,
+      ok: failures.length < accounts.length,
       year,
       month,
       saved: dryRun ? 0 : rowsToSave.length,
       summaries,
+      failures,
+      message: failures.length > 0
+        ? `一部のInstagramは取得できませんでした: ${failures.map((failure) => failure.key).join(', ')}`
+        : undefined,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Instagramの自動取得に失敗しました。'
