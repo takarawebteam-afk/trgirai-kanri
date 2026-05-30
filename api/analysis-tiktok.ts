@@ -57,6 +57,7 @@ type InsightResult = {
   reach: number | null
   urlClicks: number | null
   profileViews: number | null
+  debugMediaItems?: unknown
 }
 
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
@@ -287,10 +288,10 @@ async function fetchInstagramMediaStats(
   accessToken: string,
   since: number,
   until: number,
-): Promise<{ count: number | null; viewsSum: number | null }> {
+): Promise<{ count: number | null; viewsSum: number | null; debugItems?: Array<{ id: string; views: number | null; error?: string }> }> {
   try {
     const data = await fetchGraphJson<{ data?: { id: string }[] }>(
-      `/${instagramUserId}/media?fields=id&since=${since}&until=${until}&limit=100`,
+      `/${instagramUserId}/media?fields=id,media_type&since=${since}&until=${until}&limit=100`,
       accessToken,
     )
     if (!Array.isArray(data.data)) return { count: null, viewsSum: null }
@@ -299,20 +300,25 @@ async function fetchInstagramMediaStats(
     const count = mediaItems.length
 
     let viewsSum = 0
+    const debugItems: Array<{ id: string; media_type?: string; views: number | null; error?: string }> = []
+
     for (const item of mediaItems) {
+      const mediaItem = item as { id: string; media_type?: string }
       try {
         const insightData = await fetchGraphJson<{ data?: unknown[] }>(
-          `/${item.id}/insights?metric=views`,
+          `/${mediaItem.id}/insights?metric=views`,
           accessToken,
         )
         const val = sumInsightValues(insightData.data?.[0])
         if (val !== null) viewsSum += val
-      } catch {
-        // skip this media item if insights fail
+        debugItems.push({ id: mediaItem.id, media_type: mediaItem.media_type, views: val })
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e)
+        debugItems.push({ id: mediaItem.id, media_type: mediaItem.media_type, views: null, error: errMsg })
       }
     }
 
-    return { count, viewsSum }
+    return { count, viewsSum, debugItems }
   } catch {
     return { count: null, viewsSum: null }
   }
@@ -335,6 +341,7 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     reach: insights.reach,
     urlClicks: insights.urlClicks,
     profileViews: insights.profileViews,
+    debugMediaItems: mediaStats.debugItems,
   }
 }
 
@@ -439,6 +446,7 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
           reach: insights.reach,
           urlClicks: insights.urlClicks,
           profileViews: insights.profileViews,
+          debugMediaItems: insights.debugMediaItems,
           previousFollowers,
           followerGrowth: insights.followers !== null && previousFollowers !== null
             ? insights.followers - previousFollowers
