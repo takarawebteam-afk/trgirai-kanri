@@ -46,7 +46,7 @@ type InstagramAccountConfig = {
   instagramUserId: string
 }
 
-type InsightMetricKey = 'views' | 'reach' | 'urlClicks' | 'profileViews'
+type InsightMetricKey = 'reach' | 'urlClicks' | 'profileViews'
 
 type InsightResult = {
   username?: string
@@ -210,14 +210,12 @@ async function fetchInstagramAccountFields(instagramUserId: string, accessToken:
 
 async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken: string, since: number, until: number) {
   const metricMap: Record<InsightMetricKey, string[]> = {
-    views: ['views'],
     reach: ['reach'],
     urlClicks: ['website_clicks', 'profile_links_taps'],
     profileViews: ['profile_views'],
   }
 
   const results: Record<InsightMetricKey, number | null> = {
-    views: null,
     reach: null,
     urlClicks: null,
     profileViews: null,
@@ -225,20 +223,11 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
 
   for (const metricKey of Object.keys(metricMap) as InsightMetricKey[]) {
     for (const metricName of metricMap[metricKey]) {
-      const paths =
-        metricName === 'views'
-          ? [
-              `/${instagramUserId}/insights?metric=views&period=month&since=${since}&until=${until}`,
-              `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&breakdown=media_product_type&since=${since}&until=${until}`,
-              `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&since=${since}&until=${until}`,
-              `/${instagramUserId}/insights?metric=views&period=day&since=${since}&until=${until}`,
-              `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value`,
-            ]
-          : [
-              `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
-              `/${instagramUserId}/insights?metric=${metricName}&period=day&since=${since}&until=${until}`,
-              `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
-            ]
+      const paths = [
+        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
+        `/${instagramUserId}/insights?metric=${metricName}&period=day&since=${since}&until=${until}`,
+        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
+      ]
 
       for (const path of paths) {
         try {
@@ -293,37 +282,59 @@ async function fetchPreviousFollowers(
   }
 }
 
-async function fetchInstagramMediaCountInPeriod(
+async function fetchInstagramMediaStats(
   instagramUserId: string,
   accessToken: string,
   since: number,
   until: number,
-): Promise<number | null> {
+): Promise<{ count: number | null; viewsSum: number | null }> {
   try {
-    const data = await fetchGraphJson<{ data?: unknown[] }>(
+    const data = await fetchGraphJson<{ data?: { id: string }[] }>(
       `/${instagramUserId}/media?fields=id&since=${since}&until=${until}&limit=100`,
       accessToken,
     )
-    return Array.isArray(data.data) ? data.data.length : null
+    if (!Array.isArray(data.data)) return { count: null, viewsSum: null }
+
+    const mediaItems = data.data
+    const count = mediaItems.length
+
+    let viewsSum = 0
+    for (const item of mediaItems) {
+      try {
+        const insightData = await fetchGraphJson<{ data?: unknown[] }>(
+          `/${item.id}/insights?metric=views`,
+          accessToken,
+        )
+        const val = sumInsightValues(insightData.data?.[0])
+        if (val !== null) viewsSum += val
+      } catch {
+        // skip this media item if insights fail
+      }
+    }
+
+    return { count, viewsSum }
   } catch {
-    return null
+    return { count: null, viewsSum: null }
   }
 }
 
 async function fetchInstagramInsights(account: InstagramAccountConfig, accessToken: string, year: number, month: number): Promise<InsightResult> {
   const { since, until } = getMonthRange(year, month)
-  const [accountFields, insights, mediaCountInPeriod] = await Promise.all([
+  const [accountFields, insights, mediaStats] = await Promise.all([
     fetchInstagramAccountFields(account.instagramUserId, accessToken),
     fetchInstagramInsightMetrics(account.instagramUserId, accessToken, since, until),
-    fetchInstagramMediaCountInPeriod(account.instagramUserId, accessToken, since, until),
+    fetchInstagramMediaStats(account.instagramUserId, accessToken, since, until),
   ])
 
   return {
     username: accountFields.username,
     followers: numberOrNull(accountFields.followers_count),
     mediaCount: numberOrNull(accountFields.media_count),
-    mediaCountInPeriod,
-    ...insights,
+    mediaCountInPeriod: mediaStats.count,
+    views: mediaStats.viewsSum,
+    reach: insights.reach,
+    urlClicks: insights.urlClicks,
+    profileViews: insights.profileViews,
   }
 }
 
