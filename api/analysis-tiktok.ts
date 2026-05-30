@@ -57,9 +57,6 @@ type InsightResult = {
   reach: number | null
   urlClicks: number | null
   profileViews: number | null
-  debugMediaItems?: unknown
-  aggregatedViewsDebug?: unknown
-  accountViewsDebug?: unknown
 }
 
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
@@ -224,25 +221,47 @@ async function fetchInstagramInsightMetrics(instagramUserId: string, accessToken
     profileViews: null,
   }
 
+  const MAX_WINDOW = 30 * 24 * 60 * 60 // 30 days in seconds
+
   for (const metricKey of Object.keys(metricMap) as InsightMetricKey[]) {
     for (const metricName of metricMap[metricKey]) {
-      const paths = [
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${since}&until=${until}`,
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&since=${since}&until=${until}`,
-        `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
-      ]
+      let total = 0
+      let cursor = since
+      let success = false
 
-      for (const path of paths) {
+      while (cursor < until) {
+        const chunkUntil = Math.min(cursor + MAX_WINDOW, until)
         try {
-          const data = await fetchGraphJson<{ data?: unknown[] }>(path, accessToken)
-          results[metricKey] = sumInsightValues(data.data?.[0])
-          break
+          const data = await fetchGraphJson<{ data?: unknown[] }>(
+            `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value&since=${cursor}&until=${chunkUntil}`,
+            accessToken,
+          )
+          const val = sumInsightValues(data.data?.[0])
+          if (val !== null) {
+            total += val
+            success = true
+          }
         } catch {
-          // Meta側の指標名や期間指定は変わることがあるので、次の候補で試します。
+          break
         }
+        cursor = chunkUntil
       }
 
-      if (results[metricKey] !== null) break
+      if (success) {
+        results[metricKey] = total
+        break
+      }
+
+      try {
+        const data = await fetchGraphJson<{ data?: unknown[] }>(
+          `/${instagramUserId}/insights?metric=${metricName}&period=day&metric_type=total_value`,
+          accessToken,
+        )
+        results[metricKey] = sumInsightValues(data.data?.[0])
+        break
+      } catch {
+        // 次の指標名候補へ
+      }
     }
   }
 
@@ -290,10 +309,10 @@ async function fetchInstagramMediaStats(
   accessToken: string,
   since: number,
   until: number,
-): Promise<{ count: number | null; viewsSum: number | null; debugItems?: Array<{ id: string; views: number | null; error?: string }> }> {
+): Promise<{ count: number | null; viewsSum: number | null }> {
   try {
     const data = await fetchGraphJson<{ data?: { id: string }[] }>(
-      `/${instagramUserId}/media?fields=id,media_type&since=${since}&until=${until}&limit=100`,
+      `/${instagramUserId}/media?fields=id&since=${since}&until=${until}&limit=100`,
       accessToken,
     )
     if (!Array.isArray(data.data)) return { count: null, viewsSum: null }
@@ -302,25 +321,21 @@ async function fetchInstagramMediaStats(
     const count = mediaItems.length
 
     let viewsSum = 0
-    const debugItems: Array<{ id: string; media_type?: string; views: number | null; error?: string }> = []
 
     for (const item of mediaItems) {
-      const mediaItem = item as { id: string; media_type?: string }
       try {
         const insightData = await fetchGraphJson<{ data?: unknown[] }>(
-          `/${mediaItem.id}/insights?metric=views`,
+          `/${item.id}/insights?metric=views`,
           accessToken,
         )
         const val = sumInsightValues(insightData.data?.[0])
         if (val !== null) viewsSum += val
-        debugItems.push({ id: mediaItem.id, media_type: mediaItem.media_type, views: val })
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e)
-        debugItems.push({ id: mediaItem.id, media_type: mediaItem.media_type, views: null, error: errMsg })
+      } catch {
+        // skip this media item if insights fail
       }
     }
 
-    return { count, viewsSum, debugItems }
+    return { count, viewsSum }
   } catch {
     return { count: null, viewsSum: null }
   }
@@ -331,11 +346,10 @@ async function fetchViewsForPeriod(
   accessToken: string,
   since: number,
   until: number,
-): Promise<{ total: number; chunks: Array<{ since: number; until: number; val: number | null; error?: string }> }> {
+): Promise<number> {
   const MAX_WINDOW = 30 * 24 * 60 * 60 // 30 days in seconds
   let total = 0
   let cursor = since
-  const chunks: Array<{ since: number; until: number; val: number | null; error?: string }> = []
 
   while (cursor < until) {
     const chunkUntil = Math.min(cursor + MAX_WINDOW, until)
@@ -346,15 +360,13 @@ async function fetchViewsForPeriod(
       )
       const val = sumInsightValues(data.data?.[0])
       if (val !== null) total += val
-      chunks.push({ since: cursor, until: chunkUntil, val })
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e)
-      chunks.push({ since: cursor, until: chunkUntil, val: null, error: errMsg })
+    } catch {
+      // skip chunk on error
     }
     cursor = chunkUntil
   }
 
-  return { total, chunks }
+  return total
 }
 
 async function fetchInstagramInsights(account: InstagramAccountConfig, accessToken: string, year: number, month: number): Promise<InsightResult> {
@@ -365,24 +377,7 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     fetchInstagramMediaStats(account.instagramUserId, accessToken, since, until),
   ])
 
-  let aggregatedViewsDebug: unknown = null
-  const testPaths = [
-    `/${account.instagramUserId}/insights?metric=aggregated_views&period=day&metric_type=total_value&since=${since}&until=${until}`,
-    `/${account.instagramUserId}/insights?metric=aggregated_views&period=month&since=${since}&until=${until}`,
-    `/${account.instagramUserId}/insights?metric=aggregated_views&since=${since}&until=${until}`,
-  ]
-  for (const path of testPaths) {
-    try {
-      const raw = await fetchGraphJson<unknown>(path, accessToken)
-      aggregatedViewsDebug = { path, raw }
-      break
-    } catch (e) {
-      aggregatedViewsDebug = { path, error: e instanceof Error ? e.message : String(e) }
-    }
-  }
-
-  const viewsResult = await fetchViewsForPeriod(account.instagramUserId, accessToken, since, until)
-  const accountViewsTotal = viewsResult.total
+  const accountViewsTotal = await fetchViewsForPeriod(account.instagramUserId, accessToken, since, until)
 
   return {
     username: accountFields.username,
@@ -393,9 +388,6 @@ async function fetchInstagramInsights(account: InstagramAccountConfig, accessTok
     reach: insights.reach,
     urlClicks: insights.urlClicks,
     profileViews: insights.profileViews,
-    debugMediaItems: mediaStats.debugItems,
-    aggregatedViewsDebug,
-    accountViewsDebug: viewsResult,
   }
 }
 
@@ -500,9 +492,6 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
           reach: insights.reach,
           urlClicks: insights.urlClicks,
           profileViews: insights.profileViews,
-          debugMediaItems: insights.debugMediaItems,
-          aggregatedViewsDebug: insights.aggregatedViewsDebug,
-          accountViewsDebug: insights.accountViewsDebug,
           previousFollowers,
           followerGrowth: insights.followers !== null && previousFollowers !== null
             ? insights.followers - previousFollowers
