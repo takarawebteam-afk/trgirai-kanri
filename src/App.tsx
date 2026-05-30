@@ -2088,6 +2088,7 @@ function App() {
   const [analysisInstaLoading, setAnalysisInstaLoading] = useState(false)
   const [analysisInstaMessage, setAnalysisInstaMessage] = useState('')
   const [analysisInstaSavingCell, setAnalysisInstaSavingCell] = useState('')
+  const [analysisInstaSyncing, setAnalysisInstaSyncing] = useState(false)
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
@@ -2364,6 +2365,35 @@ function App() {
       setAnalysisInstaMessage(`保存に失敗しました: ${message}`)
     } finally {
       setAnalysisInstaSavingCell('')
+    }
+  }
+
+  async function syncAnalysisInstaMetrics() {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth() + 1
+    setAnalysisInstaSyncing(true)
+    setAnalysisInstaMessage('Instagramから数字を取得中...')
+
+    try {
+      const response = await fetch('/api/sync-instagram-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month }),
+      })
+      const data = await response.json() as { ok?: boolean, message?: string, saved?: number }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'Instagramの数字を取得できませんでした。')
+      }
+
+      await fetchAnalysisInstaSheet()
+      setAnalysisInstaMessage(`Instagramから${year}年${month}月の数字を反映しました。`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Instagramの自動反映に失敗しました。'
+      setAnalysisInstaMessage(message)
+    } finally {
+      setAnalysisInstaSyncing(false)
     }
   }
 
@@ -5861,6 +5891,14 @@ function App() {
                     <p>セルをクリックして、スプレッドシートのように直接入力できます。</p>
                   </div>
                   <div className="analysis-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncAnalysisInstaMetrics()}
+                      disabled={analysisInstaSyncing}
+                    >
+                      {analysisInstaSyncing ? '取得中...' : 'Instagramから自動取得'}
+                    </button>
                     {analysisInstaMessage && (
                       <span className={`analysis-import-message ${analysisInstaMessage.includes('失敗') || analysisInstaMessage.includes('取れません') || analysisInstaMessage.includes('読めません') || analysisInstaMessage.includes('設定されていません') ? 'is-error' : 'is-success'}`}>
                         {analysisInstaMessage}
