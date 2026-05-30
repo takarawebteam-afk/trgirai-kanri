@@ -2388,7 +2388,34 @@ function App() {
         throw new Error(data.message || 'Instagramの数字を取得できませんでした。')
       }
 
-      await fetchAnalysisInstaSheet()
+      const { data: freshRows } = await supabase
+        .from('analysis_insta_metrics')
+        .select('year, month, account, metric, value')
+        .eq('year', year)
+        .eq('month', month)
+
+      if (freshRows && freshRows.length > 0) {
+        const newValueMap = new Map(
+          (freshRows as AnalysisTiktokSavedRow[]).map((row) => [
+            `${row.account}::${row.metric}::${row.year}::${row.month}`,
+            row.value || '',
+          ])
+        )
+        setAnalysisInstaData((current) => ({
+          ...current,
+          groups: current.groups.map((group) => ({
+            ...group,
+            rows: group.rows.map((metricRow) => ({
+              ...metricRow,
+              values: metricRow.values.map((val, i) => {
+                const col = current.columns[i]
+                const key = `${group.account}::${metricRow.metric}::${Number(col.year)}::${Number(col.month)}`
+                return newValueMap.has(key) ? (newValueMap.get(key) ?? '') : val
+              }),
+            })),
+          })),
+        }))
+      }
       setAnalysisInstaMessage(`Instagramから${year}年${month}月の数字を反映しました。`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Instagramの自動反映に失敗しました。'
