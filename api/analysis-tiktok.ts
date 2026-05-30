@@ -339,14 +339,12 @@ async function fetchViewsForPeriod(
   while (cursor < until) {
     const chunkUntil = Math.min(cursor + MAX_WINDOW, until)
     try {
-      const data = await fetchGraphJson<{ data?: Array<{ values?: Array<{ value?: unknown }> }> }>(
-        `/${instagramUserId}/insights?metric=views&period=day&since=${cursor}&until=${chunkUntil}`,
+      const data = await fetchGraphJson<{ data?: unknown[] }>(
+        `/${instagramUserId}/insights?metric=views&period=day&metric_type=total_value&since=${cursor}&until=${chunkUntil}`,
         accessToken,
       )
-      const values = data.data?.[0]?.values ?? []
-      for (const v of values) {
-        total += numberOrNull(v.value) ?? 0
-      }
+      const val = sumInsightValues(data.data?.[0])
+      if (val !== null) total += val
     } catch {
       // skip chunk on error
     }
