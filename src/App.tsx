@@ -629,7 +629,7 @@ type AnalysisTiktokSavedRow = {
 
 type AnalysisYearFilter = 'total' | string
 
-type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta'
+type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads'
 
 const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
@@ -637,6 +637,7 @@ const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
   { key: 'analytics', label: 'アナリティクス' },
   { key: 'tiktok', label: 'TikTok' },
   { key: 'insta', label: 'INSTA' },
+  { key: 'threads', label: 'threads' },
 ]
 
 const ANALYSIS_TIKTOK_COLUMNS: AnalysisTiktokColumn[] = [
@@ -6104,6 +6105,14 @@ function App() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </section>
+            )}
+
+            {activeAnalysisSubTab === 'threads' && (
+              <section className="panel table-panel">
+                <div className="analysis-coming-soon-panel">
+                  <h2>threads</h2>
                 </div>
               </section>
             )}
