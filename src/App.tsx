@@ -535,7 +535,7 @@ type TaskReportCategorySummary = {
 
 type WeeklyScheduleItem = {
   id: string
-  source: '案件管理' | 'タスク管理' | '部署予定'
+  source: string
   date: string
   start_time?: string
   title: string
@@ -4372,6 +4372,8 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posts' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, () => { void fetchTaskItems() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock' }, () => { void fetchStock() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_records' }, () => { void fetchTiktokProgressForStock() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_sessions' }, () => { void fetchAnalysisSessions() })
       .on(
         'postgres_changes',
@@ -4550,6 +4552,32 @@ function App() {
         date: item.due_date,
         title: item.name,
         detail: `${getTaskItemPrimaryAssignee(item) || '担当者未設定'} / 作成者: ${item.creator || '未設定'}`,
+      })),
+    ...stockRecords
+      .filter((stock) => (
+        stock.deadline
+        && Number(stock.achieved_count) < Number(stock.required_count)
+        && isDateWithinRange(stock.deadline, dashboardToday, dashboardWeeklyLimit)
+      ))
+      .map((stock): WeeklyScheduleItem => ({
+        id: `stock-${stock.id}`,
+        source: 'ストック管理',
+        date: stock.deadline,
+        title: stock.label || 'ストック',
+        detail: `残り ${formatInteger(Number(stock.required_count) - Number(stock.achieved_count))}件 / 必要 ${formatInteger(stock.required_count)}件${stock.note ? ` / ${stock.note}` : ''}`,
+      })),
+    ...tiktokDerivedStocks
+      .filter((stock) => (
+        stock.deadline
+        && Number(stock.achieved_count) < Number(stock.required_count)
+        && isDateWithinRange(stock.deadline, dashboardToday, dashboardWeeklyLimit)
+      ))
+      .map((stock): WeeklyScheduleItem => ({
+        id: `stock-${stock.id}`,
+        source: 'ストック管理',
+        date: stock.deadline,
+        title: stock.label || 'ストック',
+        detail: `残り ${formatInteger(Number(stock.required_count) - Number(stock.achieved_count))}件 / 必要 ${formatInteger(stock.required_count)}件`,
       })),
     ...bushoSchedules
       .filter((schedule) => schedule.date && isDateWithinRange(schedule.date, dashboardToday, dashboardWeeklyLimit))
