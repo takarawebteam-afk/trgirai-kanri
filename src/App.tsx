@@ -629,7 +629,7 @@ type AnalysisTiktokSavedRow = {
 
 type AnalysisYearFilter = 'total' | string
 
-type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads'
+type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads' | 'youtube'
 
 const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
@@ -638,6 +638,7 @@ const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
   { key: 'tiktok', label: 'TikTok' },
   { key: 'insta', label: 'INSTA' },
   { key: 'threads', label: 'threads' },
+  { key: 'youtube', label: 'YouTube' },
 ]
 
 const ANALYSIS_TIKTOK_COLUMNS: AnalysisTiktokColumn[] = [
@@ -699,10 +700,29 @@ const ANALYSIS_THREADS_COLUMNS: AnalysisTiktokColumn[] = [
 const ANALYSIS_THREADS_GROUP_DEFINITIONS = [
   { account: 'Karilun', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
   { account: '長瀬', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
-  { account: '西北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
-  { account: '西宮市', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
   { account: '八尾', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
   { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+] as const
+
+const ANALYSIS_YOUTUBE_COLUMNS: AnalysisTiktokColumn[] = [
+  { year: '2024', month: '12', label: '2024年12月' },
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2025', month, label: `2025年${month}月` }
+  }),
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2026', month, label: `2026年${month}月` }
+  }),
+]
+
+const ANALYSIS_YOUTUBE_GROUP_DEFINITIONS = [
+  { account: 'Karilun', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
+  { account: '長瀬', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
+  { account: '西北', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
+  { account: '西宮市', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
+  { account: '八尾', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
+  { account: '京北', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
 ] as const
 
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
@@ -888,6 +908,37 @@ function createEmptyAnalysisThreadsData(): AnalysisTiktokSheetData {
 
 function applyAnalysisThreadsSavedRows(rows: AnalysisTiktokSavedRow[]) {
   const baseData = createEmptyAnalysisThreadsData()
+  const valueMap = new Map(rows.map((row) => [`${row.account}::${row.metric}::${row.year}::${row.month}`, row.value || '']))
+
+  return {
+    ...baseData,
+    groups: baseData.groups.map((group) => ({
+      ...group,
+      rows: group.rows.map((metricRow) => ({
+        ...metricRow,
+        values: baseData.columns.map((column) => (
+          valueMap.get(`${group.account}::${metricRow.metric}::${Number(column.year)}::${Number(column.month)}`) || ''
+        )),
+      })),
+    })),
+  }
+}
+
+function createEmptyAnalysisYoutubeData(): AnalysisTiktokSheetData {
+  return {
+    columns: ANALYSIS_YOUTUBE_COLUMNS,
+    groups: ANALYSIS_YOUTUBE_GROUP_DEFINITIONS.map((group) => ({
+      account: group.account,
+      rows: group.metrics.map((metric) => ({
+        metric,
+        values: ANALYSIS_YOUTUBE_COLUMNS.map(() => ''),
+      })),
+    })),
+  }
+}
+
+function applyAnalysisYoutubeSavedRows(rows: AnalysisTiktokSavedRow[]) {
+  const baseData = createEmptyAnalysisYoutubeData()
   const valueMap = new Map(rows.map((row) => [`${row.account}::${row.metric}::${row.year}::${row.month}`, row.value || '']))
 
   return {
@@ -2163,6 +2214,12 @@ function App() {
   const [analysisThreadsSavingCell, setAnalysisThreadsSavingCell] = useState('')
   const [analysisThreadsSyncing, setAnalysisThreadsSyncing] = useState(false)
   const [analysisThreadsYearFilter, setAnalysisThreadsYearFilter] = useState<AnalysisYearFilter>('total')
+  const [analysisYoutubeData, setAnalysisYoutubeData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
+  const [analysisYoutubeLoading, setAnalysisYoutubeLoading] = useState(false)
+  const [analysisYoutubeMessage, setAnalysisYoutubeMessage] = useState('')
+  const [analysisYoutubeSavingCell, setAnalysisYoutubeSavingCell] = useState('')
+  const [analysisYoutubeSyncing, setAnalysisYoutubeSyncing] = useState(false)
+  const [analysisYoutubeYearFilter, setAnalysisYoutubeYearFilter] = useState<AnalysisYearFilter>('total')
 
   const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
   const analysisTiktokVisibleColumns = useMemo(
@@ -2178,6 +2235,11 @@ function App() {
   const analysisThreadsVisibleColumns = useMemo(
     () => getAnalysisVisibleColumnIndexes(ANALYSIS_THREADS_COLUMNS, analysisThreadsYearFilter),
     [analysisThreadsYearFilter]
+  )
+  const analysisYoutubeYearOptions = useMemo(() => getAnalysisYearOptions(ANALYSIS_YOUTUBE_COLUMNS), [])
+  const analysisYoutubeVisibleColumns = useMemo(
+    () => getAnalysisVisibleColumnIndexes(ANALYSIS_YOUTUBE_COLUMNS, analysisYoutubeYearFilter),
+    [analysisYoutubeYearFilter]
   )
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
@@ -2654,6 +2716,133 @@ function App() {
       setAnalysisThreadsMessage(message)
     } finally {
       setAnalysisThreadsSyncing(false)
+    }
+  }
+
+  async function fetchAnalysisYoutubeSheet() {
+    setAnalysisYoutubeLoading(true)
+    setAnalysisYoutubeMessage('読込中...')
+    try {
+      const { data: savedRows, error } = await supabase
+        .from('analysis_youtube_metrics')
+        .select('*')
+      if (error) throw error
+      if (savedRows && savedRows.length > 0) {
+        setAnalysisYoutubeData(applyAnalysisYoutubeSavedRows(savedRows as AnalysisTiktokSavedRow[]))
+      } else {
+        setAnalysisYoutubeData(createEmptyAnalysisYoutubeData())
+      }
+      setAnalysisYoutubeMessage('')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : '読み込みに失敗しました。'
+      setAnalysisYoutubeMessage(`読み込みに失敗しました: ${message}`)
+    } finally {
+      setAnalysisYoutubeLoading(false)
+    }
+  }
+
+  function updateAnalysisYoutubeCell(groupIndex: number, rowIndex: number, valueIndex: number, value: string) {
+    setAnalysisYoutubeData((current) => ({
+      ...current,
+      groups: current.groups.map((group, gi) =>
+        gi !== groupIndex ? group : {
+          ...group,
+          rows: group.rows.map((row, ri) =>
+            ri !== rowIndex ? row : {
+              ...row,
+              values: row.values.map((v, vi) => vi !== valueIndex ? v : value),
+            }
+          ),
+        }
+      ),
+    }))
+  }
+
+  async function saveAnalysisYoutubeCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
+    const value = stripNumberCommas(row.values[valueIndex] || '')
+    const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+    setAnalysisYoutubeSavingCell(cellKey)
+    try {
+      const { error } = await supabase.from('analysis_youtube_metrics').upsert({
+        year: Number(column.year),
+        month: Number(column.month),
+        account: group.account,
+        metric: row.metric,
+        value,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'year,month,account,metric' })
+      if (error) throw error
+      setAnalysisYoutubeMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : '保存に失敗しました。'
+      setAnalysisYoutubeMessage(`保存に失敗しました: ${message}`)
+    } finally {
+      setAnalysisYoutubeSavingCell('')
+    }
+  }
+
+  async function syncAnalysisYoutubeMetrics() {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
+    setAnalysisYoutubeSyncing(true)
+    setAnalysisYoutubeMessage('YouTubeから数字を取得中...')
+
+    try {
+      await Promise.all([
+        fetch('/api/analysis-youtube?action=sync-youtube-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: currentYear, month: currentMonth }),
+        }),
+        fetch('/api/analysis-youtube?action=sync-youtube-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: prevYear, month: prevMonth, skipSubscriberCount: true }),
+        }),
+      ].map(async (responsePromise) => {
+        const response = await responsePromise
+        const data = await response.json() as { ok?: boolean, message?: string, saved?: number }
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || 'YouTubeの数字を取得できませんでした。')
+        }
+      }))
+
+      const { data: freshRows } = await supabase
+        .from('analysis_youtube_metrics')
+        .select('year, month, account, metric, value')
+        .or(`and(year.eq.${currentYear},month.eq.${currentMonth}),and(year.eq.${prevYear},month.eq.${prevMonth})`)
+
+      if (freshRows && freshRows.length > 0) {
+        const newValueMap = new Map(
+          (freshRows as AnalysisTiktokSavedRow[]).map((row) => [
+            `${row.account}::${row.metric}::${row.year}::${row.month}`,
+            row.value || '',
+          ])
+        )
+        setAnalysisYoutubeData((current) => ({
+          ...current,
+          groups: current.groups.map((group) => ({
+            ...group,
+            rows: group.rows.map((metricRow) => ({
+              ...metricRow,
+              values: metricRow.values.map((val, i) => {
+                const col = current.columns[i]
+                const key = `${group.account}::${metricRow.metric}::${Number(col.year)}::${Number(col.month)}`
+                return newValueMap.has(key) ? (newValueMap.get(key) ?? '') : val
+              }),
+            })),
+          })),
+        }))
+      }
+      setAnalysisYoutubeMessage(`YouTubeから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'YouTubeの自動反映に失敗しました。'
+      setAnalysisYoutubeMessage(message)
+    } finally {
+      setAnalysisYoutubeSyncing(false)
     }
   }
 
@@ -4530,6 +4719,7 @@ function App() {
     fetchAnalysisTiktokSheet()
     fetchAnalysisInstaSheet()
     void fetchAnalysisThreadsSheet()
+    void fetchAnalysisYoutubeSheet()
 
     const channel = supabase
       .channel('db-changes')
@@ -6419,6 +6609,106 @@ function App() {
                                       value={formatNumericText(value)}
                                       onChange={(e) => updateAnalysisThreadsCell(groupIndex, rowIndex, valueIndex, e.target.value)}
                                       onBlur={() => void saveAnalysisThreadsCell(group, row, column, valueIndex)}
+                                      onFocus={(e) => e.target.select()}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                                      aria-label={`${group.account} ${row.metric} ${column.label}`}
+                                    />
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeAnalysisSubTab === 'youtube' && (
+              <section className="panel table-panel">
+                <div className="panel-heading analysis-sheet-heading">
+                  <div>
+                    <h2>YouTube</h2>
+                  </div>
+                  <div className="analysis-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncAnalysisYoutubeMetrics()}
+                      disabled={analysisYoutubeSyncing}
+                    >
+                      {analysisYoutubeSyncing ? '取得中...' : 'YouTubeから自動取得'}
+                    </button>
+                    <div className="analysis-year-filter" aria-label="YouTubeの表示期間">
+                      <button
+                        type="button"
+                        className={analysisYoutubeYearFilter === 'total' ? 'active' : ''}
+                        onClick={() => setAnalysisYoutubeYearFilter('total')}
+                      >
+                        累計
+                      </button>
+                      {analysisYoutubeYearOptions.map((year) => (
+                        <button
+                          key={year}
+                          type="button"
+                          className={analysisYoutubeYearFilter === year ? 'active' : ''}
+                          onClick={() => setAnalysisYoutubeYearFilter(year)}
+                        >
+                          {year}年
+                        </button>
+                      ))}
+                    </div>
+                    {analysisYoutubeMessage && (
+                      <span className={`analysis-import-message ${analysisYoutubeMessage.includes('失敗') || analysisYoutubeMessage.includes('設定されていません') || analysisYoutubeMessage.includes('取得できません') ? 'is-error' : 'is-success'}`}>
+                        {analysisYoutubeMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="table-wrap analysis-monthly-table-wrap">
+                  <table className={`analysis-monthly-table analysis-tiktok-sheet-table ${analysisYoutubeYearFilter !== 'total' ? 'analysis-year-fit-table' : ''}`}>
+                    <thead>
+                      <tr>
+                        <th>リスト</th>
+                        <th>項目</th>
+                        {analysisYoutubeVisibleColumns.map(({ column }) => (
+                          <th key={column.label}>{analysisYoutubeYearFilter === 'total' ? column.label : `${column.month}月`}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisYoutubeData.groups.length === 0 && (
+                        <tr>
+                          <td colSpan={analysisYoutubeVisibleColumns.length + 2} className="analysis-empty-cell">
+                            {analysisYoutubeLoading ? '読込中...' : '表示できる数字がありません。'}
+                          </td>
+                        </tr>
+                      )}
+                      {analysisYoutubeData.groups.map((group, groupIndex) => (
+                        <Fragment key={group.account}>
+                          {group.rows.map((row, rowIndex) => (
+                            <tr
+                              key={`${group.account}-${row.metric}`}
+                              className={rowIndex === group.rows.length - 1 ? 'analysis-group-end-row' : ''}
+                            >
+                              {rowIndex === 0 && (
+                                <th className="analysis-account-cell" rowSpan={group.rows.length}>
+                                  {group.account}
+                                </th>
+                              )}
+                              <th className="analysis-media-cell">{row.metric}</th>
+                              {analysisYoutubeVisibleColumns.map(({ column, index: valueIndex }) => {
+                                const value = row.values[valueIndex] || ''
+                                const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+                                return (
+                                  <td key={valueIndex} className={analysisYoutubeSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
+                                    <input
+                                      className="analysis-sheet-input"
+                                      value={formatNumericText(value)}
+                                      onChange={(e) => updateAnalysisYoutubeCell(groupIndex, rowIndex, valueIndex, e.target.value)}
+                                      onBlur={() => void saveAnalysisYoutubeCell(group, row, column, valueIndex)}
                                       onFocus={(e) => e.target.select()}
                                       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
                                       aria-label={`${group.account} ${row.metric} ${column.label}`}
