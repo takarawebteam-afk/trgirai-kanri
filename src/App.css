@@ -758,7 +758,7 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 }
 
 .dashboard-schedule-item {
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 3px 8px;
@@ -810,7 +810,6 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   justify-content: flex-start;
   width: 72px;
   padding: 1px 6px;
-  margin-bottom: 4px;
   border-radius: 999px;
   background: var(--white);
   border: 1px solid rgba(13, 42, 110, 0.12);
