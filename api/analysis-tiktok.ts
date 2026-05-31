@@ -43,7 +43,9 @@ type GoogleSheetValuesResponse = {
 type InstagramAccountConfig = {
   key: string
   account: string
-  instagramUserId: string
+  instagramUserId?: string
+  instagramUsername?: string
+  facebookPageName?: string
 }
 
 type InsightMetricKey = 'reach' | 'urlClicks' | 'profileViews'
@@ -62,6 +64,10 @@ type InsightResult = {
 const DEFAULT_INSTAGRAM_ACCOUNTS: InstagramAccountConfig[] = [
   { key: 'karilun_com', account: 'Karilun', instagramUserId: '17841411857507663' },
   { key: 'ap_nagase', account: '長瀬', instagramUserId: '17841408519154477' },
+  { key: 'nishinomiyakita', account: '西北', instagramUsername: 'nishinomiyakita' },
+  { key: 'nishinomiya_karilun', account: '西宮市', instagramUsername: 'nishinomiya_karilun' },
+  { key: 'apaman_yao', account: '八尾', instagramUsername: 'apaman_yao' },
+  { key: 'keihan_karilun', account: '京北', instagramUsername: 'keihan_karilun' },
 ]
 
 const INSTAGRAM_METRIC_LABELS = {
@@ -148,7 +154,68 @@ function parseAccountsConfig() {
   if (!rawValue) return DEFAULT_INSTAGRAM_ACCOUNTS
 
   const parsed = JSON.parse(rawValue) as InstagramAccountConfig[]
-  return parsed.filter((account) => account.account && account.instagramUserId)
+  return parsed.filter((account) => (
+    account.account
+    && (account.instagramUserId || account.instagramUsername || account.facebookPageName)
+  ))
+}
+
+type ConnectedInstagramAccount = {
+  pageName: string
+  instagramUserId: string
+  instagramUsername?: string
+}
+
+function normalizeMetaName(value: string | undefined) {
+  return String(value ?? '').replace(/^@/, '').trim().toLowerCase()
+}
+
+async function fetchConnectedInstagramAccounts(accessToken: string): Promise<ConnectedInstagramAccount[]> {
+  try {
+    const data = await fetchGraphJson<{
+      data?: Array<{
+        name?: string
+        instagram_business_account?: {
+          id?: string
+          username?: string
+        }
+      }>
+    }>(
+      `/me/accounts?fields=${encodeURIComponent('name,instagram_business_account{id,username}')}&limit=100`,
+      accessToken,
+    )
+
+    return (data.data ?? [])
+      .map((page) => ({
+        pageName: page.name ?? '',
+        instagramUserId: page.instagram_business_account?.id ?? '',
+        instagramUsername: page.instagram_business_account?.username,
+      }))
+      .filter((page) => page.instagramUserId)
+  } catch {
+    return []
+  }
+}
+
+function resolveInstagramUserId(
+  account: InstagramAccountConfig,
+  connectedAccounts: ConnectedInstagramAccount[],
+) {
+  if (account.instagramUserId) return account.instagramUserId
+
+  const username = normalizeMetaName(account.instagramUsername)
+  if (username) {
+    const match = connectedAccounts.find((item) => normalizeMetaName(item.instagramUsername) === username)
+    if (match) return match.instagramUserId
+  }
+
+  const pageName = normalizeMetaName(account.facebookPageName)
+  if (pageName) {
+    const match = connectedAccounts.find((item) => normalizeMetaName(item.pageName) === pageName)
+    if (match) return match.instagramUserId
+  }
+
+  throw new Error(`${account.account}のInstagram IDが見つかりませんでした。Meta側でページとInstagramの連携を確認してください。`)
 }
 
 function getMonthRange(year: number, month: number) {
@@ -383,7 +450,12 @@ async function fetchViewsForPeriod(
   return total
 }
 
-async function fetchInstagramInsights(account: InstagramAccountConfig, accessToken: string, year: number, month: number): Promise<InsightResult> {
+async function fetchInstagramInsights(
+  account: InstagramAccountConfig & { instagramUserId: string },
+  accessToken: string,
+  year: number,
+  month: number,
+): Promise<InsightResult> {
   const { since, until } = getMonthRange(year, month)
   const [accountFields, insights, mediaStats] = await Promise.all([
     fetchInstagramAccountFields(account.instagramUserId, accessToken),
@@ -504,10 +576,14 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
     const summaries: object[] = []
     const failures: object[] = []
     const rowsToSave: object[] = []
+    const connectedAccounts = accounts.some((account) => !account.instagramUserId)
+      ? await fetchConnectedInstagramAccounts(accessToken)
+      : []
 
     for (const account of accounts) {
       try {
-        const insights = await fetchInstagramInsights(account, accessToken, year, month)
+        const instagramUserId = resolveInstagramUserId(account, connectedAccounts)
+        const insights = await fetchInstagramInsights({ ...account, instagramUserId }, accessToken, year, month)
         const previousFollowers = previousFollowersMap[account.account] ?? null
         summaries.push({
           key: account.key,
