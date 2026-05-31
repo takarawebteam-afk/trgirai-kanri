@@ -4753,7 +4753,7 @@ function App() {
       ))
       .map((stock): WeeklyScheduleItem => ({
         id: `stock-${stock.id}`,
-        source: 'ストック管理',
+        source: '撮影期日',
         date: stock.deadline,
         title: stock.label || 'ストック',
         detail: `残り ${formatInteger(Number(stock.required_count) - Number(stock.achieved_count))}件 / 必要 ${formatInteger(stock.required_count)}件${stock.note ? ` / ${stock.note}` : ''}`,
@@ -4766,7 +4766,7 @@ function App() {
       ))
       .map((stock): WeeklyScheduleItem => ({
         id: `stock-${stock.id}`,
-        source: 'ストック管理',
+        source: '撮影期日',
         date: stock.deadline,
         title: stock.label || 'ストック',
         detail: `残り ${formatInteger(Number(stock.required_count) - Number(stock.achieved_count))}件 / 必要 ${formatInteger(stock.required_count)}件`,
