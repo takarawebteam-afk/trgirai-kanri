@@ -27,7 +27,7 @@ type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
 type TaskItemRecurrence = 'none' | 'monthly'
 type RecurringDateRule = 'same_day' | 'month_end'
-type PageKey = 'dashboard' | 'analysis' | 'tasks' | 'sns' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
+type PageKey = 'dashboard' | 'analysis' | 'tasks' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
 
 type StockRecord = {
   id: string
@@ -397,15 +397,6 @@ type Task = {
   note: string
 }
 
-type SnsPost = {
-  id: string
-  postDate: string
-  platform: SnsPlatform
-  account: string
-  comments: number
-  saves: number
-}
-
 type RecruitmentRecord = {
   id: string
   date: string
@@ -496,7 +487,6 @@ const TAB_ITEMS: { key: PageKey; label: string }[] = [
   { key: 'snsproperty', label: 'SNS物件管理' },
   { key: 'progress', label: '進捗管理' },
   { key: 'stock', label: 'ストック管理' },
-  { key: 'sns', label: 'SNS投稿管理' },
   { key: 'manuals', label: 'Note' },
 ] as const
 
@@ -585,7 +575,6 @@ const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
   recurring_instance_key: null,
 }
 const snsPlatforms: SnsPlatform[] = ['TikTok', 'Instagram', 'Threads', 'YouTube']
-const snsAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '八尾', '採用', '管理']
 
 type AnalysisMonthlyMediaRow = {
   media: string
@@ -876,14 +865,6 @@ const defaultTaskForm: Omit<Task, 'id'> = {
   status: '未実施',
   savings: 0,
   note: '',
-}
-
-const defaultSnsForm: Omit<SnsPost, 'id'> = {
-  postDate: '',
-  platform: 'TikTok',
-  account: 'Karilun',
-  comments: 0,
-  saves: 0,
 }
 
 const defaultRecruitmentForm: Omit<RecruitmentRecord, 'id'> = {
@@ -1833,7 +1814,6 @@ function App() {
   }, [])
 
   const [tasks, setTasks] = useState<Task[]>([])
-  const [posts, setPosts] = useState<SnsPost[]>([])
   const [recruitment, setRecruitment] = useState<RecruitmentRecord[]>([])
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState('all')
@@ -1849,7 +1829,6 @@ function App() {
 
   // 新規追加フォーム
   const [taskForm, setTaskForm] = useState(defaultTaskForm)
-  const [snsForm, setSnsForm] = useState(defaultSnsForm)
   const [recruitmentForm, setRecruitmentForm] = useState(defaultRecruitmentForm)
 
   // インライン編集
@@ -1857,8 +1836,6 @@ function App() {
   const [taskInlineForm, setTaskInlineForm] = useState<Omit<Task, 'id'>>(defaultTaskForm)
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all')
   const [taskShowCompleted, setTaskShowCompleted] = useState(true)
-  const [snsInlineId, setSnsInlineId] = useState<string | null>(null)
-  const [snsInlineForm, setSnsInlineForm] = useState<Omit<SnsPost, 'id'>>(defaultSnsForm)
   const [recruitmentInlineId, setRecruitmentInlineId] = useState<string | null>(null)
   const [recruitmentInlineForm, setRecruitmentInlineForm] = useState<Omit<RecruitmentRecord, 'id'>>(defaultRecruitmentForm)
 
@@ -2145,11 +2122,6 @@ function App() {
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
     if (data) setTasks(data as Task[])
-  }
-
-  async function fetchPosts() {
-    const { data } = await supabase.from('sns_posts').select('*').order('created_at', { ascending: false })
-    if (data) setPosts(data as SnsPost[])
   }
 
   async function importAnalysisSessions() {
@@ -4352,7 +4324,6 @@ function App() {
     if (!currentUserEmail) return
 
     fetchTasks()
-    fetchPosts()
     fetchRecruitment()
     fetchTaskItems()
     fetchMembers()
@@ -4369,7 +4340,6 @@ function App() {
     const channel = supabase
       .channel('db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posts' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recruitment' }, fetchRecruitment)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_items' }, () => { void fetchTaskItems() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stock' }, () => { void fetchStock() })
@@ -4462,7 +4432,6 @@ function App() {
     new Set([
       new Date().getFullYear(),
       ...tasks.flatMap((task) => [getYear(task.taskDate), getYear(task.dueDate)]),
-      ...posts.map((post) => getYear(post.postDate)),
       ...recruitment.map((record) => getYear(record.date)),
     ]),
   )
@@ -5589,14 +5558,6 @@ function App() {
     return true
   })
 
-  const handleSnsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    await supabase.from('sns_posts').insert({ ...normalizePost(snsForm), id: crypto.randomUUID() })
-    setSnsForm(defaultSnsForm)
-    fetchPosts()
-    setShowModal(false)
-  }
-
   const handleRecruitmentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('recruitment').insert({ ...normalizeRecruitment(recruitmentForm), id: crypto.randomUUID() })
@@ -5622,10 +5583,6 @@ function App() {
       note: task.note || '',
     })
   }
-  const startSnsInline = (post: SnsPost) => {
-    setSnsInlineId(post.id)
-    setSnsInlineForm({ postDate: post.postDate, platform: post.platform, account: post.account, comments: post.comments, saves: post.saves })
-  }
   const startRecruitmentInline = (record: RecruitmentRecord) => {
     setRecruitmentInlineId(record.id)
     setRecruitmentInlineForm({ date: record.date, platform: record.platform, department: record.department, jobType: record.jobType, costReduction: record.costReduction })
@@ -5642,12 +5599,6 @@ function App() {
     await supabase.from('tasks').update(normalizeTask(formToSave)).eq('id', taskInlineId)
     setTaskInlineId(null)
     fetchTasks()
-  }
-  const saveSnsInline = async () => {
-    if (!snsInlineId) return
-    await supabase.from('sns_posts').update(normalizePost(snsInlineForm)).eq('id', snsInlineId)
-    setSnsInlineId(null)
-    fetchPosts()
   }
   const saveRecruitmentInline = async () => {
     if (!recruitmentInlineId) return
@@ -6593,63 +6544,6 @@ function App() {
             </section>
 
           </section>
-        )}
-
-        {/* ===== SNS投稿管理 ===== */}
-        {activePage === 'sns' && (
-          <>
-            <section className="panel table-panel">
-              <div className="panel-heading"><div><h2>SNS投稿一覧</h2><p>行をクリックして直接編集</p></div></div>
-              <div className="table-wrap">
-                <table className="compact-list-table">
-                  <thead>
-                    <tr><th>投稿日</th><th>媒体</th><th>アカウント</th><th>コメント</th><th>保存</th><th>操作</th></tr>
-                  </thead>
-                  <tbody>
-                    {posts.map((post) => {
-                      const isEditing = snsInlineId === post.id
-                      const f = snsInlineForm
-                      return (
-                        <tr
-                          key={post.id}
-                          className={isEditing ? 'row-editing' : 'row-hoverable'}
-                          onClick={() => { if (!isEditing) startSnsInline(post) }}
-                        >
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="date" value={f.postDate} onChange={(e) => setSnsInlineForm({ ...f, postDate: e.target.value })} /> : post.postDate}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <select className="inline-select" value={f.platform} onChange={(e) => setSnsInlineForm({ ...f, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p}>{p}</option>)}</select> : post.platform}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <select className="inline-select" value={f.account} onChange={(e) => setSnsInlineForm({ ...f, account: e.target.value })}>{snsAccounts.map((a) => <option key={a}>{a}</option>)}</select> : post.account}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.comments} onChange={(e) => setSnsInlineForm({ ...f, comments: Number(e.target.value) })} /> : integer.format(post.comments)}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.saves} onChange={(e) => setSnsInlineForm({ ...f, saves: Number(e.target.value) })} /> : integer.format(post.saves)}
-                          </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <div className="row-actions">
-                              {isEditing ? (
-                                <>
-                                  <button className="primary" onClick={saveSnsInline}>保存</button>
-                                  <button className="secondary" onClick={() => setSnsInlineId(null)}>×</button>
-                                </>
-                              ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('sns_posts', post.id, fetchPosts, 'このSNS記録を本当に削除しますか？')}>削除</button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
         )}
 
         {activePage === 'snsproperty' && (
@@ -8670,7 +8564,6 @@ function App() {
               <h2 className="modal-title">
                 {activePage === 'tasks' && '案件を追加'}
                 {activePage === 'taskmanagement' && 'タスクを追加'}
-                {activePage === 'sns' && '投稿を追加'}
                 {activePage === 'recruitment' && '採用データを追加'}
                 {activePage === 'hankyo' && '反響を追加'}
                 {activePage === 'dm' && 'DMを追加'}
@@ -8824,31 +8717,6 @@ function App() {
                   </div>
                 </form>
               </>
-            )}
-
-            {/* SNS投稿管理フォーム */}
-            {activePage === 'sns' && (
-              <form className="data-form" onSubmit={handleSnsSubmit}>
-                <label className="form-label">投稿日
-                  <input type="date" value={snsForm.postDate} onChange={(e) => setSnsForm({ ...snsForm, postDate: e.target.value })} required />
-                </label>
-                <label className="form-label">媒体
-                  <select value={snsForm.platform} onChange={(e) => setSnsForm({ ...snsForm, platform: e.target.value as SnsPlatform })}>{snsPlatforms.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                </label>
-                <label className="form-label">アカウント
-                  <select value={snsForm.account} onChange={(e) => setSnsForm({ ...snsForm, account: e.target.value })}>{snsAccounts.map((a) => <option key={a} value={a}>{a}</option>)}</select>
-                </label>
-                <label className="form-label">コメント数
-                  <input type="number" min="0" placeholder="コメント数（例: 50）" value={snsForm.comments || ''} onChange={(e) => setSnsForm({ ...snsForm, comments: Number(e.target.value) || 0 })} />
-                </label>
-                <label className="form-label">保存数
-                  <input type="number" min="0" placeholder="保存数（例: 100）" value={snsForm.saves || ''} onChange={(e) => setSnsForm({ ...snsForm, saves: Number(e.target.value) || 0 })} />
-                </label>
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                  <button type="button" className="secondary" onClick={() => setShowModal(false)}>キャンセル</button>
-                </div>
-              </form>
             )}
 
             {/* 採用管理フォーム */}
@@ -11124,14 +10992,6 @@ function calcTaskSavings(task: Task, selectedYear: number, selectedMonth: string
 
 function normalizeTask(task: Omit<Task, 'id'>): Omit<Task, 'id'> {
   return { ...task, savings: Number(task.savings) || 0 }
-}
-
-function normalizePost(post: Omit<SnsPost, 'id'>): Omit<SnsPost, 'id'> {
-  return {
-    ...post,
-    comments: Number(post.comments) || 0,
-    saves: Number(post.saves) || 0,
-  }
 }
 
 function normalizeRecruitment(record: Omit<RecruitmentRecord, 'id'>): Omit<RecruitmentRecord, 'id'> {
