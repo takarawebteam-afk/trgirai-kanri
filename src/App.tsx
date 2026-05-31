@@ -2792,12 +2792,12 @@ function App() {
 
     try {
       await Promise.all([
-        fetch('/api/analysis-youtube?action=sync-youtube-insights', {
+        fetch('/api/analysis-tiktok?action=sync-youtube-insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ year: currentYear, month: currentMonth }),
         }),
-        fetch('/api/analysis-youtube?action=sync-youtube-insights', {
+        fetch('/api/analysis-tiktok?action=sync-youtube-insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ year: prevYear, month: prevMonth, skipSubscriberCount: true }),
