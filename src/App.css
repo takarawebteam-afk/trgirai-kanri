@@ -822,27 +822,47 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   box-sizing: border-box;
 }
 
-.schedule-source-badge.source-task {
-  background: var(--blue-50);
-  border-color: rgba(26, 111, 230, 0.15);
-  color: var(--blue-700);
+/* ソースごとの行（ongoing-item）のカラーカスタマイズ */
+.ongoing-item.source-task strong {
+  color: var(--blue-900);
 }
 
-.schedule-source-badge.source-stock {
+/* ストック管理 -> 赤 */
+.ongoing-item.source-stock {
   background: var(--red-100);
-  border-color: rgba(185, 28, 28, 0.15);
+  border-left-color: var(--red-700);
+}
+.ongoing-item.source-stock strong {
+  color: #7f1d1d;
+}
+.ongoing-item.source-stock .schedule-source-badge {
+  border-color: rgba(185, 28, 28, 0.2);
   color: var(--red-700);
 }
 
-.schedule-source-badge.source-busho {
+/* 部署予定 -> 緑 */
+.ongoing-item.source-busho {
   background: var(--green-100);
-  border-color: rgba(21, 128, 61, 0.15);
+  border-left-color: var(--green-700);
+}
+.ongoing-item.source-busho strong {
+  color: #064e3b;
+}
+.ongoing-item.source-busho .schedule-source-badge {
+  border-color: rgba(21, 128, 61, 0.2);
   color: var(--green-700);
 }
 
-.schedule-source-badge.source-project {
+/* 案件管理 -> 黄色 */
+.ongoing-item.source-project {
   background: var(--amber-100);
-  border-color: rgba(180, 83, 9, 0.15);
+  border-left-color: var(--amber-700);
+}
+.ongoing-item.source-project strong {
+  color: #78350f;
+}
+.ongoing-item.source-project .schedule-source-badge {
+  border-color: rgba(180, 83, 9, 0.2);
   color: var(--amber-700);
 }
 
