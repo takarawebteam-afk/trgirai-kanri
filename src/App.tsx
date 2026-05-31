@@ -684,6 +684,27 @@ const ANALYSIS_INSTA_GROUP_DEFINITIONS = [
   { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', '視聴者リーチ', 'プロフ閲覧', 'URLクリック', 'URLクリック率'] },
 ] as const
 
+const ANALYSIS_THREADS_COLUMNS: AnalysisTiktokColumn[] = [
+  { year: '2024', month: '12', label: '2024年12月' },
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2025', month, label: `2025年${month}月` }
+  }),
+  ...Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1)
+    return { year: '2026', month, label: `2026年${month}月` }
+  }),
+]
+
+const ANALYSIS_THREADS_GROUP_DEFINITIONS = [
+  { account: 'Karilun', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+  { account: '長瀬', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+  { account: '西北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+  { account: '西宮市', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+  { account: '八尾', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+  { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+] as const
+
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
   {
     account: 'Karilun',
@@ -851,6 +872,38 @@ function applyAnalysisInstaSavedRows(rows: AnalysisTiktokSavedRow[]) {
     })),
   }
 }
+
+function createEmptyAnalysisThreadsData(): AnalysisTiktokSheetData {
+  return {
+    columns: ANALYSIS_THREADS_COLUMNS,
+    groups: ANALYSIS_THREADS_GROUP_DEFINITIONS.map((group) => ({
+      account: group.account,
+      rows: group.metrics.map((metric) => ({
+        metric,
+        values: ANALYSIS_THREADS_COLUMNS.map(() => ''),
+      })),
+    })),
+  }
+}
+
+function applyAnalysisThreadsSavedRows(rows: AnalysisTiktokSavedRow[]) {
+  const baseData = createEmptyAnalysisThreadsData()
+  const valueMap = new Map(rows.map((row) => [`${row.account}::${row.metric}::${row.year}::${row.month}`, row.value || '']))
+
+  return {
+    ...baseData,
+    groups: baseData.groups.map((group) => ({
+      ...group,
+      rows: group.rows.map((metricRow) => ({
+        ...metricRow,
+        values: baseData.columns.map((column) => (
+          valueMap.get(`${group.account}::${metricRow.metric}::${Number(column.year)}::${Number(column.month)}`) || ''
+        )),
+      })),
+    })),
+  }
+}
+
 const recruitDepartments: RecruitDepartment[] = ['仲介', '管理', '売買', 'ビバ', '経理', '総務', 'その他']
 const jobTypes: JobType[] = ['正社員', 'パート']
 
@@ -2104,6 +2157,11 @@ function App() {
   const [analysisInstaSavingCell, setAnalysisInstaSavingCell] = useState('')
   const [analysisInstaSyncing, setAnalysisInstaSyncing] = useState(false)
   const [analysisInstaYearFilter, setAnalysisInstaYearFilter] = useState<AnalysisYearFilter>('total')
+  const [analysisThreadsData, setAnalysisThreadsData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
+  const [analysisThreadsLoading, setAnalysisThreadsLoading] = useState(false)
+  const [analysisThreadsMessage, setAnalysisThreadsMessage] = useState('')
+  const [analysisThreadsSavingCell, setAnalysisThreadsSavingCell] = useState('')
+  const [analysisThreadsYearFilter, setAnalysisThreadsYearFilter] = useState<AnalysisYearFilter>('total')
 
   const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
   const analysisTiktokVisibleColumns = useMemo(
@@ -2114,6 +2172,11 @@ function App() {
   const analysisInstaVisibleColumns = useMemo(
     () => getAnalysisVisibleColumnIndexes(analysisInstaData.columns, analysisInstaYearFilter),
     [analysisInstaData.columns, analysisInstaYearFilter]
+  )
+  const analysisThreadsYearOptions = useMemo(() => getAnalysisYearOptions(ANALYSIS_THREADS_COLUMNS), [])
+  const analysisThreadsVisibleColumns = useMemo(
+    () => getAnalysisVisibleColumnIndexes(ANALYSIS_THREADS_COLUMNS, analysisThreadsYearFilter),
+    [analysisThreadsYearFilter]
   )
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
@@ -2396,6 +2459,68 @@ function App() {
       setAnalysisInstaMessage(`保存に失敗しました: ${message}`)
     } finally {
       setAnalysisInstaSavingCell('')
+    }
+  }
+
+  async function fetchAnalysisThreadsSheet() {
+    setAnalysisThreadsLoading(true)
+    setAnalysisThreadsMessage('読込中...')
+    try {
+      const { data: savedRows, error } = await supabase
+        .from('analysis_threads_metrics')
+        .select('*')
+      if (error) throw error
+      if (savedRows && savedRows.length > 0) {
+        setAnalysisThreadsData(applyAnalysisThreadsSavedRows(savedRows as AnalysisTiktokSavedRow[]))
+      } else {
+        setAnalysisThreadsData(createEmptyAnalysisThreadsData())
+      }
+      setAnalysisThreadsMessage('')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : '読み込みに失敗しました。'
+      setAnalysisThreadsMessage(`読み込みに失敗しました: ${message}`)
+    } finally {
+      setAnalysisThreadsLoading(false)
+    }
+  }
+
+  function updateAnalysisThreadsCell(groupIndex: number, rowIndex: number, valueIndex: number, value: string) {
+    setAnalysisThreadsData((current) => ({
+      ...current,
+      groups: current.groups.map((group, gi) =>
+        gi !== groupIndex ? group : {
+          ...group,
+          rows: group.rows.map((row, ri) =>
+            ri !== rowIndex ? row : {
+              ...row,
+              values: row.values.map((v, vi) => vi !== valueIndex ? v : value),
+            }
+          ),
+        }
+      ),
+    }))
+  }
+
+  async function saveAnalysisThreadsCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
+    const value = stripNumberCommas(row.values[valueIndex] || '')
+    const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+    setAnalysisThreadsSavingCell(cellKey)
+    try {
+      const { error } = await supabase.from('analysis_threads_metrics').upsert({
+        year: Number(column.year),
+        month: Number(column.month),
+        account: group.account,
+        metric: row.metric,
+        value,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'year,month,account,metric' })
+      if (error) throw error
+      setAnalysisThreadsMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : '保存に失敗しました。'
+      setAnalysisThreadsMessage(`保存に失敗しました: ${message}`)
+    } finally {
+      setAnalysisThreadsSavingCell('')
     }
   }
 
@@ -4337,6 +4462,7 @@ function App() {
     fetchAnalysisSessions()
     fetchAnalysisTiktokSheet()
     fetchAnalysisInstaSheet()
+    void fetchAnalysisThreadsSheet()
 
     const channel = supabase
       .channel('db-changes')
@@ -4353,6 +4479,35 @@ function App() {
           const row = payload.new as { year: number; month: number; account: string; metric: string; value: string }
           if (!row?.account || !row?.metric) return
           setAnalysisInstaData((current) => ({
+            ...current,
+            groups: current.groups.map((group) => ({
+              ...group,
+              rows: group.rows.map((metricRow) => ({
+                ...metricRow,
+                values: metricRow.values.map((val, i) => {
+                  const col = current.columns[i]
+                  if (
+                    group.account === row.account &&
+                    metricRow.metric === row.metric &&
+                    Number(col.year) === Number(row.year) &&
+                    Number(col.month) === Number(row.month)
+                  ) {
+                    return row.value || ''
+                  }
+                  return val
+                }),
+              })),
+            })),
+          }))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'analysis_threads_metrics' },
+        (payload) => {
+          const row = payload.new as { year: number; month: number; account: string; metric: string; value: string }
+          if (!row?.account || !row?.metric) return
+          setAnalysisThreadsData((current) => ({
             ...current,
             groups: current.groups.map((group) => ({
               ...group,
@@ -6111,8 +6266,92 @@ function App() {
 
             {activeAnalysisSubTab === 'threads' && (
               <section className="panel table-panel">
-                <div className="analysis-coming-soon-panel">
-                  <h2>threads</h2>
+                <div className="panel-heading analysis-sheet-heading">
+                  <div>
+                    <h2>threads</h2>
+                  </div>
+                  <div className="analysis-actions">
+                    <div className="analysis-year-filter" aria-label="threadsの表示期間">
+                      <button
+                        type="button"
+                        className={analysisThreadsYearFilter === 'total' ? 'active' : ''}
+                        onClick={() => setAnalysisThreadsYearFilter('total')}
+                      >
+                        累計
+                      </button>
+                      {analysisThreadsYearOptions.map((year) => (
+                        <button
+                          key={year}
+                          type="button"
+                          className={analysisThreadsYearFilter === year ? 'active' : ''}
+                          onClick={() => setAnalysisThreadsYearFilter(year)}
+                        >
+                          {year}年
+                        </button>
+                      ))}
+                    </div>
+                    {analysisThreadsMessage && (
+                      <span className={`analysis-import-message ${analysisThreadsMessage.includes('失敗') ? 'is-error' : 'is-success'}`}>
+                        {analysisThreadsMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="table-wrap analysis-monthly-table-wrap">
+                  <table className={`analysis-monthly-table analysis-tiktok-sheet-table ${analysisThreadsYearFilter !== 'total' ? 'analysis-year-fit-table' : ''}`}>
+                    <thead>
+                      <tr>
+                        <th>リスト</th>
+                        <th>項目</th>
+                        {analysisThreadsVisibleColumns.map(({ column }) => (
+                          <th key={column.label}>{analysisThreadsYearFilter === 'total' ? column.label : `${column.month}月`}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisThreadsData.groups.length === 0 && (
+                        <tr>
+                          <td colSpan={analysisThreadsVisibleColumns.length + 2} className="analysis-empty-cell">
+                            {analysisThreadsLoading ? '読込中...' : '表示できる数字がありません。'}
+                          </td>
+                        </tr>
+                      )}
+                      {analysisThreadsData.groups.map((group, groupIndex) => (
+                        <Fragment key={group.account}>
+                          {group.rows.map((row, rowIndex) => (
+                            <tr
+                              key={`${group.account}-${row.metric}`}
+                              className={rowIndex === group.rows.length - 1 ? 'analysis-group-end-row' : ''}
+                            >
+                              {rowIndex === 0 && (
+                                <th className="analysis-account-cell" rowSpan={group.rows.length}>
+                                  {group.account}
+                                </th>
+                              )}
+                              <th className="analysis-media-cell">{row.metric}</th>
+                              {analysisThreadsVisibleColumns.map(({ column, index: valueIndex }) => {
+                                const value = row.values[valueIndex] || ''
+                                const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
+                                return (
+                                  <td key={valueIndex} className={analysisThreadsSavingCell === cellKey ? 'analysis-cell-saving' : ''}>
+                                    <input
+                                      className="analysis-sheet-input"
+                                      value={formatNumericText(value)}
+                                      onChange={(e) => updateAnalysisThreadsCell(groupIndex, rowIndex, valueIndex, e.target.value)}
+                                      onBlur={() => void saveAnalysisThreadsCell(group, row, column, valueIndex)}
+                                      onFocus={(e) => e.target.select()}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                                      aria-label={`${group.account} ${row.metric} ${column.label}`}
+                                    />
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             )}
