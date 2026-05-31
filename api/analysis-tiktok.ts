@@ -78,6 +78,23 @@ const INSTAGRAM_METRIC_LABELS = {
   urlClicks: 'URLクリック',
 } as const
 
+const THREADS_API_BASE = 'https://graph.threads.net/v1.0'
+
+type ThreadsAccountConfig = {
+  key: string
+  account: string
+  threadsUserId?: string
+}
+
+const DEFAULT_THREADS_ACCOUNTS: ThreadsAccountConfig[] = [
+  { key: 'karilun_com', account: 'Karilun' },
+  { key: 'ap_nagase', account: '長瀬' },
+  { key: 'nishinomiyakita', account: '西北' },
+  { key: 'nishinomiya_karilun', account: '西宮市' },
+  { key: 'apaman_yao', account: '八尾' },
+  { key: 'keihan_karilun', account: '京北' },
+]
+
 function text(value: SheetValue | undefined) {
   return String(value ?? '').trim()
 }
@@ -533,6 +550,272 @@ function buildInstagramRows(
     }))
 }
 
+async function fetchThreadsJson<T>(url: string, accessToken: string) {
+  const separator = url.includes('?') ? '&' : '?'
+  const response = await fetch(`${url}${separator}access_token=${encodeURIComponent(accessToken)}`)
+  const data = await response.json() as T & { error?: { message?: string } }
+  if (!response.ok || data.error) {
+    throw new Error(data.error?.message || 'Threadsの数字を取得できませんでした。')
+  }
+  return data
+}
+
+function parseThreadsAccountsConfig(): ThreadsAccountConfig[] {
+  const rawValue = process.env.THREADS_ACCOUNT_IDS
+  if (!rawValue) return DEFAULT_THREADS_ACCOUNTS
+  try {
+    const parsed = JSON.parse(rawValue) as ThreadsAccountConfig[]
+    return parsed.filter((a) => a.account && a.threadsUserId)
+  } catch {
+    return DEFAULT_THREADS_ACCOUNTS
+  }
+}
+
+async function fetchPreviousThreadsFollowers(
+  supabase: { from: (table: string) => any },
+  accountNames: string[],
+  prevYear: number,
+  prevMonth: number,
+): Promise<Record<string, number | null>> {
+  try {
+    const { data } = await supabase
+      .from('analysis_threads_metrics')
+      .select('account, value')
+      .eq('metric', 'フォロワー数')
+      .eq('year', prevYear)
+      .eq('month', prevMonth)
+      .in('account', accountNames)
+    const result: Record<string, number | null> = {}
+    const rows = (data ?? []) as Array<{ account: string; value: string | null }>
+    for (const name of accountNames) {
+      const row = rows.find((r) => r.account === name)
+      result[name] = parseStoredNumber(row?.value ?? null)
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+async function fetchThreadsAccountFields(threadsUserId: string, accessToken: string) {
+  return fetchThreadsJson<{ followers_count?: number }>(
+    `${THREADS_API_BASE}/${threadsUserId}?fields=followers_count`,
+    accessToken,
+  )
+}
+
+async function fetchThreadsInsightMetrics(
+  threadsUserId: string,
+  accessToken: string,
+  since: number,
+  until: number,
+): Promise<{ views: number | null; likes: number | null; replies: number | null; reposts: number | null }> {
+  const results = { views: null as number | null, likes: null as number | null, replies: null as number | null, reposts: null as number | null }
+  const metrics = ['views', 'likes', 'replies', 'reposts'] as const
+  const chunkSeconds = 30 * 24 * 60 * 60
+
+  for (const metricName of metrics) {
+    let total = 0
+    let cursor = since
+    while (cursor < until) {
+      const chunkUntil = Math.min(cursor + chunkSeconds, until)
+      try {
+        const data = await fetchThreadsJson<{ data?: unknown[] }>(
+          `${THREADS_API_BASE}/${threadsUserId}/threads_insights?metric=${metricName}&period=day&metric_type=total_value&since=${cursor}&until=${chunkUntil}`,
+          accessToken,
+        )
+        const val = sumInsightValues(data.data?.[0])
+        total += val ?? 0
+      } catch {
+        // chunk failed, continue
+      }
+      cursor = chunkUntil
+    }
+    results[metricName] = total
+  }
+
+  return results
+}
+
+async function fetchThreadsPostCount(
+  threadsUserId: string,
+  accessToken: string,
+  since: number,
+  until: number,
+): Promise<number | null> {
+  try {
+    const data = await fetchThreadsJson<{ data?: unknown[] }>(
+      `${THREADS_API_BASE}/${threadsUserId}/threads?fields=id&since=${since}&until=${until}&limit=100`,
+      accessToken,
+    )
+    return Array.isArray(data.data) ? data.data.length : null
+  } catch {
+    return null
+  }
+}
+
+function buildThreadsRows(
+  year: number,
+  month: number,
+  accountName: string,
+  followers: number | null,
+  previousFollowers: number | null,
+  postCount: number | null,
+  metrics: { views: number | null; likes: number | null; replies: number | null; reposts: number | null },
+  includeFollowerMetrics: boolean,
+) {
+  const rows: Array<{ metric: string; value: number | string | null }> = []
+
+  if (includeFollowerMetrics && followers !== null) {
+    rows.push({ metric: 'フォロワー数', value: followers })
+  }
+
+  if (includeFollowerMetrics && followers !== null && previousFollowers !== null) {
+    rows.push({ metric: 'フォロワー増加数', value: followers - previousFollowers })
+  }
+
+  if (postCount !== null) {
+    rows.push({ metric: '投稿数', value: postCount })
+  }
+
+  if (
+    includeFollowerMetrics &&
+    followers !== null &&
+    previousFollowers !== null &&
+    postCount !== null &&
+    postCount > 0
+  ) {
+    const growth = followers - previousFollowers
+    rows.push({ metric: 'フォロワー/投稿', value: Math.round((growth / postCount) * 10) / 10 })
+  }
+
+  if (metrics.views !== null) rows.push({ metric: '視聴回数(閲覧数)', value: metrics.views })
+  if (metrics.likes !== null) rows.push({ metric: 'いいね数', value: metrics.likes })
+  if (metrics.reposts !== null) rows.push({ metric: 'リポスト数', value: metrics.reposts })
+  if (metrics.replies !== null) rows.push({ metric: 'コメント数', value: metrics.replies })
+
+  return rows
+    .filter((row) => row.value !== null && row.value !== '')
+    .map((row) => ({
+      year,
+      month,
+      account: accountName,
+      metric: row.metric,
+      value: String(row.value),
+      updated_at: new Date().toISOString(),
+    }))
+}
+
+async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
+  const accessToken = process.env.THREADS_ACCESS_TOKEN
+  if (!accessToken) {
+    return res.status(200).json({
+      ok: false,
+      message: 'ThreadsのアクセストークンがまだVercelに設定されていません。THREADS_ACCESS_TOKENを設定してください。',
+    })
+  }
+
+  const now = new Date()
+  const year = Number(req.body?.year || now.getFullYear())
+  const month = Number(req.body?.month || now.getMonth() + 1)
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return res.status(400).json({ ok: false, message: '年月が正しくありません。' })
+  }
+
+  try {
+    const accounts = parseThreadsAccountsConfig().filter((a) => a.threadsUserId)
+    if (accounts.length === 0) {
+      return res.status(200).json({
+        ok: false,
+        message: 'ThreadsアカウントIDがまだ設定されていません。THREADS_ACCOUNT_IDSをVercelに設定してください。',
+      })
+    }
+
+    const { year: prevYear, month: prevMonth } = getPrevYearMonth(year, month)
+    const currentYearMonth = getCurrentYearMonthJst()
+    const includeFollowerMetrics = year === currentYearMonth.year && month === currentYearMonth.month
+    const { since, until } = getMonthRange(year, month)
+
+    let previousFollowersMap: Record<string, number | null> = {}
+    try {
+      const supabaseForRead = getSupabaseClient()
+      previousFollowersMap = await fetchPreviousThreadsFollowers(
+        supabaseForRead,
+        accounts.map((a) => a.account),
+        prevYear,
+        prevMonth,
+      )
+    } catch {
+      // computed metrics will be skipped
+    }
+
+    const summaries: object[] = []
+    const failures: object[] = []
+    const rowsToSave: object[] = []
+
+    for (const account of accounts) {
+      const { threadsUserId } = account as ThreadsAccountConfig & { threadsUserId: string }
+      try {
+        const [accountFields, insightMetrics, postCount] = await Promise.all([
+          fetchThreadsAccountFields(threadsUserId, accessToken),
+          fetchThreadsInsightMetrics(threadsUserId, accessToken, since, until),
+          fetchThreadsPostCount(threadsUserId, accessToken, since, until),
+        ])
+        const followers = numberOrNull(accountFields.followers_count)
+        const previousFollowers = previousFollowersMap[account.account] ?? null
+
+        summaries.push({
+          key: account.key,
+          account: account.account,
+          followers,
+          postCount,
+          views: insightMetrics.views,
+          likes: insightMetrics.likes,
+          replies: insightMetrics.replies,
+          reposts: insightMetrics.reposts,
+          previousFollowers,
+        })
+
+        rowsToSave.push(...buildThreadsRows(
+          year, month, account.account,
+          followers, previousFollowers, postCount,
+          insightMetrics, includeFollowerMetrics,
+        ))
+      } catch (error) {
+        failures.push({
+          key: account.key,
+          account: account.account,
+          message: error instanceof Error ? error.message : '取得できませんでした。',
+        })
+      }
+    }
+
+    if (rowsToSave.length > 0) {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase
+        .from('analysis_threads_metrics')
+        .upsert(rowsToSave, { onConflict: 'year,month,account,metric' })
+      if (error) throw new Error(error.message)
+    }
+
+    return res.status(200).json({
+      ok: failures.length < accounts.length,
+      year,
+      month,
+      saved: rowsToSave.length,
+      summaries,
+      failures,
+      message: failures.length > 0
+        ? `一部のThreadsは取得できませんでした: ${failures.map((f) => (f as { key: string }).key).join(', ')}`
+        : undefined,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Threadsの自動取得に失敗しました。'
+    return res.status(200).json({ ok: false, message })
+  }
+}
+
 async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
   const accessToken = process.env.META_GRAPH_ACCESS_TOKEN || process.env.INSTAGRAM_GRAPH_ACCESS_TOKEN
   if (!accessToken) {
@@ -644,6 +927,10 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST' && req.query.action === 'sync-instagram-insights') {
     return syncInstagramInsights(req, res)
+  }
+
+  if (req.method === 'POST' && req.query.action === 'sync-threads-insights') {
+    return syncThreadsInsights(req, res)
   }
 
   if (req.method !== 'GET') {

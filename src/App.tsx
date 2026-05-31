@@ -2161,6 +2161,7 @@ function App() {
   const [analysisThreadsLoading, setAnalysisThreadsLoading] = useState(false)
   const [analysisThreadsMessage, setAnalysisThreadsMessage] = useState('')
   const [analysisThreadsSavingCell, setAnalysisThreadsSavingCell] = useState('')
+  const [analysisThreadsSyncing, setAnalysisThreadsSyncing] = useState(false)
   const [analysisThreadsYearFilter, setAnalysisThreadsYearFilter] = useState<AnalysisYearFilter>('total')
 
   const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
@@ -2587,6 +2588,72 @@ function App() {
       setAnalysisInstaMessage(message)
     } finally {
       setAnalysisInstaSyncing(false)
+    }
+  }
+
+  async function syncAnalysisThreadsMetrics() {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1
+    const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear
+    setAnalysisThreadsSyncing(true)
+    setAnalysisThreadsMessage('Threadsから数字を取得中...')
+
+    try {
+      await Promise.all([
+        fetch('/api/analysis-tiktok?action=sync-threads-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: currentYear, month: currentMonth }),
+        }),
+        fetch('/api/analysis-tiktok?action=sync-threads-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: prevYear, month: prevMonth }),
+        }),
+      ].map(async (responsePromise) => {
+        const response = await responsePromise
+        const data = await response.json() as { ok?: boolean, message?: string, saved?: number }
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || 'Threadsの数字を取得できませんでした。')
+        }
+      }))
+
+      const { data: freshRows } = await supabase
+        .from('analysis_threads_metrics')
+        .select('year, month, account, metric, value')
+        .or(`and(year.eq.${currentYear},month.eq.${currentMonth}),and(year.eq.${prevYear},month.eq.${prevMonth})`)
+
+      if (freshRows && freshRows.length > 0) {
+        const newValueMap = new Map(
+          (freshRows as AnalysisTiktokSavedRow[]).map((row) => [
+            `${row.account}::${row.metric}::${row.year}::${row.month}`,
+            row.value || '',
+          ])
+        )
+        setAnalysisThreadsData((current) => ({
+          ...current,
+          groups: current.groups.map((group) => ({
+            ...group,
+            rows: group.rows.map((metricRow) => ({
+              ...metricRow,
+              values: metricRow.values.map((val, i) => {
+                const col = current.columns[i]
+                const key = `${group.account}::${metricRow.metric}::${Number(col.year)}::${Number(col.month)}`
+                return newValueMap.has(key) ? (newValueMap.get(key) ?? '') : val
+              }),
+            })),
+          })),
+        }))
+      }
+      setAnalysisThreadsMessage(`Threadsから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Threadsの自動反映に失敗しました。'
+      setAnalysisThreadsMessage(message)
+    } finally {
+      setAnalysisThreadsSyncing(false)
     }
   }
 
@@ -6271,6 +6338,14 @@ function App() {
                     <h2>threads</h2>
                   </div>
                   <div className="analysis-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncAnalysisThreadsMetrics()}
+                      disabled={analysisThreadsSyncing}
+                    >
+                      {analysisThreadsSyncing ? '取得中...' : 'Threadsから自動取得'}
+                    </button>
                     <div className="analysis-year-filter" aria-label="threadsの表示期間">
                       <button
                         type="button"
@@ -6291,7 +6366,7 @@ function App() {
                       ))}
                     </div>
                     {analysisThreadsMessage && (
-                      <span className={`analysis-import-message ${analysisThreadsMessage.includes('失敗') ? 'is-error' : 'is-success'}`}>
+                      <span className={`analysis-import-message ${analysisThreadsMessage.includes('失敗') || analysisThreadsMessage.includes('設定されていません') || analysisThreadsMessage.includes('取得できません') ? 'is-error' : 'is-success'}`}>
                         {analysisThreadsMessage}
                       </span>
                     )}
