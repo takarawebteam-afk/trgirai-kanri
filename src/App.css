@@ -1,4 +1,4 @@
-﻿/* ===== リセット・変数 ===== */
+/* ===== リセット・変数 ===== */
 :root {
   --blue-900: #0d2a6e;
   --blue-700: #1550b8;
@@ -821,6 +821,31 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   text-align: left;
   box-sizing: border-box;
 }
+
+.schedule-source-badge.source-task {
+  background: var(--blue-50);
+  border-color: rgba(26, 111, 230, 0.15);
+  color: var(--blue-700);
+}
+
+.schedule-source-badge.source-stock {
+  background: var(--red-100);
+  border-color: rgba(185, 28, 28, 0.15);
+  color: var(--red-700);
+}
+
+.schedule-source-badge.source-busho {
+  background: var(--green-100);
+  border-color: rgba(21, 128, 61, 0.15);
+  color: var(--green-700);
+}
+
+.schedule-source-badge.source-project {
+  background: var(--amber-100);
+  border-color: rgba(180, 83, 9, 0.15);
+  color: var(--amber-700);
+}
+
 
 /* ===== 管理レイアウト ===== */
 .management-layout {

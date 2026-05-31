@@ -6003,7 +6003,12 @@ function App() {
                 {weeklySchedules.map((item) => (
                   <article className="ongoing-item dashboard-schedule-item" key={item.id}>
                     <div className="dashboard-schedule-main">
-                      <span className="schedule-source-badge">{item.source}</span>
+                      <span className={`schedule-source-badge ${
+                        item.source === 'タスク管理' ? 'source-task' :
+                        item.source === '撮影期日' ? 'source-stock' :
+                        item.source === '部署予定' ? 'source-busho' :
+                        item.source === '案件管理' ? 'source-project' : ''
+                      }`}>{item.source}</span>
                       <strong>{item.title}</strong>
                       <p className="dashboard-schedule-detail">{item.detail}</p>
                     </div>
