@@ -722,7 +722,6 @@ const ANALYSIS_YOUTUBE_GROUP_DEFINITIONS = [
   { account: '西北', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
   { account: '西宮市', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
   { account: '八尾', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
-  { account: '京北', metrics: ['チャンネル登録数', '登録者増加数', '投稿数', '登録者/投稿', '再生数', '平均視聴時間', 'いいね数', 'コメント数'] },
 ] as const
 
 const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [

@@ -93,7 +93,6 @@ const DEFAULT_THREADS_ACCOUNTS: ThreadsAccountConfig[] = [
   { key: 'nishinomiyakita', account: '西北' },
   { key: 'nishinomiya_karilun', account: '西宮市' },
   { key: 'apaman_yao', account: '八尾' },
-  { key: 'keihan_karilun', account: '京北' },
 ]
 
 function text(value: SheetValue | undefined) {
