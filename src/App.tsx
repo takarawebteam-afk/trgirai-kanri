@@ -629,7 +629,7 @@ type AnalysisTiktokSavedRow = {
 
 type AnalysisYearFilter = 'total' | string
 
-type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads' | 'youtube'
+type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads' | 'youtube' | 'site-inflow'
 
 const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
@@ -639,7 +639,15 @@ const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
   { key: 'insta', label: 'INSTA' },
   { key: 'threads', label: 'threads' },
   { key: 'youtube', label: 'YouTube' },
+  { key: 'site-inflow', label: 'サイト流入' },
 ]
+
+const SITE_INFLOW_SITES = [
+  { key: 'karilun', label: 'Karilunサイト', accounts: ['Karilun', '京阪', '西宮市'] },
+  { key: 'yao',     label: 'アパマン八尾',   accounts: ['八尾'] },
+  { key: 'kindai',  label: '近大サイト',     accounts: ['長瀬'] },
+  { key: 'kansei',  label: '関学サイト',     accounts: ['西北'] },
+] as const
 
 const ANALYSIS_TIKTOK_COLUMNS: AnalysisTiktokColumn[] = [
   ...Array.from({ length: 11 }, (_, index) => {
@@ -2193,6 +2201,7 @@ function App() {
   const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
   const [analysisTableGroups, setAnalysisTableGroups] = useState<AnalysisMonthlyAccountGroup[]>(ANALYSIS_MONTHLY_TABLE_GROUPS)
   const [activeAnalysisSubTab, setActiveAnalysisSubTab] = useState<AnalysisSubTab>('analytics')
+  const [activeSiteInflowSite, setActiveSiteInflowSite] = useState<string>('karilun')
   const [analysisImporting, setAnalysisImporting] = useState(false)
   const [analysisImportMessage, setAnalysisImportMessage] = useState('')
   const [analysisImportMessageType, setAnalysisImportMessageType] = useState<'success' | 'error'>('success')
@@ -6724,6 +6733,61 @@ function App() {
                 </div>
               </section>
             )}
+
+            {activeAnalysisSubTab === 'site-inflow' && (() => {
+              const site = SITE_INFLOW_SITES.find(s => s.key === activeSiteInflowSite) ?? SITE_INFLOW_SITES[0]
+              const currentYearTotals = ANALYSIS_MONTHS.map((_, monthIdx) =>
+                analysisTableGroups
+                  .filter(g => (site.accounts as readonly string[]).includes(g.account))
+                  .reduce((siteSum, group) =>
+                    siteSum + group.rows.reduce((rowSum, row) => {
+                      const v = row.values[monthIdx]
+                      return rowSum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
+                    }, 0)
+                  , 0)
+              )
+              const chartData = ANALYSIS_MONTHS.map((month, i) => ({
+                month: `${month}月`,
+                今年: currentYearTotals[i],
+                前年: 0,
+              }))
+              return (
+                <section className="panel table-panel">
+                  <div className="panel-heading analysis-sheet-heading">
+                    <div>
+                      <h2>サイト流入</h2>
+                      <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>各SNS媒体からサイトへの月別流入数（今年 vs 前年）</p>
+                    </div>
+                    <div className="analysis-actions">
+                      {SITE_INFLOW_SITES.map(s => (
+                        <button
+                          key={s.key}
+                          type="button"
+                          className={activeSiteInflowSite === s.key ? 'active' : 'secondary'}
+                          onClick={() => setActiveSiteInflowSite(s.key)}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ padding: '8px 0 24px' }}>
+                    <ResponsiveContainer width="100%" height={320}>
+                      <LineChart data={chartData} margin={{ top: 16, right: 32, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(value: number, name: string) => [value.toLocaleString(), name]} />
+                        <Legend wrapperStyle={{ fontSize: 13 }} />
+                        <Line type="monotone" dataKey="今年" stroke="#4F81BD" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                        <Line type="monotone" dataKey="前年" stroke="#AAAAAA" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <p style={{ textAlign: 'center', fontSize: 11, color: '#bbb', marginTop: 4 }}>※ 前年データは未取得のため0表示</p>
+                  </div>
+                </section>
+              )
+            })()}
           </>
         )}
 
