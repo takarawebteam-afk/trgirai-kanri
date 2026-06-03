@@ -863,6 +863,11 @@ function getAnalysisYearOptions(columns: AnalysisTiktokColumn[]) {
   return Array.from(new Set(columns.map((column) => column.year))).sort((a, b) => Number(a) - Number(b))
 }
 
+function getDefaultAnalysisYearFilter(columns: AnalysisTiktokColumn[]): AnalysisYearFilter {
+  const currentYear = String(new Date().getFullYear())
+  return getAnalysisYearOptions(columns).includes(currentYear) ? currentYear : 'total'
+}
+
 function getAnalysisVisibleColumnIndexes(columns: AnalysisTiktokColumn[], filter: AnalysisYearFilter) {
   return columns
     .map((column, index) => ({ column, index }))
@@ -2209,25 +2214,25 @@ function App() {
   const [analysisTiktokLoading, setAnalysisTiktokLoading] = useState(false)
   const [analysisTiktokMessage, setAnalysisTiktokMessage] = useState('')
   const [analysisTiktokSavingCell, setAnalysisTiktokSavingCell] = useState('')
-  const [analysisTiktokYearFilter, setAnalysisTiktokYearFilter] = useState<AnalysisYearFilter>('total')
+  const [analysisTiktokYearFilter, setAnalysisTiktokYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_TIKTOK_COLUMNS))
   const [analysisInstaData, setAnalysisInstaData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisInstaLoading, setAnalysisInstaLoading] = useState(false)
   const [analysisInstaMessage, setAnalysisInstaMessage] = useState('')
   const [analysisInstaSavingCell, setAnalysisInstaSavingCell] = useState('')
   const [analysisInstaSyncing, setAnalysisInstaSyncing] = useState(false)
-  const [analysisInstaYearFilter, setAnalysisInstaYearFilter] = useState<AnalysisYearFilter>('total')
+  const [analysisInstaYearFilter, setAnalysisInstaYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_INSTA_COLUMNS))
   const [analysisThreadsData, setAnalysisThreadsData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisThreadsLoading, setAnalysisThreadsLoading] = useState(false)
   const [analysisThreadsMessage, setAnalysisThreadsMessage] = useState('')
   const [analysisThreadsSavingCell, setAnalysisThreadsSavingCell] = useState('')
   const [analysisThreadsSyncing, setAnalysisThreadsSyncing] = useState(false)
-  const [analysisThreadsYearFilter, setAnalysisThreadsYearFilter] = useState<AnalysisYearFilter>('total')
+  const [analysisThreadsYearFilter, setAnalysisThreadsYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_THREADS_COLUMNS))
   const [analysisYoutubeData, setAnalysisYoutubeData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisYoutubeLoading, setAnalysisYoutubeLoading] = useState(false)
   const [analysisYoutubeMessage, setAnalysisYoutubeMessage] = useState('')
   const [analysisYoutubeSavingCell, setAnalysisYoutubeSavingCell] = useState('')
   const [analysisYoutubeSyncing, setAnalysisYoutubeSyncing] = useState(false)
-  const [analysisYoutubeYearFilter, setAnalysisYoutubeYearFilter] = useState<AnalysisYearFilter>('total')
+  const [analysisYoutubeYearFilter, setAnalysisYoutubeYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_YOUTUBE_COLUMNS))
 
   const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
   const analysisTiktokVisibleColumns = useMemo(
@@ -6777,7 +6782,7 @@ function App() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(value: number, name: string) => [value.toLocaleString(), name]} />
+                        <Tooltip formatter={(value, name) => [Number(value ?? 0).toLocaleString(), String(name)]} />
                         <Legend wrapperStyle={{ fontSize: 13 }} />
                         <Line type="monotone" dataKey="今年" stroke="#4F81BD" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                         <Line type="monotone" dataKey="前年" stroke="#AAAAAA" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
