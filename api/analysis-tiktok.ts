@@ -940,15 +940,29 @@ type YouTubeAccountConfig = {
   key: string
   account: string
   channelId: string
+  refreshToken?: string
 }
 
 function getYoutubeAccounts(): YouTubeAccountConfig[] {
   const raw = process.env.YOUTUBE_CHANNEL_IDS ?? ''
   if (!raw) return []
   return raw.split(',').map((entry) => {
-    const [key, account, channelId] = entry.split(':')
-    return { key: key.trim(), account: account.trim(), channelId: channelId.trim() }
+    const [key, account, channelId, refreshToken] = entry.split(':')
+    return { key: key.trim(), account: account.trim(), channelId: channelId.trim(), refreshToken: refreshToken?.trim() }
   })
+}
+
+async function getYoutubeAccessToken(refreshToken: string): Promise<string> {
+  const params = new URLSearchParams({
+    client_id: process.env.YOUTUBE_CLIENT_ID ?? '',
+    client_secret: process.env.YOUTUBE_CLIENT_SECRET ?? '',
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token',
+  })
+  const res = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', body: params })
+  const json = await res.json() as { access_token?: string; error?: string }
+  if (!json.access_token) throw new Error('アクセストークン取得失敗: ' + (json.error ?? 'unknown'))
+  return json.access_token
 }
 
 async function fetchYoutubeChannelStats(channelId: string, apiKey: string) {
@@ -1014,6 +1028,17 @@ async function fetchYoutubeMonthlyVideos(channelId: string, apiKey: string, year
   return { videoCount, totalLikes, totalComments }
 }
 
+async function fetchYoutubeAnalytics(channelId: string, accessToken: string, year: number, month: number): Promise<{ views: number; avgViewDuration: number }> {
+  const since = new Date(year, month - 1, 1).toISOString().split('T')[0]
+  const until = new Date(year, month, 0).toISOString().split('T')[0]
+  const url = 'https://youtubeanalytics.googleapis.com/v2/reports?ids=channel%3D%3D' + channelId + '&startDate=' + since + '&endDate=' + until + '&metrics=views%2CaverageViewDuration'
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } })
+  if (!res.ok) throw new Error('YouTube Analytics API error: ' + res.status)
+  const json = await res.json() as { rows?: number[][] }
+  const row = json.rows?.[0]
+  return { views: row?.[0] ?? 0, avgViewDuration: row?.[1] ?? 0 }
+}
+
 async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
   try {
     const apiKey = process.env.YOUTUBE_API_KEY ?? ''
@@ -1044,6 +1069,17 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
         rows.push({ year, month, account: acc.account, metric: '投稿数', value: String(monthlyVideos.videoCount), updated_at: updatedAt })
         rows.push({ year, month, account: acc.account, metric: 'いいね数', value: String(monthlyVideos.totalLikes), updated_at: updatedAt })
         rows.push({ year, month, account: acc.account, metric: 'コメント数', value: String(monthlyVideos.totalComments), updated_at: updatedAt })
+
+        if (acc.refreshToken) {
+          try {
+            const accessToken = await getYoutubeAccessToken(acc.refreshToken)
+            const analytics = await fetchYoutubeAnalytics(acc.channelId, accessToken, year, month)
+            rows.push({ year, month, account: acc.account, metric: '再生数', value: String(analytics.views), updated_at: updatedAt })
+            rows.push({ year, month, account: acc.account, metric: '平均視聴時間', value: String(Math.round(analytics.avgViewDuration)), updated_at: updatedAt })
+          } catch (error) {
+            console.error(error)
+          }
+        }
 
         return {
           ok: true as const,
