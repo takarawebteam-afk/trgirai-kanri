@@ -43,6 +43,7 @@ type TiktokProgressRecord = {
   id: string
   shooting_start_date: string | null
   shooting_date: string | null
+  scheduled_post_date: string | null
   material_processing: string | null
   property_name: string
   media: string
@@ -2152,6 +2153,7 @@ function App() {
         : recs.filter(r => r.shooting_date && r.shooting_date.trim()).length
       return {
         id: `derived-${key}`,
+        scheduled_post_date: Array.from(new Set(recs.map(r => r.scheduled_post_date).filter((date): date is string => !!date))).sort().join(' / '),
         deadline: date,
         label,
         required_count: recs.length,
@@ -3357,12 +3359,12 @@ function App() {
     const [tiktokResult, recruitmentResult] = await Promise.all([
       supabase
         .from('production_records')
-        .select('id,shooting_start_date,shooting_date,material_processing,property_name,media')
+        .select('id,shooting_start_date,shooting_date,scheduled_post_date,material_processing,property_name,media')
         .ilike('media', '%TikTok%')
         .not('shooting_start_date', 'is', null),
       supabase
         .from('production_records')
-        .select('id,shooting_start_date,shooting_date,material_processing,property_name,media')
+        .select('id,shooting_start_date,shooting_date,scheduled_post_date,material_processing,property_name,media')
         .eq('media', '採用')
         .not('shooting_start_date', 'is', null),
     ])
@@ -8384,16 +8386,17 @@ function App() {
                   <table className="compact-list-table">
                     <thead>
                       <tr>
-                        <th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>メモ</th><th>操作</th>
+                        <th>投稿予定日</th><th>締切日</th><th>ラベル</th><th>必要件数</th><th>達成件数</th><th>メモ</th><th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {incompleteStockRecords.length === 0 && incompleteTiktokDerivedStocks.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
+                      {incompleteStockRecords.length === 0 && incompleteTiktokDerivedStocks.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>データがありません</td></tr>}
                       {incompleteStockRecords.map(r => {
                         const isEditing = stockInlineId === r.id
                         const f = stockInlineForm
                         return (
                           <tr key={r.id} className={isEditing ? 'row-editing' : 'row-hoverable'} onClick={() => { if (!isEditing) startStockInline(r) }}>
+                            <td></td>
                             <td onClick={e => isEditing && e.stopPropagation()}>
                               {isEditing ? <input className="inline-input" type="date" value={f.deadline} onChange={e => setStockInlineForm({ ...f, deadline: e.target.value })} /> : r.deadline}
                             </td>
@@ -8423,6 +8426,7 @@ function App() {
                       })}
                       {incompleteTiktokDerivedStocks.map(r => (
                         <tr key={r.id} style={{ background: '#f0f9ff' }}>
+                          <td>{r.scheduled_post_date}</td>
                           <td>{r.deadline}</td>
                           <td><span style={{ fontSize: '0.78rem', background: r.label === '採用' ? '#1a73e8' : '#010101', color: '#fff', borderRadius: 3, padding: '1px 6px', display: 'inline-block', minWidth: '3.2rem', textAlign: 'center' }}>{r.label}</span></td>
                           <td>{formatInteger(r.required_count)}件</td>
