@@ -1015,46 +1015,86 @@ async function fetchYoutubeMonthlyVideos(channelId: string, apiKey: string, year
 }
 
 async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
-  const apiKey = process.env.YOUTUBE_API_KEY ?? ''
-  if (!apiKey) {
-    return res.status(200).json({ ok: false, message: 'YouTube API キーが設定されていません。YOUTUBE_API_KEY環境変数を設定してください。' })
-  }
+  try {
+    const apiKey = process.env.YOUTUBE_API_KEY ?? ''
+    if (!apiKey) {
+      return res.status(200).json({ ok: false, message: 'YouTube API キーが設定されていません。YOUTUBE_API_KEY環境変数を設定してください。' })
+    }
 
-  const accounts = getYoutubeAccounts()
-  if (accounts.length === 0) {
-    return res.status(200).json({ ok: false, message: 'YouTubeチャンネルIDが設定されていません。YOUTUBE_CHANNEL_IDS環境変数を設定してください。' })
-  }
+    const accounts = getYoutubeAccounts()
+    if (accounts.length === 0) {
+      return res.status(200).json({ ok: false, message: 'YouTubeチャンネルIDが設定されていません。YOUTUBE_CHANNEL_IDS環境変数を設定してください。' })
+    }
 
-  const { year, month, skipSubscriberCount } = req.body as { year: number; month: number; skipSubscriberCount?: boolean }
+    const { year, month, skipSubscriberCount } = req.body as { year: number; month: number; skipSubscriberCount?: boolean }
 
-  const rows: Array<{ year: number; month: number; account: string; metric: string; value: string; updated_at: string }> = []
+    const results = await Promise.all(accounts.map(async (acc) => {
+      try {
+        const [stats, monthlyVideos] = await Promise.all([
+          fetchYoutubeChannelStats(acc.channelId, apiKey),
+          fetchYoutubeMonthlyVideos(acc.channelId, apiKey, year, month),
+        ])
 
-  for (const acc of accounts) {
-    try {
-      const [stats, monthlyVideos] = await Promise.all([
-        fetchYoutubeChannelStats(acc.channelId, apiKey),
-        fetchYoutubeMonthlyVideos(acc.channelId, apiKey, year, month),
-      ])
+        const rows: Array<{ year: number; month: number; account: string; metric: string; value: string; updated_at: string }> = []
+        const updatedAt = new Date().toISOString()
 
-      if (!skipSubscriberCount && stats.subscriberCount !== undefined) {
-        rows.push({ year, month, account: acc.account, metric: 'チャンネル登録数', value: stats.subscriberCount, updated_at: new Date().toISOString() })
+        if (!skipSubscriberCount && stats.subscriberCount !== undefined) {
+          rows.push({ year, month, account: acc.account, metric: 'チャンネル登録数', value: stats.subscriberCount, updated_at: updatedAt })
+        }
+        rows.push({ year, month, account: acc.account, metric: '投稿数', value: String(monthlyVideos.videoCount), updated_at: updatedAt })
+        rows.push({ year, month, account: acc.account, metric: 'いいね数', value: String(monthlyVideos.totalLikes), updated_at: updatedAt })
+        rows.push({ year, month, account: acc.account, metric: 'コメント数', value: String(monthlyVideos.totalComments), updated_at: updatedAt })
+
+        return {
+          ok: true as const,
+          summary: {
+            key: acc.key,
+            account: acc.account,
+            subscriberCount: stats.subscriberCount ?? null,
+            videoCount: monthlyVideos.videoCount,
+            totalLikes: monthlyVideos.totalLikes,
+            totalComments: monthlyVideos.totalComments,
+          },
+          rows,
+        }
+      } catch (error) {
+        return {
+          ok: false as const,
+          failure: {
+            key: acc.key,
+            account: acc.account,
+            message: error instanceof Error ? error.message : '取得できませんでした。',
+          },
+          rows: [],
+        }
       }
-      rows.push({ year, month, account: acc.account, metric: '投稿数', value: String(monthlyVideos.videoCount), updated_at: new Date().toISOString() })
-      rows.push({ year, month, account: acc.account, metric: 'いいね数', value: String(monthlyVideos.totalLikes), updated_at: new Date().toISOString() })
-      rows.push({ year, month, account: acc.account, metric: 'コメント数', value: String(monthlyVideos.totalComments), updated_at: new Date().toISOString() })
-    } catch (e) {
-      console.error(`Error fetching YouTube data for ${acc.account}:`, e)
-    }
-  }
+    }))
 
-  if (rows.length > 0) {
-    const { error } = await supabase.from('analysis_youtube_metrics').upsert(rows, { onConflict: 'year,month,account,metric' })
-    if (error) {
-      return res.status(500).json({ ok: false, message: `Supabase保存エラー: ${error.message}` })
-    }
-  }
+    const summaries = results.flatMap((result) => (result.ok ? [result.summary] : []))
+    const failures = results.flatMap((result) => (result.ok ? [] : [result.failure]))
+    const rows = results.flatMap((result) => result.rows)
 
-  return res.status(200).json({ ok: true, saved: rows.length, message: `${rows.length}件を保存しました。` })
+    if (rows.length > 0) {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.from('analysis_youtube_metrics').upsert(rows, { onConflict: 'year,month,account,metric' })
+      if (error) {
+        return res.status(500).json({ ok: false, message: `Supabase保存エラー: ${error.message}` })
+      }
+    }
+
+    return res.status(200).json({
+      ok: failures.length < accounts.length,
+      saved: rows.length,
+      summaries,
+      failures,
+      message: failures.length > 0
+        ? `一部のYouTubeは取得できませんでした: ${failures.map((failure) => failure.key).join(', ')}`
+        : `${rows.length}件を保存しました。`,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'YouTubeの自動取得に失敗しました。'
+    return res.status(500).json({ ok: false, message })
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
