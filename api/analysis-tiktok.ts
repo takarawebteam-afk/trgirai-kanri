@@ -1075,7 +1075,7 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
             const accessToken = await getYoutubeAccessToken(acc.refreshToken)
             const analytics = await fetchYoutubeAnalytics(acc.channelId, accessToken, year, month)
             rows.push({ year, month, account: acc.account, metric: '再生数', value: String(analytics.views), updated_at: updatedAt })
-            rows.push({ year, month, account: acc.account, metric: '平均視聴時間', value: String(Math.round(analytics.avgViewDuration)), updated_at: updatedAt })
+            rows.push({ year, month, account: acc.account, metric: '平均視聴時間（秒）', value: String(Math.round(analytics.avgViewDuration)), updated_at: updatedAt })
           } catch (error) {
             console.error(error)
           }
