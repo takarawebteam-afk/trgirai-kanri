@@ -6746,6 +6746,9 @@ function App() {
               const SITE_MEDIA_COLORS: Record<string, string> = {
                 TikTok: '#69C9D0', Instagram: '#E1306C', Threads: '#444444', YouTube: '#FF0000', その他: '#AAAAAA',
               }
+              const KARILUN_ACC_COLORS: Record<string, string> = {
+                Karilun: '#4F81BD', 京阪: '#ED7D31', 西宮市: '#70AD47',
+              }
               const SITE_MEDIA_LIST = ['TikTok', 'Instagram', 'Threads', 'YouTube', 'その他']
               const site = SITE_INFLOW_SITES.find(s => s.key === activeSiteInflowSite) ?? SITE_INFLOW_SITES[0]
               const siteAccounts = site.accounts as readonly string[]
@@ -6767,12 +6770,33 @@ function App() {
                 return row
               })
 
+              // Karilunサイト用：アカウント別積み上げ棒グラフ
+              const accBarChartData = ANALYSIS_MONTHS.map((month, monthIdx) => {
+                const row: Record<string, number | string> = { month: `${month}月` }
+                for (const acc of ['Karilun', '京阪', '西宮市']) {
+                  const group = analysisTableGroups.find(g => g.account === acc)
+                  row[acc] = group
+                    ? group.rows.reduce((sum, r) => {
+                        const v = r.values[monthIdx]
+                        return sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
+                      }, 0)
+                    : 0
+                }
+                return row
+              })
+
               // 前年比折れ線グラフ用データ（今年の合計 vs 前年=未取得）
               const lineChartData = barChartData.map(row => ({
                 month: row.month,
                 今年: row['合計'] as number,
                 前年: 0,
               }))
+
+              // ボタン共通スタイル
+              const btnBase: React.CSSProperties = {
+                padding: '5px 14px', fontSize: 13, borderRadius: 4, border: '1px solid',
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, transition: 'all 0.15s',
+              }
 
               return (
                 <section className="panel table-panel">
@@ -6782,16 +6806,24 @@ function App() {
                       <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>各SNS媒体からサイトへの月別流入数</p>
                     </div>
                     <div className="analysis-actions">
-                      {SITE_INFLOW_SITES.map(s => (
-                        <button
-                          key={s.key}
-                          type="button"
-                          className={activeSiteInflowSite === s.key ? 'active' : 'secondary'}
-                          onClick={() => setActiveSiteInflowSite(s.key)}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
+                      {SITE_INFLOW_SITES.map(s => {
+                        const isActive = activeSiteInflowSite === s.key
+                        return (
+                          <button
+                            key={s.key}
+                            type="button"
+                            style={{
+                              ...btnBase,
+                              background: isActive ? '#1558D6' : '#fff',
+                              color: isActive ? '#fff' : '#333',
+                              borderColor: isActive ? '#1558D6' : '#ccc',
+                            }}
+                            onClick={() => setActiveSiteInflowSite(s.key)}
+                          >
+                            {s.label}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -6814,6 +6846,25 @@ function App() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+
+                  {/* Karilunサイトのみ：アカウント別内訳 */}
+                  {activeSiteInflowSite === 'karilun' && (
+                    <div style={{ padding: '16px 0 8px' }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 8, paddingLeft: 4 }}>アカウント別内訳（Karilun / 京阪 / 西宮市）</p>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={accBarChartData} margin={{ top: 20, right: 24, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(value, name) => [Number(value ?? 0).toLocaleString(), String(name)]} />
+                          <Legend wrapperStyle={{ fontSize: 12 }} />
+                          {['Karilun', '京阪', '西宮市'].map(acc => (
+                            <Bar key={acc} dataKey={acc} stackId="b" fill={KARILUN_ACC_COLORS[acc]} />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
 
                   {/* 今年 vs 前年 折れ線グラフ */}
                   <div style={{ padding: '16px 0 24px' }}>
