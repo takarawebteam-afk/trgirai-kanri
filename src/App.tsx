@@ -6743,28 +6743,43 @@ function App() {
             )}
 
             {activeAnalysisSubTab === 'site-inflow' && (() => {
+              const SITE_MEDIA_COLORS: Record<string, string> = {
+                TikTok: '#69C9D0', Instagram: '#E1306C', Threads: '#444444', YouTube: '#FF0000', その他: '#AAAAAA',
+              }
+              const SITE_MEDIA_LIST = ['TikTok', 'Instagram', 'Threads', 'YouTube', 'その他']
               const site = SITE_INFLOW_SITES.find(s => s.key === activeSiteInflowSite) ?? SITE_INFLOW_SITES[0]
-              const currentYearTotals = ANALYSIS_MONTHS.map((_, monthIdx) =>
-                analysisTableGroups
-                  .filter(g => (site.accounts as readonly string[]).includes(g.account))
-                  .reduce((siteSum, group) =>
-                    siteSum + group.rows.reduce((rowSum, row) => {
-                      const v = row.values[monthIdx]
-                      return rowSum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
+              const siteAccounts = site.accounts as readonly string[]
+
+              // 媒体別積み上げ棒グラフ用データ
+              const barChartData = ANALYSIS_MONTHS.map((month, monthIdx) => {
+                const row: Record<string, number | string> = { month: `${month}月` }
+                for (const media of SITE_MEDIA_LIST) {
+                  row[media] = analysisTableGroups
+                    .filter(g => siteAccounts.includes(g.account))
+                    .reduce((sum, group) => {
+                      const mediaRow = group.rows.find(r => r.media === media)
+                      if (!mediaRow) return sum
+                      const v = mediaRow.values[monthIdx]
+                      return sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
                     }, 0)
-                  , 0)
-              )
-              const chartData = ANALYSIS_MONTHS.map((month, i) => ({
-                month: `${month}月`,
-                今年: currentYearTotals[i],
+                }
+                row['合計'] = SITE_MEDIA_LIST.reduce((s, m) => s + (row[m] as number), 0)
+                return row
+              })
+
+              // 前年比折れ線グラフ用データ（今年の合計 vs 前年=未取得）
+              const lineChartData = barChartData.map(row => ({
+                month: row.month,
+                今年: row['合計'] as number,
                 前年: 0,
               }))
+
               return (
                 <section className="panel table-panel">
                   <div className="panel-heading analysis-sheet-heading">
                     <div>
                       <h2>サイト流入</h2>
-                      <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>各SNS媒体からサイトへの月別流入数（今年 vs 前年）</p>
+                      <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>各SNS媒体からサイトへの月別流入数</p>
                     </div>
                     <div className="analysis-actions">
                       {SITE_INFLOW_SITES.map(s => (
@@ -6779,14 +6794,37 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  <div style={{ padding: '8px 0 24px' }}>
-                    <ResponsiveContainer width="100%" height={320}>
-                      <LineChart data={chartData} margin={{ top: 16, right: 32, left: 0, bottom: 0 }}>
+
+                  {/* 媒体別 積み上げ棒グラフ */}
+                  <div style={{ padding: '16px 0 8px' }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 8, paddingLeft: 4 }}>媒体別内訳（月別）</p>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={barChartData} margin={{ top: 20, right: 24, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(value, name) => [Number(value ?? 0).toLocaleString(), String(name)]}
+                          itemSorter={(item) => -(SITE_MEDIA_LIST.indexOf(String(item.dataKey)))}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        {SITE_MEDIA_LIST.map(media => (
+                          <Bar key={media} dataKey={media} stackId="a" fill={SITE_MEDIA_COLORS[media]} />
+                        ))}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* 今年 vs 前年 折れ線グラフ */}
+                  <div style={{ padding: '16px 0 24px' }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 8, paddingLeft: 4 }}>今年 vs 前年</p>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <LineChart data={lineChartData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(value, name) => [Number(value ?? 0).toLocaleString(), String(name)]} />
-                        <Legend wrapperStyle={{ fontSize: 13 }} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
                         <Line type="monotone" dataKey="今年" stroke="#4F81BD" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                         <Line type="monotone" dataKey="前年" stroke="#AAAAAA" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
                       </LineChart>
