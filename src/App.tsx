@@ -2332,11 +2332,21 @@ function App() {
     setAnalysisTiktokMessage('読込中...')
 
     try {
-      const { data: savedRows, error } = await supabase
-        .from('analysis_tiktok_metrics')
-        .select('year, month, account, metric, value')
-
-      if (error) throw error
+      const PAGE_SIZE = 1000
+      let allRows: AnalysisTiktokSavedRow[] = []
+      let from = 0
+      while (true) {
+        const { data: page, error: pageError } = await supabase
+          .from('analysis_tiktok_metrics')
+          .select('year, month, account, metric, value')
+          .range(from, from + PAGE_SIZE - 1)
+        if (pageError) throw pageError
+        if (!page || page.length === 0) break
+        allRows = [...allRows, ...(page as AnalysisTiktokSavedRow[])]
+        if (page.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+      const savedRows = allRows
 
       if (savedRows && savedRows.length > 0) {
         setAnalysisTiktokData(applyAnalysisTiktokSavedRows(savedRows as AnalysisTiktokSavedRow[]))
@@ -4745,6 +4755,36 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stock' }, () => { void fetchStock() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_records' }, () => { void fetchTiktokProgressForStock() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_sessions' }, () => { void fetchAnalysisSessions() })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'analysis_tiktok_metrics' },
+        (payload) => {
+          const row = payload.new as { year: number; month: number; account: string; metric: string; value: string }
+          if (!row?.account || !row?.metric) return
+          setAnalysisTiktokData((current) => ({
+            ...current,
+            groups: current.groups.map((group) => ({
+              ...group,
+              rows: group.rows.map((metricRow) => ({
+                ...metricRow,
+                values: metricRow.values.map((val, i) => {
+                  const col = current.columns[i]
+                  if (!col) return val
+                  if (
+                    group.account === row.account &&
+                    metricRow.metric === row.metric &&
+                    Number(col.year) === Number(row.year) &&
+                    Number(col.month) === Number(row.month)
+                  ) {
+                    return row.value || ''
+                  }
+                  return val
+                }),
+              })),
+            })),
+          }))
+        }
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'analysis_insta_metrics' },
