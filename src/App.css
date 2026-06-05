@@ -3131,10 +3131,10 @@ button.secondary.small {
 @media print {
   @page {
     size: A3 landscape;
-    margin-top: 10mm;
-    margin-left: 8mm;
-    margin-right: 2mm;
-    margin-bottom: 1mm;
+    margin-top: 5mm;
+    margin-left: 4mm;
+    margin-right: 4mm;
+    margin-bottom: 4mm;
   }
 
   html, body {
@@ -3192,11 +3192,11 @@ button.secondary.small {
 
   .jisha-table-wrap {
     overflow: visible;
-    padding: 0.5mm 0;
-    width: calc(100% / 1.38) !important;
+    padding: 0;
+    width: calc(100% / 1.28) !important;
     box-sizing: border-box;
     display: inline-block;
-    transform: scale(1.38);
+    transform: scale(1.28);
     transform-origin: top left;
   }
 
@@ -3206,12 +3206,12 @@ button.secondary.small {
   }
 
   .jisha-table-title {
-    font-size: 1rem;
-    padding: 0 0 4px 0;
+    font-size: 0.9rem;
+    padding: 0 0 2px 0;
   }
 
   .jisha-table {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     page-break-inside: avoid;
     width: 100% !important;
     min-width: 0;
@@ -3219,8 +3219,8 @@ button.secondary.small {
   }
 
   .jisha-th, .jisha-th-media {
-    padding: 5px 2px;
-    font-size: 0.7rem;
+    padding: 3px 1px;
+    font-size: 0.62rem;
     min-width: 0;
     line-height: 1.2;
   }
@@ -3230,31 +3230,31 @@ button.secondary.small {
   }
 
   .jisha-media-cell {
-    width: 9px;
-    min-width: 9px;
-    padding: 1px 0;
-    font-size: 0.56rem;
+    width: 8px;
+    min-width: 8px;
+    padding: 0;
+    font-size: 0.5rem;
     letter-spacing: -0.1em;
   }
 
   .jisha-label-cell {
-    width: 22px;
-    padding: 4px 2px;
-    font-size: 0.62rem;
-    line-height: 1.25;
+    width: 20px;
+    padding: 2px 1px;
+    font-size: 0.56rem;
+    line-height: 1.15;
   }
 
   .jisha-cell {
     min-width: 0;
-    padding: 4px 2px;
-    font-size: 0.8rem;
-    line-height: 1.25;
+    padding: 2px 1px;
+    font-size: 0.72rem;
+    line-height: 1.15;
   }
 
   .jisha-yosan-hi-row td,
   .jisha-nen-hi-row td {
-    font-size: 0.66rem;
-    line-height: 1.2;
+    font-size: 0.58rem;
+    line-height: 1.1;
   }
 
   .jisha-cell-editable:hover {
