@@ -9968,6 +9968,33 @@ function formatTaskReportChartAxis(value: number, metric: 'count' | 'minutes') {
   return `${formatNumericText(Math.round((value / 60) * 10) / 10)}h`
 }
 
+function formatTaskReportCsvHours(minutes: number) {
+  return Number((minutes / 60).toFixed(1))
+}
+
+function formatTaskReportCsvPercent(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return ''
+  return Number(value.toFixed(1))
+}
+
+function getTaskReportCsvValue(value: string | number | null | undefined) {
+  const text = value == null ? '' : String(value)
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function downloadTaskReportCsv(fileName: string, csvRows: Array<Array<string | number | null | undefined>>) {
+  const csvText = csvRows.map((row) => row.map(getTaskReportCsvValue).join(',')).join('\r\n')
+  const blob = new Blob(['\uFEFF', csvText], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function getTaskReportMonthKeys(startDate: string, endDate: string) {
   if (!startDate || !endDate || startDate > endDate) return []
 
@@ -10601,6 +10628,191 @@ function TaskReportPanel() {
     setCategoryModalSaving(false)
   }
 
+  const exportTaskReportCsv = () => {
+    const exportRows = reportRows
+    const exportMemberSummaries = visibleMemberOptions.map((member) => {
+      const memberRows = exportRows.filter((row) => row.member_name === member.name)
+      const minutes = memberRows.reduce((sum, row) => sum + row.minutes, 0)
+      const workMinutes = reportDateTexts.reduce((sum, dateText) => sum + (workMinutesByDate[dateText]?.[member.name] || 0), 0)
+
+      return {
+        name: member.name,
+        count: memberRows.length,
+        minutes,
+        workMinutes,
+        averageMinutes: memberRows.length > 0 ? Math.round(minutes / memberRows.length) : 0,
+        utilization: workMinutes > 0 ? (minutes / workMinutes) * 100 : null,
+      }
+    })
+    const exportTotalCount = exportRows.length
+    const exportTotalMinutes = exportRows.reduce((sum, row) => sum + row.minutes, 0)
+    const exportTotalWorkMinutes = exportMemberSummaries.reduce((sum, member) => sum + member.workMinutes, 0)
+    const exportTargetLabel = selectedReportMember || 'WEBチーム全体'
+    const periodLabel = selectedReportPeriod === 'total' ? `${currentYear}年累計` : selectedReportPeriod.replace('-', '年') + '月'
+
+    const getMemberHint = (member: (typeof exportMemberSummaries)[number]) => {
+      const hints: string[] = []
+      const timeShare = exportTotalMinutes > 0 ? (member.minutes / exportTotalMinutes) * 100 : 0
+      const countShare = exportTotalCount > 0 ? (member.count / exportTotalCount) * 100 : 0
+
+      if (member.utilization != null && member.utilization > 100) hints.push('勤務時間を超えています。分担や作業量の見直し候補です。')
+      else if (member.utilization != null && member.utilization >= 90) hints.push('勤務時間に近い負担です。余裕時間を確認してください。')
+      if (timeShare >= 40) hints.push('チーム内の時間がこの担当者に集まっています。')
+      if (countShare >= 40) hints.push('チーム内の件数がこの担当者に集まっています。')
+      if (member.averageMinutes >= 90) hints.push('1件あたりの時間が長めです。手順化や分担の余地があります。')
+
+      return hints.length > 0 ? hints.join(' / ') : '大きな偏りは少なめです。'
+    }
+
+    const getWorkHint = (summary: TaskReportCategorySummary, topMemberShare: number | null) => {
+      const hints: string[] = []
+      const timeShare = exportTotalMinutes > 0 ? (summary.totalMinutes / exportTotalMinutes) * 100 : 0
+
+      if (summary.averageMinutes >= 90) hints.push('1件あたりの時間が長めです。作業手順や待ち時間を確認してください。')
+      if (timeShare >= 30) hints.push('全体の時間割合が大きい業務です。効率化すると効果が出やすいです。')
+      if (topMemberShare != null && topMemberShare >= 70 && summary.totalCount >= 3) hints.push('特定の担当者に偏っています。引き継ぎや分担を確認してください。')
+      if (summary.totalCount >= 50 && summary.averageMinutes <= 20) hints.push('件数が多い短時間業務です。まとめて処理できるか確認してください。')
+
+      return hints.length > 0 ? hints.join(' / ') : '今のところ大きな改善候補は少なめです。'
+    }
+
+    const csvRows: Array<Array<string | number | null | undefined>> = []
+    csvRows.push(['WEBチーム業務棚卸し AI分析用CSV'])
+    csvRows.push(['集計対象', exportTargetLabel])
+    csvRows.push(['集計期間', periodLabel])
+    csvRows.push(['開始日', startDate])
+    csvRows.push(['終了日', endDate])
+    csvRows.push(['合計件数', exportTotalCount])
+    csvRows.push(['合計時間(分)', exportTotalMinutes])
+    csvRows.push(['合計時間(h)', formatTaskReportCsvHours(exportTotalMinutes)])
+    csvRows.push(['合計勤務時間(分)', exportTotalWorkMinutes])
+    csvRows.push(['合計勤務時間(h)', formatTaskReportCsvHours(exportTotalWorkMinutes)])
+    csvRows.push(['全体平均時間(分/件)', exportTotalCount > 0 ? Math.round(exportTotalMinutes / exportTotalCount) : 0])
+    csvRows.push(['全体業務占有率(%)', formatTaskReportCsvPercent(exportTotalWorkMinutes > 0 ? (exportTotalMinutes / exportTotalWorkMinutes) * 100 : null)])
+    csvRows.push([])
+
+    csvRows.push(['担当者別まとめ'])
+    csvRows.push(['担当者', '件数', '仕事時間(分)', '仕事時間(h)', '勤務時間(分)', '勤務時間(h)', '平均時間(分/件)', '業務占有率(%)', 'チーム内件数割合(%)', 'チーム内時間割合(%)', '改善のヒント'])
+    exportMemberSummaries.forEach((member) => {
+      csvRows.push([
+        member.name,
+        member.count,
+        member.minutes,
+        formatTaskReportCsvHours(member.minutes),
+        member.workMinutes,
+        formatTaskReportCsvHours(member.workMinutes),
+        member.averageMinutes,
+        formatTaskReportCsvPercent(member.utilization),
+        formatTaskReportCsvPercent(exportTotalCount > 0 ? (member.count / exportTotalCount) * 100 : null),
+        formatTaskReportCsvPercent(exportTotalMinutes > 0 ? (member.minutes / exportTotalMinutes) * 100 : null),
+        getMemberHint(member),
+      ])
+    })
+    csvRows.push([])
+
+    csvRows.push(['カテゴリ・業務別まとめ'])
+    csvRows.push([
+      '区分',
+      'カテゴリ',
+      '細分類業務',
+      ...visibleMemberOptions.map((member) => `件数:${member.name}`),
+      '件数合計',
+      ...visibleMemberOptions.map((member) => `時間(分):${member.name}`),
+      '時間合計(分)',
+      '時間合計(h)',
+      '平均時間(分/件)',
+      'チーム内時間割合(%)',
+      '最多担当者',
+      '最多担当者の時間割合(%)',
+      '改善のヒント',
+    ])
+
+    categorySections.forEach((section) => {
+      const writeSummaryRow = (summary: TaskReportCategorySummary) => {
+        const topMember = visibleMemberOptions
+          .map((member) => ({
+            name: member.name,
+            minutes: summary.memberMinutes[member.name] || 0,
+          }))
+          .sort((a, b) => b.minutes - a.minutes)[0]
+        const topMemberShare = topMember && summary.totalMinutes > 0 ? (topMember.minutes / summary.totalMinutes) * 100 : null
+
+        csvRows.push([
+          summary.isCategoryTotal ? 'カテゴリ合計' : '細分類業務',
+          summary.category,
+          summary.detail,
+          ...visibleMemberOptions.map((member) => summary.memberCounts[member.name] || 0),
+          summary.totalCount,
+          ...visibleMemberOptions.map((member) => summary.memberMinutes[member.name] || 0),
+          summary.totalMinutes,
+          formatTaskReportCsvHours(summary.totalMinutes),
+          summary.averageMinutes,
+          formatTaskReportCsvPercent(exportTotalMinutes > 0 ? (summary.totalMinutes / exportTotalMinutes) * 100 : null),
+          topMember?.name || '',
+          formatTaskReportCsvPercent(topMemberShare),
+          getWorkHint(summary, topMemberShare),
+        ])
+      }
+
+      writeSummaryRow(section.total)
+      section.details.forEach((detail) => writeSummaryRow(detail))
+    })
+    csvRows.push([])
+
+    csvRows.push(['担当者ごとの業務負担割合'])
+    csvRows.push(['カテゴリ', '細分類業務', '担当者', '件数', '時間(分)', '時間(h)', '平均時間(分/件)', '担当者内時間割合(%)', 'チーム全体時間割合(%)', '業務内担当割合(%)', '改善のヒント'])
+    categorySections.forEach((section) => {
+      section.details.forEach((detail) => {
+        visibleMemberOptions.forEach((member) => {
+          const memberCount = detail.memberCounts[member.name] || 0
+          const memberMinutes = detail.memberMinutes[member.name] || 0
+          if (memberCount === 0 && memberMinutes === 0) return
+
+          const memberTotalMinutes = exportMemberSummaries.find((item) => item.name === member.name)?.minutes || 0
+          const workShare = detail.totalMinutes > 0 ? (memberMinutes / detail.totalMinutes) * 100 : null
+          const hint = workShare != null && workShare >= 70 && detail.totalCount >= 3
+            ? 'この業務が1人に寄っています。ほかの担当者へ分けられるか確認してください。'
+            : memberMinutes >= 180
+              ? 'この担当者の時間が大きい業務です。作業の流れを確認してください。'
+              : '負担は比較的小さめです。'
+
+          csvRows.push([
+            detail.category,
+            detail.detail,
+            member.name,
+            memberCount,
+            memberMinutes,
+            formatTaskReportCsvHours(memberMinutes),
+            memberCount > 0 ? Math.round(memberMinutes / memberCount) : 0,
+            formatTaskReportCsvPercent(memberTotalMinutes > 0 ? (memberMinutes / memberTotalMinutes) * 100 : null),
+            formatTaskReportCsvPercent(exportTotalMinutes > 0 ? (memberMinutes / exportTotalMinutes) * 100 : null),
+            formatTaskReportCsvPercent(workShare),
+            hint,
+          ])
+        })
+      })
+    })
+    csvRows.push([])
+
+    csvRows.push(['元データ一覧'])
+    csvRows.push(['日付', '担当者', 'カテゴリ', '業務内容', '時間(分)', '時間(h)', 'データ元'])
+    exportRows.forEach((row) => {
+      csvRows.push([
+        row.event_date,
+        row.member_name,
+        row.category,
+        row.task_name,
+        row.minutes,
+        formatTaskReportCsvHours(row.minutes),
+        row.source,
+      ])
+    })
+
+    const safePeriod = selectedReportPeriod === 'total' ? `${currentYear}-total` : selectedReportPeriod
+    const safeTarget = exportTargetLabel.replace(/[\\/:*?"<>|]/g, '')
+    downloadTaskReportCsv(`業務棚卸し_AI分析用_${safeTarget}_${safePeriod}.csv`, csvRows)
+  }
+
   return (
     <section className="task-report-page">
       <div className="panel task-report-hero">
@@ -10609,8 +10821,17 @@ function TaskReportPanel() {
             <h2>WEBチームの業務棚卸し</h2>
             <p>期間を選択すると、実行した業務と時間をまとめて見られます。</p>
           </div>
-          <div className="task-report-period-filter" role="group" aria-label="集計期間">
-            {reportPeriodOptions.map((option) => (
+          <div className="task-report-hero-actions">
+            <button
+              type="button"
+              className="task-report-csv-button"
+              onClick={exportTaskReportCsv}
+              disabled={loading || reportRows.length === 0}
+            >
+              AI分析用CSV
+            </button>
+            <div className="task-report-period-filter" role="group" aria-label="集計期間">
+              {reportPeriodOptions.map((option) => (
               <button
                 key={option.key}
                 type="button"
@@ -10620,7 +10841,8 @@ function TaskReportPanel() {
               >
                 {option.label}
               </button>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
         {error && <p className="task-report-error">{error}</p>}

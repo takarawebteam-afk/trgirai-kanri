@@ -4447,6 +4447,39 @@ button.secondary.small {
   color: #5f6368;
 }
 
+.task-report-hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-report-csv-button {
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  border: 1px solid #1a73e8;
+  border-radius: 8px;
+  background: #1a73e8;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.task-report-csv-button:hover:not(:disabled) {
+  background: #1558b0;
+  border-color: #1558b0;
+}
+
+.task-report-csv-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .task-report-period-filter {
   display: flex;
   gap: 6px;
@@ -5158,9 +5191,14 @@ button.secondary.small {
   }
 
   .task-report-hero-top,
+  .task-report-hero-actions,
   .task-report-period-filter {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .task-report-csv-button {
+    width: 100%;
   }
 
   .task-report-period-filter {
