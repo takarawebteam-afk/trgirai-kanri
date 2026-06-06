@@ -3130,7 +3130,7 @@ button.secondary.small {
 /* ===== 自社集客売上 印刷スタイル ===== */
 @media print {
   @page {
-    size: A3 landscape;
+    size: A4 landscape;
     margin-top: 5mm;
     margin-left: 4mm;
     margin-right: 4mm;
@@ -3193,11 +3193,11 @@ button.secondary.small {
   .jisha-table-wrap {
     overflow: visible;
     padding: 0;
-    width: calc(100% / 1.28) !important;
+    width: 100% !important;
+    max-width: 100% !important;
     box-sizing: border-box;
-    display: inline-block;
-    transform: scale(1.28);
-    transform-origin: top left;
+    display: block;
+    transform: none;
   }
 
   * {
@@ -3213,7 +3213,8 @@ button.secondary.small {
   .jisha-table {
     font-size: 0.72rem;
     page-break-inside: avoid;
-    width: 100% !important;
+    width: 98% !important;
+    margin: 0 auto;
     min-width: 0;
     table-layout: fixed;
   }
