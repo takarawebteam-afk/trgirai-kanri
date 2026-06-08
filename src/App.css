@@ -2195,17 +2195,29 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   min-width: 0;
 }
 
+.hankyo-list-heading {
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.hankyo-heading-text {
+  flex: 0 0 170px;
+  min-width: 170px;
+}
+
 .hankyo-toolbar {
   display: flex;
+  flex: 1;
   flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--gray-200);
+  min-width: 0;
+  padding: 0;
 }
 
 .hankyo-search {
-  flex: 1.2;
+  flex: 1 1 360px;
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--gray-200);
@@ -2314,6 +2326,21 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   background: var(--gray-100);
   color: var(--gray-400);
   cursor: not-allowed;
+}
+
+@media (max-width: 1280px) {
+  .hankyo-list-heading {
+    flex-wrap: wrap;
+  }
+
+  .hankyo-toolbar {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+
+  .hankyo-search {
+    flex-basis: 100%;
+  }
 }
 
 .hankyo-dup-btn {

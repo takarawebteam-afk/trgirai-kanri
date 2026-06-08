@@ -8070,78 +8070,78 @@ function App() {
           <>
             {/* 一覧テーブル */}
             <section className="panel hankyo-table-panel">
-              <div className="panel-heading">
-                <div><h2>反響一覧</h2><p>全{formatInteger(filteredHankyo.length)}件 / {formatInteger(hankyoRecords.length)}件中</p></div>
-              </div>
+              <div className="panel-heading hankyo-list-heading" onClick={() => setHankyoOpenFilter(null)}>
+                <div className="hankyo-heading-text"><h2>反響一覧</h2><p>全{formatInteger(filteredHankyo.length)}件 / {formatInteger(hankyoRecords.length)}件中</p></div>
 
-              {/* 検索・フィルター */}
-              <div className="hankyo-toolbar" onClick={() => setHankyoOpenFilter(null)}>
-                <input
-                  className="hankyo-search"
-                  placeholder="顧客名で検索..."
-                  value={hankyoSearch}
-                  onChange={(e) => { setHankyoSearch(e.target.value) }}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                {([
-                  { key: 'month', label: '月', selected: hankyoMonthFilters, setSelected: setHankyoMonthFilters, options: Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}月` })) },
-                  { key: 'account', label: 'アカウント', selected: hankyoAccountFilters, setSelected: setHankyoAccountFilters, options: hankyoAccounts.map(v => ({ value: v, label: v })) },
-                  { key: 'trigger', label: 'きっかけ', selected: hankyoTriggerFilters, setSelected: setHankyoTriggerFilters, options: hankyoTriggers.map(v => ({ value: v, label: v })) },
-                  { key: 'media', label: '媒体', selected: hankyoMediaFilters, setSelected: setHankyoMediaFilters, options: hankyoMedias.map(v => ({ value: v, label: v })) },
-                  { key: 'inquiryType', label: '問合内容', selected: hankyoInquiryTypeFilters, setSelected: setHankyoInquiryTypeFilters, options: hankyoInquiryTypes.map(v => ({ value: v, label: v })) },
-                  { key: 'contactMethod', label: '問合手段', selected: hankyoContactMethodFilters, setSelected: setHankyoContactMethodFilters, options: hankyoContactMethods.map(v => ({ value: v, label: v })) },
-                  { key: 'moveIn', label: '入居時期', selected: hankyoMoveInFilters, setSelected: setHankyoMoveInFilters, options: hankyoMoveInTimings.map(v => ({ value: v, label: v })) },
-                  { key: 'store', label: '店舗', selected: hankyoStoreFilters, setSelected: setHankyoStoreFilters, options: hankyoStores.map(v => ({ value: v, label: v })) },
-                ] as { key: string; label: string; selected: string[]; setSelected: React.Dispatch<React.SetStateAction<string[]>>; options: { value: string; label: string }[] }[]).map(({ key, label, selected, setSelected, options }) => (
-                  <div key={key} className="hankyo-multiselect" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className={`hankyo-multiselect-btn${selected.length > 0 ? ' active' : ''}`}
-                      onClick={() => setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)}
-                    >
-                      {selected.length === 0 ? `全${label}` : `${label}(${formatInteger(selected.length)})`}
-                      <span className="hankyo-multiselect-arrow">▾</span>
-                    </button>
-                    {hankyoOpenFilter === key && (
-                      <div className="hankyo-multiselect-dropdown">
-                        <label className="hankyo-multiselect-item hankyo-multiselect-all">
-                          <input
-                            type="checkbox"
-                            checked={selected.length === 0}
-                            onChange={() => setSelected([])}
-                          />
-                          すべて
-                        </label>
-                        {options.map(opt => (
-                          <label key={opt.value} className="hankyo-multiselect-item">
+                {/* 検索・フィルター */}
+                <div className="hankyo-toolbar">
+                  <input
+                    className="hankyo-search"
+                    placeholder="顧客名で検索..."
+                    value={hankyoSearch}
+                    onChange={(e) => { setHankyoSearch(e.target.value) }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  {([
+                    { key: 'month', label: '月', selected: hankyoMonthFilters, setSelected: setHankyoMonthFilters, options: Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}月` })) },
+                    { key: 'account', label: 'アカウント', selected: hankyoAccountFilters, setSelected: setHankyoAccountFilters, options: hankyoAccounts.map(v => ({ value: v, label: v })) },
+                    { key: 'trigger', label: 'きっかけ', selected: hankyoTriggerFilters, setSelected: setHankyoTriggerFilters, options: hankyoTriggers.map(v => ({ value: v, label: v })) },
+                    { key: 'media', label: '媒体', selected: hankyoMediaFilters, setSelected: setHankyoMediaFilters, options: hankyoMedias.map(v => ({ value: v, label: v })) },
+                    { key: 'inquiryType', label: '問合内容', selected: hankyoInquiryTypeFilters, setSelected: setHankyoInquiryTypeFilters, options: hankyoInquiryTypes.map(v => ({ value: v, label: v })) },
+                    { key: 'contactMethod', label: '問合手段', selected: hankyoContactMethodFilters, setSelected: setHankyoContactMethodFilters, options: hankyoContactMethods.map(v => ({ value: v, label: v })) },
+                    { key: 'moveIn', label: '入居時期', selected: hankyoMoveInFilters, setSelected: setHankyoMoveInFilters, options: hankyoMoveInTimings.map(v => ({ value: v, label: v })) },
+                    { key: 'store', label: '店舗', selected: hankyoStoreFilters, setSelected: setHankyoStoreFilters, options: hankyoStores.map(v => ({ value: v, label: v })) },
+                  ] as { key: string; label: string; selected: string[]; setSelected: React.Dispatch<React.SetStateAction<string[]>>; options: { value: string; label: string }[] }[]).map(({ key, label, selected, setSelected, options }) => (
+                    <div key={key} className="hankyo-multiselect" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className={`hankyo-multiselect-btn${selected.length > 0 ? ' active' : ''}`}
+                        onClick={() => setHankyoOpenFilter(hankyoOpenFilter === key ? null : key)}
+                      >
+                        {selected.length === 0 ? `全${label}` : `${label}(${formatInteger(selected.length)})`}
+                        <span className="hankyo-multiselect-arrow">▾</span>
+                      </button>
+                      {hankyoOpenFilter === key && (
+                        <div className="hankyo-multiselect-dropdown">
+                          <label className="hankyo-multiselect-item hankyo-multiselect-all">
                             <input
                               type="checkbox"
-                              checked={selected.includes(opt.value)}
-                              onChange={(e) => {
-                                setSelected(prev =>
-                                  e.target.checked
-                                    ? [...prev, opt.value]
-                                    : prev.filter(v => v !== opt.value)
-                                )
-                              }}
+                              checked={selected.length === 0}
+                              onChange={() => setSelected([])}
                             />
-                            {opt.label}
+                            すべて
                           </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="hankyo-csv-button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    exportHankyoCsv()
-                  }}
-                  disabled={filteredHankyo.length === 0}
-                >
-                  CSV出力
-                </button>
+                          {options.map(opt => (
+                            <label key={opt.value} className="hankyo-multiselect-item">
+                              <input
+                                type="checkbox"
+                                checked={selected.includes(opt.value)}
+                                onChange={(e) => {
+                                  setSelected(prev =>
+                                    e.target.checked
+                                      ? [...prev, opt.value]
+                                      : prev.filter(v => v !== opt.value)
+                                  )
+                                }}
+                              />
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="hankyo-csv-button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      exportHankyoCsv()
+                    }}
+                    disabled={filteredHankyo.length === 0}
+                  >
+                    CSV出力
+                  </button>
+                </div>
               </div>
 
               <div className="table-wrap">
