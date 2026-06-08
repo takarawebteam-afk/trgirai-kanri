@@ -6027,6 +6027,30 @@ function App() {
     return true
   })
 
+  const exportHankyoCsv = () => {
+    const csvRows: Array<Array<string | number | null | undefined>> = [
+      ['反響日', '確認済み', '顧客名', 'アカウント', 'きっかけ', '媒体', '問合内容', '問合手段', '入居時期', '店舗', '希望エリア', '備考', '作成日時', '更新日時'],
+      ...filteredHankyo.map((record) => [
+        record.inquiry_date,
+        record.confirmed ? '済' : '',
+        record.customer_name,
+        record.account,
+        record.trigger,
+        record.media,
+        record.inquiry_type,
+        record.contact_method,
+        record.move_in_timing,
+        record.store,
+        record.area,
+        record.note,
+        record.created_at,
+        record.updated_at,
+      ]),
+    ]
+    const today = new Date().toISOString().split('T')[0]
+    downloadCsv(`反響管理_${today}.csv`, csvRows)
+  }
+
   const handleRecruitmentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await supabase.from('recruitment').insert({ ...normalizeRecruitment(recruitmentForm), id: crypto.randomUUID() })
@@ -8107,6 +8131,17 @@ function App() {
                     )}
                   </div>
                 ))}
+                <button
+                  type="button"
+                  className="hankyo-csv-button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    exportHankyoCsv()
+                  }}
+                  disabled={filteredHankyo.length === 0}
+                >
+                  CSV出力
+                </button>
               </div>
 
               <div className="table-wrap">
@@ -9977,13 +10012,13 @@ function formatTaskReportCsvPercent(value: number | null) {
   return Number(value.toFixed(1))
 }
 
-function getTaskReportCsvValue(value: string | number | null | undefined) {
+function getCsvValue(value: string | number | null | undefined) {
   const text = value == null ? '' : String(value)
   return `"${text.replace(/"/g, '""')}"`
 }
 
-function downloadTaskReportCsv(fileName: string, csvRows: Array<Array<string | number | null | undefined>>) {
-  const csvText = csvRows.map((row) => row.map(getTaskReportCsvValue).join(',')).join('\r\n')
+function downloadCsv(fileName: string, csvRows: Array<Array<string | number | null | undefined>>) {
+  const csvText = csvRows.map((row) => row.map(getCsvValue).join(',')).join('\r\n')
   const blob = new Blob(['\uFEFF', csvText], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -10810,7 +10845,7 @@ function TaskReportPanel() {
 
     const safePeriod = selectedReportPeriod === 'total' ? `${currentYear}-total` : selectedReportPeriod
     const safeTarget = exportTargetLabel.replace(/[\\/:*?"<>|]/g, '')
-    downloadTaskReportCsv(`業務棚卸し_AI分析用_${safeTarget}_${safePeriod}.csv`, csvRows)
+    downloadCsv(`業務棚卸し_AI分析用_${safeTarget}_${safePeriod}.csv`, csvRows)
   }
 
   return (

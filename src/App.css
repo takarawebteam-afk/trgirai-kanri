@@ -2290,6 +2290,32 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
   accent-color: var(--blue-500);
 }
 
+.hankyo-csv-button {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--blue-600);
+  border-radius: var(--radius-sm);
+  background: var(--blue-600);
+  color: var(--white);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hankyo-csv-button:hover:not(:disabled) {
+  background: var(--blue-700);
+  border-color: var(--blue-700);
+}
+
+.hankyo-csv-button:disabled {
+  border-color: var(--gray-200);
+  background: var(--gray-100);
+  color: var(--gray-400);
+  cursor: not-allowed;
+}
+
 .hankyo-dup-btn {
   padding: 4px 10px;
   border-radius: 6px;
