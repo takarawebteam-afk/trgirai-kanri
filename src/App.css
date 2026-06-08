@@ -1403,7 +1403,35 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 }
 
 .member-name { font-weight: 700; color: var(--gray-900); }
-.member-event-count { font-size: 12px; color: var(--gray-500); }
+.member-task-time-summary {
+  flex: 1;
+  min-width: 0;
+  margin: 0 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  line-height: 1.15;
+}
+
+.member-task-time-summary strong {
+  font-size: 14px;
+  color: var(--gray-900);
+  white-space: nowrap;
+}
+
+.member-task-time-summary small {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--gray-600);
+  white-space: nowrap;
+}
+
+.member-event-count {
+  font-size: 12px;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
 
 .no-events {
   padding: 12px 14px;

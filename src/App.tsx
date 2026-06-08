@@ -491,7 +491,7 @@ const TAB_ITEMS: { key: PageKey; label: string }[] = [
   { key: 'manuals', label: 'Note' },
 ] as const
 
-type CalendarEvent = { id: string; summary: string; start: string }
+type CalendarEvent = { id: string; summary: string; start: string; isAllDay: boolean }
 
 type TaskReportRow = {
   id: string
@@ -11666,6 +11666,7 @@ function TodayTasksPanel() {
             id: e.id,
             summary: e.summary || '（タイトルなし）',
             start: e.start?.dateTime || e.start?.date || '',
+            isAllDay: !!e.start?.date,
           }))
         } catch {
           results[member.calendarId] = []
@@ -11808,10 +11809,26 @@ function TodayTasksPanel() {
             const events = memberEvents[member.calendarId] || []
             const manualMemberTasks = manualTasks[member.calendarId] || []
             const totalCount = events.length + manualMemberTasks.length
+            const calendarTaskMinutes = events.reduce((sum, ev) => {
+              const key = `${member.calendarId}:${ev.id}`
+              return sum + (checkedEvents[key] ? (minutesMap[key] || 0) : 0)
+            }, 0)
+            const manualTaskMinutes = manualMemberTasks.reduce((sum, task) => (
+              sum + (task.checked ? (task.minutes || 0) : 0)
+            ), 0)
+            const taskMinutes = calendarTaskMinutes + manualTaskMinutes
+            const workMinutes = getTaskReportWorkMinutes(
+              member.name,
+              events.map((event) => ({ summary: event.summary, isAllDay: event.isAllDay })),
+            )
             return (
               <div key={member.calendarId} className="member-task-card">
                 <div className="member-task-header" style={{ borderLeft: `4px solid ${member.color}` }}>
                   <span className="member-name">{member.name}</span>
+                  <div className="member-task-time-summary" aria-label={`${member.name}の仕事時間と勤務時間`}>
+                    <strong>{formatTaskReportTime(taskMinutes)}</strong>
+                    <small>勤務時間 {formatTaskReportTime(workMinutes)}</small>
+                  </div>
                   <span className="member-event-count">{formatInteger(totalCount)}件</span>
                 </div>
                 <button
