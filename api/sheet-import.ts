@@ -46,6 +46,11 @@ const TRANSPARENT_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUw
 type StoreName = keyof typeof STORE_DESTINATION_CONFIG
 type StoreSnsPropertyTableName = typeof STORE_DESTINATION_CONFIG[StoreName]['tableName']
 
+const DESTINATION_NAME_ALIASES: Record<string, string> = {
+  'Karilun｜京阪': '京阪',
+  'Karilun｜西宮市': '西宮市',
+}
+
 type SheetImportBody = {
   storeName?: unknown
   propertyName?: unknown
@@ -126,6 +131,11 @@ function sendCsv(res: VercelResponse, value: string) {
 
 function normalizeStoreName(value: string) {
   return value.replace(/\s+/g, '').trim()
+}
+
+function normalizeDestinationName(value: string) {
+  const destinationName = text(value)
+  return DESTINATION_NAME_ALIASES[destinationName] || destinationName
 }
 
 function isStoreName(value: string): value is StoreName {
@@ -348,7 +358,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const storeName = normalizeStoreName(text(body.storeName))
   const propertyName = text(body.propertyName)
   const roomNumber = text(body.roomNumber)
-  const requestedDestinationName = text(body.destinationName)
+  const requestedDestinationName = normalizeDestinationName(text(body.destinationName))
   const sourceMonth = normalizeSourceMonth(text(body.sourceMonth))
 
   if (!storeName || !propertyName || !roomNumber) {
