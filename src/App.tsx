@@ -2273,6 +2273,7 @@ function App() {
   const [dmPage, setDmPage] = useState(1)
   const [dmAreaLoading, setDmAreaLoading] = useState(false)
   const [activeSnsPropertyPlatform, setActiveSnsPropertyPlatform] = useState<SnsPropertyPlatform>('sokanri')
+  const [snsPropertyRealtimeReloadKey, setSnsPropertyRealtimeReloadKey] = useState(0)
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
   const [instagramProperties, setInstagramProperties] = useState<InstagramPropertyRecord[]>([])
   const [youtubeProperties, setYoutubeProperties] = useState<YoutubePropertyRecord[]>([])
@@ -5374,6 +5375,9 @@ function App() {
     const debouncedFetchBusho = createRealtimeDebouncedHandler(() => { void fetchBusho() })
     const debouncedFetchMembers = createRealtimeDebouncedHandler(() => { void fetchMembers() })
     const debouncedFetchAnalysisYoutubeSheet = createRealtimeDebouncedHandler(() => { void fetchAnalysisYoutubeSheet() })
+    const debouncedReloadSnsProperty = createRealtimeDebouncedHandler(() => {
+      setSnsPropertyRealtimeReloadKey((key) => key + 1)
+    })
 
     const channel = supabase
       .channel('db-changes')
@@ -5390,6 +5394,16 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busho_schedules' }, debouncedFetchBusho)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, debouncedFetchMembers)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_youtube_metrics' }, debouncedFetchAnalysisYoutubeSheet)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_tiktok_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_instagram_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_youtube_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_recruitment_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_keihan_karilun_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_nishinomiya_karilun_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_nagase_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_nishikita_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_yao_properties' }, debouncedReloadSnsProperty)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_property_select_options' }, debouncedReloadSnsProperty)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'analysis_tiktok_metrics' },
@@ -5520,6 +5534,7 @@ function App() {
     fetchTiktokProperties,
     fetchYoutubeProperties,
     isStoreSnsPropertyPlatform,
+    snsPropertyRealtimeReloadKey,
   ])
 
   useEffect(() => {
@@ -5530,7 +5545,7 @@ function App() {
       'threads_post_date', 'post_text', 'post_reserved',
     ]
     fields.forEach((field) => { void refreshSnsPropertyOptions(field) })
-  }, [activePage, currentUserEmail])
+  }, [activePage, currentUserEmail, snsPropertyRealtimeReloadKey])
 
   const yearOptions = Array.from(
     new Set([

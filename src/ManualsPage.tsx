@@ -143,6 +143,21 @@ function noteSignature(draft: NoteDraft) {
   })
 }
 
+function createRealtimeDebouncedHandler(callback: () => void, delay = 300) {
+  let timer: ReturnType<typeof window.setTimeout> | undefined
+
+  const handler = () => {
+    if (timer !== undefined) window.clearTimeout(timer)
+    timer = window.setTimeout(callback, delay)
+  }
+
+  handler.cancel = () => {
+    if (timer !== undefined) window.clearTimeout(timer)
+  }
+
+  return handler
+}
+
 function ResizableImageView({ node, selected, updateAttributes }: NodeViewProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const width = typeof node.attrs.width === 'number' ? node.attrs.width : DEFAULT_IMAGE_WIDTH
@@ -580,6 +595,28 @@ function ManualsPage({
   }, [loadData])
 
   useEffect(() => {
+    const reloadManuals = createRealtimeDebouncedHandler(() => {
+      const currentDraft = draftRef.current
+      if (currentDraft && noteSignature(currentDraft) !== lastSavedSignatureRef.current) return
+      void loadData()
+    })
+
+    const channel = supabase
+      .channel('manuals-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_pages' }, reloadManuals)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_sections' }, reloadManuals)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_categories' }, reloadManuals)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_page_categories' }, reloadManuals)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_page_allowed_accounts' }, reloadManuals)
+      .subscribe()
+
+    return () => {
+      reloadManuals.cancel()
+      supabase.removeChannel(channel)
+    }
+  }, [loadData])
+
+  useEffect(() => {
     draftRef.current = draft
   }, [draft])
 
@@ -659,8 +696,12 @@ function ManualsPage({
       allowedEmails: selectedNoteAllowedEmails.length > 0 ? selectedNoteAllowedEmails : allowedAccountEmails,
     }
 
-    const isSwitchingNote = draftRef.current?.id !== selectedNote.id
-    lastSavedSignatureRef.current = noteSignature(nextDraft)
+    const currentDraft = draftRef.current
+    const isSwitchingNote = currentDraft?.id !== selectedNote.id
+    const nextSignature = noteSignature(nextDraft)
+    lastSavedSignatureRef.current = nextSignature
+    if (!isSwitchingNote && currentDraft && noteSignature(currentDraft) === nextSignature) return
+
     setDraft(nextDraft)
     if (isSwitchingNote) {
       setSaveState('idle')
