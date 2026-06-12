@@ -658,6 +658,11 @@ type TiktokInsightFollowerRow = {
   followerDiff: number
 }
 
+type TiktokInsightDailyRow = TiktokInsightOverviewRow & {
+  followers: number
+  followerDiff: number
+}
+
 type TiktokInsightAudienceRow = {
   label: string
   distribution: number
@@ -1064,6 +1069,36 @@ function getTiktokInsightGenderLabel(gender: string) {
 
 function formatTiktokInsightPercent(value: number) {
   return `${Math.round(value * 1000) / 10}%`
+}
+
+function getTiktokInsightDailyInsight(row: TiktokInsightDailyRow, previousRow: TiktokInsightDailyRow | undefined, hasPost: boolean) {
+  const viewDiff = previousRow ? row.videoViews - previousRow.videoViews : null
+  const profileDiff = previousRow ? row.profileViews - previousRow.profileViews : null
+  const insights: string[] = []
+
+  insights.push(hasPost ? '投稿あり' : '投稿なし')
+
+  if (typeof viewDiff === 'number' && viewDiff !== 0) {
+    insights.push(`再生数は前日比${viewDiff > 0 ? '+' : ''}${formatInteger(viewDiff)}`)
+  } else if (!previousRow) {
+    insights.push(`再生数${formatInteger(row.videoViews)}`)
+  }
+
+  if (typeof profileDiff === 'number' && profileDiff > 0) {
+    insights.push(`プロフィール表示+${formatInteger(profileDiff)}`)
+  }
+
+  if (row.followerDiff > 0) {
+    insights.push(`フォロワー+${formatInteger(row.followerDiff)}`)
+  } else if (row.followerDiff < 0) {
+    insights.push(`フォロワー${formatInteger(row.followerDiff)}`)
+  }
+
+  if (!hasPost && row.followerDiff === 0 && (!viewDiff || viewDiff <= 0) && (!profileDiff || profileDiff <= 0)) {
+    insights.push('大きな動きなし')
+  }
+
+  return insights.join(' / ')
 }
 
 function getTiktokInsightPropertyDateKey(postDate: string | null | undefined, propertyNumber: string | null | undefined, year: number) {
@@ -2550,7 +2585,7 @@ function App() {
 
     return tiktokInsightMonthOptions.filter((month) => !selectedLimitMonthKey || month.monthKey <= selectedLimitMonthKey)
   }, [tiktokInsightMonthOptions, tiktokInsightSelectedMonth, tiktokInsightSelectedMonthKey, tiktokInsightViewMode])
-  const tiktokInsightDailyRows = useMemo(() => {
+  const tiktokInsightDailyRows = useMemo<TiktokInsightDailyRow[]>(() => {
     const followerMap = new Map(tiktokInsightFollowerRows.map((row) => [row.dateKey, row]))
     return tiktokInsightOverviewRows.map((overviewRow) => {
       const followerRow = followerMap.get(overviewRow.dateKey)
@@ -2581,13 +2616,15 @@ function App() {
       posts.sort((a, b) => a.propertyNumber.localeCompare(b.propertyNumber) || a.propertyName.localeCompare(b.propertyName))
     })
 
-    return tiktokInsightDailyRows.map((row) => {
+    return tiktokInsightDailyRows.map((row, index) => {
       const posts = postsByDate.get(row.dateKey) || []
+      const hasPost = posts.length > 0
       return {
         ...row,
-        postDateLabel: posts.length > 0 ? row.dateLabel : '',
+        postDateLabel: hasPost ? row.dateLabel : '',
         propertyNumbers: posts.map((post) => post.propertyNumber).filter(Boolean),
         propertyNames: posts.map((post) => post.propertyName).filter(Boolean),
+        insightText: getTiktokInsightDailyInsight(row, tiktokInsightDailyRows[index - 1], hasPost),
       }
     })
   }, [tiktokInsightDailyRows, tiktokInsightPostProperties, tiktokInsightYear])
@@ -7768,6 +7805,20 @@ function App() {
                       </div>
                       <div className="table-wrap analysis-monthly-table-wrap">
                         <table className="analysis-monthly-table tiktok-insight-daily-table">
+                          <colgroup>
+                            <col className="tiktok-insight-col-date" />
+                            <col className="tiktok-insight-col-post-date" />
+                            <col className="tiktok-insight-col-property-number" />
+                            <col className="tiktok-insight-col-property-name" />
+                            <col className="tiktok-insight-col-video-views" />
+                            <col className="tiktok-insight-col-profile-views" />
+                            <col className="tiktok-insight-col-likes" />
+                            <col className="tiktok-insight-col-comments" />
+                            <col className="tiktok-insight-col-shares" />
+                            <col className="tiktok-insight-col-followers" />
+                            <col className="tiktok-insight-col-follower-diff" />
+                            <col className="tiktok-insight-col-insight" />
+                          </colgroup>
                           <thead>
                             <tr>
                               <th>日付</th>
@@ -7781,6 +7832,7 @@ function App() {
                               <th>シェア</th>
                               <th>フォロワー数</th>
                               <th>フォロワー増減</th>
+                              <th>見解</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -7799,6 +7851,7 @@ function App() {
                                 <td className={row.followerDiff > 0 ? 'tiktok-insight-positive' : row.followerDiff < 0 ? 'tiktok-insight-negative' : ''}>
                                   {formatInteger(row.followerDiff)}
                                 </td>
+                                <td className="tiktok-insight-insight-cell">{row.insightText}</td>
                               </tr>
                             ))}
                           </tbody>

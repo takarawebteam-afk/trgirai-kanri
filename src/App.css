@@ -6318,6 +6318,51 @@ button.secondary.small {
   min-width: 86px;
 }
 
+.tiktok-insight-daily-table {
+  table-layout: fixed;
+  min-width: 1280px;
+}
+
+.tiktok-insight-daily-table th,
+.tiktok-insight-daily-table td {
+  min-width: 0;
+  padding-right: 6px;
+  padding-left: 6px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-date,
+.tiktok-insight-daily-table .tiktok-insight-col-post-date {
+  width: 66px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-property-number,
+.tiktok-insight-daily-table .tiktok-insight-col-video-views,
+.tiktok-insight-daily-table .tiktok-insight-col-followers,
+.tiktok-insight-daily-table .tiktok-insight-col-follower-diff {
+  width: 78px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-profile-views {
+  width: 92px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-likes,
+.tiktok-insight-daily-table .tiktok-insight-col-shares {
+  width: 60px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-comments {
+  width: 70px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-property-name {
+  width: 150px;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-col-insight {
+  width: 380px;
+}
+
 .tiktok-insight-post-table .tiktok-insight-text-cell,
 .tiktok-insight-daily-table .tiktok-insight-text-cell {
   min-width: 180px;
@@ -6328,10 +6373,16 @@ button.secondary.small {
 }
 
 .tiktok-insight-daily-table .tiktok-insight-post-cell {
-  min-width: 120px;
-  max-width: 280px;
+  min-width: 0;
+  max-width: none;
   text-align: left;
   white-space: pre-line;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-insight-cell {
+  text-align: left;
+  white-space: normal;
+  line-height: 1.45;
 }
 
 .tiktok-insight-positive {
