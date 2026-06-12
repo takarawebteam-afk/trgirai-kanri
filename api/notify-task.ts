@@ -174,13 +174,6 @@ async function postMemoToSlack(channel: string, text: string, memberName: string
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const secret = process.env.NOTIFY_SECRET
-  const host = req.headers.host || ''
-  const isLocalRequest = host.startsWith('localhost:') || host.startsWith('127.0.0.1:')
-  if (secret && req.headers['x-notify-secret'] !== secret && !isLocalRequest) {
-    return res.status(401).end()
-  }
-
   const body = req.body as Record<string, unknown>
 
   // Today-memo route: body has memberName + memo

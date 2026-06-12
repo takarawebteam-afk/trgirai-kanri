@@ -2155,12 +2155,10 @@ async function notifyTaskEvent(payload: {
   creator?: string
   members: Member[]
 }) {
-  const notifySecret = import.meta.env.VITE_NOTIFY_SECRET as string | undefined
   const response = await fetch('/api/notify-task', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(notifySecret ? { 'x-notify-secret': notifySecret } : {}),
     },
     body: JSON.stringify(payload),
   })
@@ -12555,12 +12553,10 @@ function TodayTasksPanel() {
     setMemoSavingMemberId(memberName)
     setMemoError('')
     try {
-      const notifySecret = import.meta.env.VITE_NOTIFY_SECRET as string | undefined
       const response = await fetch('/api/notify-task', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(notifySecret ? { 'x-notify-secret': notifySecret } : {}),
         },
         body: JSON.stringify({ memberName, memo }),
       })
