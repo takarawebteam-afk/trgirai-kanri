@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useGoogleLogin } from '@react-oauth/google'
-import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LineChart, Line, Cell, ReferenceLine } from 'recharts'
 import * as XLSX from 'xlsx'
 import './App.css'
 import { supabase } from './supabase'
@@ -16,6 +16,15 @@ import {
   restoreChangeHistory,
   saveUndoSnapshot,
 } from './undoHistory'
+
+function createRealtimeDebouncedHandler(callback: () => void, delay = 300) {
+  let timer: ReturnType<typeof window.setTimeout> | undefined
+
+  return () => {
+    if (timer !== undefined) window.clearTimeout(timer)
+    timer = window.setTimeout(callback, delay)
+  }
+}
 
 type Department = '人事' | '総務' | '仲介' | '管理' | '売買' | '本社' | 'その他'
 type TaskType = '単発' | '継続'
@@ -630,10 +639,77 @@ type AnalysisTiktokSavedRow = {
 
 type AnalysisYearFilter = 'total' | string
 
-type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads' | 'youtube' | 'site-inflow'
+type AnalysisSubTab = 'analytics' | 'tiktok' | 'insta' | 'threads' | 'youtube' | 'site-inflow' | 'tiktok-insight'
+
+type TiktokInsightOverviewRow = {
+  dateKey: string
+  dateLabel: string
+  videoViews: number
+  profileViews: number
+  likes: number
+  comments: number
+  shares: number
+}
+
+type TiktokInsightFollowerRow = {
+  dateKey: string
+  dateLabel: string
+  followers: number
+  followerDiff: number
+}
+
+type TiktokInsightAudienceRow = {
+  label: string
+  distribution: number
+}
+
+type TiktokInsightFileStatus = {
+  overview: boolean
+  followerHistory: boolean
+  gender: boolean
+  territories: boolean
+}
+
+type TiktokInsightPropertyRow = Pick<TiktokPropertyRecord, 'id' | 'post_date' | 'property_number' | 'property_name'>
+
+type TiktokInsightViewMode = 'monthly' | 'cumulative'
+
+type TiktokInsightStoredMonth = {
+  monthKey: string
+  year: number
+  month: number
+  overviewRows: TiktokInsightOverviewRow[]
+  followerRows: TiktokInsightFollowerRow[]
+  genderRows: TiktokInsightAudienceRow[]
+  territoryRows: TiktokInsightAudienceRow[]
+  fileStatus: TiktokInsightFileStatus
+  updatedAt: string
+}
+
+type TiktokInsightDbRow = {
+  month_key: string
+  year: number
+  month: number
+  overview_rows: unknown
+  follower_rows: unknown
+  gender_rows: unknown
+  territory_rows: unknown
+  file_status: unknown
+  updated_at: string | null
+}
 
 const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
+
+function getEmptyTiktokInsightFileStatus(): TiktokInsightFileStatus {
+  return {
+    overview: false,
+    followerHistory: false,
+    gender: false,
+    territories: false,
+  }
+}
+
 const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
   { key: 'analytics', label: 'アナリティクス' },
   { key: 'tiktok', label: 'TikTok' },
@@ -641,6 +717,7 @@ const analysisSubTabs: { key: AnalysisSubTab; label: string }[] = [
   { key: 'threads', label: 'threads' },
   { key: 'youtube', label: 'YouTube' },
   { key: 'site-inflow', label: 'サイト流入' },
+  { key: 'tiktok-insight', label: 'TikTok分析' },
 ]
 
 const SITE_INFLOW_SITES = [
@@ -874,6 +951,197 @@ function getAnalysisVisibleColumnIndexes(columns: AnalysisTiktokColumn[], filter
   return columns
     .map((column, index) => ({ column, index }))
     .filter(({ column }) => filter === 'total' || column.year === filter)
+}
+
+function readTiktokInsightNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const normalized = String(value ?? '').replace(/,/g, '').replace(/%/g, '').trim()
+  if (!normalized) return 0
+  const numberValue = Number(normalized)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+function parseTiktokInsightDate(value: unknown, year: number) {
+  const raw = String(value ?? '').trim()
+  const isoMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  const jpMatch = raw.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/)
+
+  const parsedYear = isoMatch ? Number(isoMatch[1]) : year
+  const month = isoMatch ? Number(isoMatch[2]) : jpMatch ? Number(jpMatch[1]) : 0
+  const day = isoMatch ? Number(isoMatch[3]) : jpMatch ? Number(jpMatch[2]) : 0
+
+  if (!Number.isInteger(parsedYear) || !Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null
+  }
+
+  const dateKey = `${parsedYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return { dateKey, dateLabel: `${month}月${day}日` }
+}
+
+function parseTiktokInsightCsvRows(fileText: string) {
+  const workbook = XLSX.read(fileText, { type: 'string' })
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  if (!sheet) return []
+  return XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: '' })
+}
+
+function detectTiktokInsightFileKind(fileName: string, rows: Record<string, string | number>[]) {
+  const normalizedName = fileName.toLowerCase()
+  const headers = new Set(Object.keys(rows[0] || {}))
+
+  if (normalizedName.includes('overview') || headers.has('Video Views')) return 'overview'
+  if (normalizedName.includes('followerhistory') || headers.has('Followers')) return 'followerHistory'
+  if (normalizedName.includes('followergender') || headers.has('Gender')) return 'gender'
+  if (normalizedName.includes('followertopterritories') || headers.has('Top territories')) return 'territories'
+
+  return null
+}
+
+function buildTiktokInsightOverviewRows(rows: Record<string, string | number>[], year: number): TiktokInsightOverviewRow[] {
+  return rows.flatMap((row) => {
+    const parsedDate = parseTiktokInsightDate(row.Date, year)
+    if (!parsedDate) return []
+    return [{
+      ...parsedDate,
+      videoViews: readTiktokInsightNumber(row['Video Views']),
+      profileViews: readTiktokInsightNumber(row['Profile Views']),
+      likes: readTiktokInsightNumber(row.Likes),
+      comments: readTiktokInsightNumber(row.Comments),
+      shares: readTiktokInsightNumber(row.Shares),
+    }]
+  }).sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+}
+
+function buildTiktokInsightFollowerRows(rows: Record<string, string | number>[], year: number): TiktokInsightFollowerRow[] {
+  return rows.flatMap((row) => {
+    const parsedDate = parseTiktokInsightDate(row.Date, year)
+    if (!parsedDate) return []
+    return [{
+      ...parsedDate,
+      followers: readTiktokInsightNumber(row.Followers),
+      followerDiff: readTiktokInsightNumber(row['Difference in followers from previous day']),
+    }]
+  }).sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+}
+
+function buildTiktokInsightAudienceRows(rows: Record<string, string | number>[], labelKey: string): TiktokInsightAudienceRow[] {
+  return rows
+    .map((row) => ({
+      label: String(row[labelKey] ?? '').trim(),
+      distribution: readTiktokInsightNumber(row.Distribution),
+    }))
+    .filter((row) => row.label)
+    .sort((a, b) => b.distribution - a.distribution)
+}
+
+function getTiktokInsightCountryLabel(countryCode: string) {
+  const countryLabels: Record<string, string> = {
+    JP: '日本',
+    US: 'アメリカ',
+    BR: 'ブラジル',
+    ID: 'インドネシア',
+    KR: '韓国',
+    SG: 'シンガポール',
+    TH: 'タイ',
+  }
+  return countryLabels[countryCode] || countryCode
+}
+
+function getTiktokInsightGenderLabel(gender: string) {
+  const genderLabels: Record<string, string> = {
+    Female: '女性',
+    Male: '男性',
+    Other: 'その他',
+  }
+  return genderLabels[gender] || gender
+}
+
+function formatTiktokInsightPercent(value: number) {
+  return `${Math.round(value * 1000) / 10}%`
+}
+
+function getTiktokInsightPreviousDateKey(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00`)
+  date.setDate(date.getDate() - 1)
+  return date.toISOString().slice(0, 10)
+}
+
+function getTiktokInsightNextDateKey(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00`)
+  date.setDate(date.getDate() + 1)
+  return date.toISOString().slice(0, 10)
+}
+
+function getTiktokInsightPropertyDateKey(postDate: string | null | undefined, propertyNumber: string | null | undefined, year: number) {
+  const rawDate = String(postDate || '').trim()
+  if (!rawDate) return ''
+
+  const fullDateMatch = rawDate.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  if (fullDateMatch) {
+    const [, rawYear, month, day] = fullDateMatch
+    return `${rawYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const normalizedMonthDay = rawDate
+    .replace(/\s+/g, '')
+    .replace(/年/g, '/')
+    .replace(/月/g, '/')
+    .replace(/日/g, '')
+    .replace(/\./g, '/')
+    .replace(/-/g, '/')
+  const monthDayMatch = normalizedMonthDay.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (monthDayMatch) {
+    const [, month, day] = monthDayMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const normalizedDate = normalizeSnsPropertyPostDate(postDate, propertyNumber).slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) ? normalizedDate : ''
+}
+
+function getTiktokInsightMonthKeyFromDateKey(dateKey: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey.slice(0, 7) : ''
+}
+
+function getTiktokInsightMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split('-')
+  return year && month ? `${year}年${Number(month)}月` : monthKey
+}
+
+function getTiktokInsightMonthKeyFromRows(
+  overviewRows: TiktokInsightOverviewRow[],
+  followerRows: TiktokInsightFollowerRow[],
+  fallbackYear: number,
+  fallbackMonthKey: string,
+) {
+  const dateKey = overviewRows[0]?.dateKey || followerRows[0]?.dateKey || ''
+  const monthKey = getTiktokInsightMonthKeyFromDateKey(dateKey)
+  if (monthKey) return monthKey
+  if (fallbackMonthKey) return fallbackMonthKey
+  return `${fallbackYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+}
+
+function combineTiktokInsightFileStatus(months: TiktokInsightStoredMonth[]) {
+  return months.reduce((status, month) => ({
+    overview: status.overview || month.fileStatus.overview,
+    followerHistory: status.followerHistory || month.fileStatus.followerHistory,
+    gender: status.gender || month.fileStatus.gender,
+    territories: status.territories || month.fileStatus.territories,
+  }), getEmptyTiktokInsightFileStatus())
+}
+
+function normalizeTiktokInsightDbMonth(row: TiktokInsightDbRow): TiktokInsightStoredMonth {
+  return {
+    monthKey: row.month_key,
+    year: Number(row.year),
+    month: Number(row.month),
+    overviewRows: Array.isArray(row.overview_rows) ? row.overview_rows as TiktokInsightOverviewRow[] : [],
+    followerRows: Array.isArray(row.follower_rows) ? row.follower_rows as TiktokInsightFollowerRow[] : [],
+    genderRows: Array.isArray(row.gender_rows) ? row.gender_rows as TiktokInsightAudienceRow[] : [],
+    territoryRows: Array.isArray(row.territory_rows) ? row.territory_rows as TiktokInsightAudienceRow[] : [],
+    fileStatus: { ...getEmptyTiktokInsightFileStatus(), ...(row.file_status && typeof row.file_status === 'object' ? row.file_status : {}) },
+    updatedAt: row.updated_at || '',
+  }
 }
 
 function createEmptyAnalysisInstaData(): AnalysisTiktokSheetData {
@@ -2236,6 +2504,21 @@ function App() {
   const [analysisYoutubeSavingCell, setAnalysisYoutubeSavingCell] = useState('')
   const [analysisYoutubeSyncing, setAnalysisYoutubeSyncing] = useState(false)
   const [analysisYoutubeYearFilter, setAnalysisYoutubeYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_YOUTUBE_COLUMNS))
+  const [tiktokInsightStoredMonths, setTiktokInsightStoredMonths] = useState<Record<string, TiktokInsightStoredMonth>>({})
+  const [tiktokInsightSelectedMonthKey, setTiktokInsightSelectedMonthKey] = useState('')
+  const [tiktokInsightViewMode, setTiktokInsightViewMode] = useState<TiktokInsightViewMode>('monthly')
+  const [tiktokInsightYear, setTiktokInsightYear] = useState(new Date().getFullYear())
+  const [tiktokInsightOverviewRows, setTiktokInsightOverviewRows] = useState<TiktokInsightOverviewRow[]>([])
+  const [tiktokInsightFollowerRows, setTiktokInsightFollowerRows] = useState<TiktokInsightFollowerRow[]>([])
+  const [tiktokInsightGenderRows, setTiktokInsightGenderRows] = useState<TiktokInsightAudienceRow[]>([])
+  const [tiktokInsightTerritoryRows, setTiktokInsightTerritoryRows] = useState<TiktokInsightAudienceRow[]>([])
+  const [tiktokInsightPostProperties, setTiktokInsightPostProperties] = useState<TiktokInsightPropertyRow[]>([])
+  const [tiktokInsightFileStatus, setTiktokInsightFileStatus] = useState<TiktokInsightFileStatus>(getEmptyTiktokInsightFileStatus)
+  const [tiktokInsightMessage, setTiktokInsightMessage] = useState('')
+  const [tiktokInsightMessageType, setTiktokInsightMessageType] = useState<'success' | 'error'>('success')
+  const [tiktokInsightLoading, setTiktokInsightLoading] = useState(false)
+  const [tiktokInsightDragActive, setTiktokInsightDragActive] = useState(false)
+  const tiktokInsightFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
   const analysisTiktokVisibleColumns = useMemo(
@@ -2257,10 +2540,347 @@ function App() {
     () => getAnalysisVisibleColumnIndexes(ANALYSIS_YOUTUBE_COLUMNS, analysisYoutubeYearFilter),
     [analysisYoutubeYearFilter]
   )
+  const tiktokInsightMonthOptions = useMemo(() => (
+    Object.values(tiktokInsightStoredMonths)
+      .filter((month) => month.year === tiktokInsightYear)
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+  ), [tiktokInsightStoredMonths, tiktokInsightYear])
+  const tiktokInsightSelectedMonth = useMemo(() => (
+    tiktokInsightSelectedMonthKey
+      ? tiktokInsightStoredMonths[tiktokInsightSelectedMonthKey] || null
+      : tiktokInsightMonthOptions[tiktokInsightMonthOptions.length - 1] || null
+  ), [tiktokInsightMonthOptions, tiktokInsightSelectedMonthKey, tiktokInsightStoredMonths])
+  const tiktokInsightDisplayMonths = useMemo(() => {
+    const selectedLimitMonthKey = tiktokInsightSelectedMonth?.monthKey || tiktokInsightSelectedMonthKey
+    if (tiktokInsightViewMode === 'monthly') return [tiktokInsightSelectedMonth]
+      .filter((month): month is TiktokInsightStoredMonth => Boolean(month))
+
+    return tiktokInsightMonthOptions.filter((month) => !selectedLimitMonthKey || month.monthKey <= selectedLimitMonthKey)
+  }, [tiktokInsightMonthOptions, tiktokInsightSelectedMonth, tiktokInsightSelectedMonthKey, tiktokInsightViewMode])
+  const tiktokInsightDailyRows = useMemo(() => {
+    const followerMap = new Map(tiktokInsightFollowerRows.map((row) => [row.dateKey, row]))
+    return tiktokInsightOverviewRows.map((overviewRow) => {
+      const followerRow = followerMap.get(overviewRow.dateKey)
+      return {
+        ...overviewRow,
+        followers: followerRow?.followers ?? 0,
+        followerDiff: followerRow?.followerDiff ?? 0,
+      }
+    })
+  }, [tiktokInsightOverviewRows, tiktokInsightFollowerRows])
+  const tiktokInsightSummary = useMemo(() => {
+    const totalViews = tiktokInsightDailyRows.reduce((sum, row) => sum + row.videoViews, 0)
+    const totalProfileViews = tiktokInsightDailyRows.reduce((sum, row) => sum + row.profileViews, 0)
+    const totalFollowerDiff = tiktokInsightFollowerRows.reduce((sum, row) => sum + row.followerDiff, 0)
+    const bestViewDay = tiktokInsightDailyRows.reduce<typeof tiktokInsightDailyRows[number] | null>(
+      (best, row) => (!best || row.videoViews > best.videoViews ? row : best),
+      null,
+    )
+    const bestFollowerDay = tiktokInsightFollowerRows.reduce<TiktokInsightFollowerRow | null>(
+      (best, row) => (!best || row.followerDiff > best.followerDiff ? row : best),
+      null,
+    )
+
+    return {
+      totalViews,
+      totalProfileViews,
+      totalFollowerDiff,
+      bestViewDay,
+      bestFollowerDay,
+      periodLabel: tiktokInsightDailyRows.length
+        ? `${tiktokInsightDailyRows[0].dateLabel}〜${tiktokInsightDailyRows[tiktokInsightDailyRows.length - 1].dateLabel}`
+        : '未読み込み',
+    }
+  }, [tiktokInsightDailyRows, tiktokInsightFollowerRows])
+  const tiktokInsightPostRows = useMemo(() => {
+    const overviewMap = new Map(tiktokInsightOverviewRows.map((row) => [row.dateKey, row]))
+    const followerMap = new Map(tiktokInsightFollowerRows.map((row) => [row.dateKey, row]))
+
+    return tiktokInsightPostProperties
+      .flatMap((property) => {
+        const dateKey = getTiktokInsightPropertyDateKey(property.post_date, property.property_number, tiktokInsightYear)
+        if (!dateKey || (!overviewMap.has(dateKey) && !followerMap.has(dateKey))) return []
+
+        const overview = overviewMap.get(dateKey)
+        const previousOverview = overviewMap.get(getTiktokInsightPreviousDateKey(dateKey))
+        const nextOverview = overviewMap.get(getTiktokInsightNextDateKey(dateKey))
+        const follower = followerMap.get(dateKey)
+        const previousFollower = followerMap.get(getTiktokInsightPreviousDateKey(dateKey))
+        const nextFollower = followerMap.get(getTiktokInsightNextDateKey(dateKey))
+        const viewDiffFromPrevious = overview && previousOverview ? overview.videoViews - previousOverview.videoViews : null
+        const nextViewDiff = nextOverview && overview ? nextOverview.videoViews - overview.videoViews : null
+        const followerDiff = follower?.followerDiff ?? null
+        const nextFollowerDiff = nextFollower?.followerDiff ?? null
+        const signals = [
+          typeof viewDiffFromPrevious === 'number' && viewDiffFromPrevious > 0 ? '再生数が前日より増加' : '',
+          typeof followerDiff === 'number' && followerDiff > 0 ? '投稿日にフォロワー増' : '',
+          typeof nextFollowerDiff === 'number' && nextFollowerDiff > 0 ? '翌日にフォロワー増' : '',
+        ].filter(Boolean)
+
+        return [{
+          id: property.id,
+          propertyNumber: property.property_number || '-',
+          propertyName: property.property_name || '-',
+          postDate: dateKey,
+          dateLabel: overview?.dateLabel || follower?.dateLabel || dateKey,
+          previousViews: previousOverview?.videoViews ?? null,
+          videoViews: overview?.videoViews ?? null,
+          viewDiffFromPrevious,
+          nextViewDiff,
+          previousFollowerDiff: previousFollower?.followerDiff ?? null,
+          followerDiff,
+          nextFollowerDiff,
+          signalLabel: signals.length ? signals.join(' / ') : '大きな増加なし',
+        }]
+      })
+      .sort((a, b) => a.postDate.localeCompare(b.postDate) || a.propertyNumber.localeCompare(b.propertyNumber))
+  }, [tiktokInsightOverviewRows, tiktokInsightFollowerRows, tiktokInsightPostProperties, tiktokInsightYear])
+  const tiktokInsightGenderChartData = useMemo(() => (
+    tiktokInsightGenderRows.map((row) => ({
+      label: getTiktokInsightGenderLabel(row.label),
+      割合: Math.round(row.distribution * 1000) / 10,
+    }))
+  ), [tiktokInsightGenderRows])
+  const tiktokInsightTerritoryChartData = useMemo(() => (
+    tiktokInsightTerritoryRows.slice(0, 10).map((row) => ({
+      label: getTiktokInsightCountryLabel(row.label),
+      割合: Math.round(row.distribution * 1000) / 10,
+    }))
+  ), [tiktokInsightTerritoryRows])
+
+  useEffect(() => {
+    setTiktokInsightYear(selectedYear)
+  }, [selectedYear])
+
+  useEffect(() => {
+    const selectedMonth = tiktokInsightStoredMonths[tiktokInsightSelectedMonthKey]
+    if (selectedMonth && selectedMonth.year === tiktokInsightYear) return
+    if (Number(tiktokInsightSelectedMonthKey.slice(0, 4)) === tiktokInsightYear) return
+
+    const latestMonthForYear = tiktokInsightMonthOptions[tiktokInsightMonthOptions.length - 1]
+    if (latestMonthForYear && latestMonthForYear.monthKey !== tiktokInsightSelectedMonthKey) {
+      setTiktokInsightSelectedMonthKey(latestMonthForYear.monthKey)
+      return
+    }
+
+    const currentMonthKey = `${tiktokInsightYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    if (!latestMonthForYear && currentMonthKey !== tiktokInsightSelectedMonthKey) {
+      setTiktokInsightSelectedMonthKey(currentMonthKey)
+    }
+  }, [tiktokInsightMonthOptions, tiktokInsightSelectedMonthKey, tiktokInsightStoredMonths, tiktokInsightYear])
+
+  useEffect(() => {
+    const nextOverviewRows = tiktokInsightDisplayMonths
+      .flatMap((month) => month.overviewRows)
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    const nextFollowerRows = tiktokInsightDisplayMonths
+      .flatMap((month) => month.followerRows)
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    const latestMonth = tiktokInsightDisplayMonths[tiktokInsightDisplayMonths.length - 1]
+
+    setTiktokInsightOverviewRows(nextOverviewRows)
+    setTiktokInsightFollowerRows(nextFollowerRows)
+    setTiktokInsightGenderRows(latestMonth?.genderRows || [])
+    setTiktokInsightTerritoryRows(latestMonth?.territoryRows || [])
+    setTiktokInsightFileStatus(combineTiktokInsightFileStatus(tiktokInsightDisplayMonths))
+  }, [tiktokInsightDisplayMonths])
 
   const isMasterUser = normalizeEmail(currentUserEmail || '') === MASTER_EMAIL
   const currentAllowedAccount = allowedAccounts.find((account) => normalizeEmail(account.email) === normalizeEmail(currentUserEmail || ''))
   const canUseOutsideOffice = Boolean(currentAllowedAccount?.allow_outside_office)
+
+  async function fetchTiktokInsightMonths(nextSelectedMonthKey?: string) {
+    setTiktokInsightLoading(true)
+    const { data, error } = await supabase
+      .from('tiktok_insight_months')
+      .select('month_key,year,month,overview_rows,follower_rows,gender_rows,territory_rows,file_status,updated_at')
+      .order('month_key', { ascending: true })
+
+    if (error) {
+      setTiktokInsightMessage(`TikTok分析CSVの読み込みに失敗しました: ${error.message}`)
+      setTiktokInsightMessageType('error')
+      setTiktokInsightLoading(false)
+      return
+    }
+
+    const months = ((data || []) as TiktokInsightDbRow[]).reduce((acc, row) => {
+      const month = normalizeTiktokInsightDbMonth(row)
+      acc[month.monthKey] = month
+      return acc
+    }, {} as Record<string, TiktokInsightStoredMonth>)
+    const selectionYear = nextSelectedMonthKey ? Number(nextSelectedMonthKey.slice(0, 4)) : tiktokInsightYear
+    const monthsInSelectionYear = Object.values(months)
+      .filter((month) => month.year === selectionYear)
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+    const currentMonthKey = `${selectionYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    const keptMonthKey = Number(tiktokInsightSelectedMonthKey.slice(0, 4)) === selectionYear ? tiktokInsightSelectedMonthKey : ''
+    const selectedMonthKey = nextSelectedMonthKey || keptMonthKey || monthsInSelectionYear[monthsInSelectionYear.length - 1]?.monthKey || currentMonthKey
+
+    setTiktokInsightStoredMonths(months)
+    setTiktokInsightSelectedMonthKey(selectedMonthKey)
+    setTiktokInsightYear(selectionYear)
+    setTiktokInsightLoading(false)
+  }
+
+  function readTiktokInsightFileText(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.onerror = () => reject(new Error(`${file.name}を読めませんでした。`))
+      reader.readAsText(file, 'utf-8')
+    })
+  }
+
+  async function importTiktokInsightCsvFiles(files: FileList | File[]) {
+    const csvFiles = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.csv'))
+    if (csvFiles.length === 0) {
+      setTiktokInsightMessage('CSVファイルを選んでください。')
+      setTiktokInsightMessageType('error')
+      return
+    }
+
+    const imported: {
+      overviewRows?: TiktokInsightOverviewRow[]
+      followerRows?: TiktokInsightFollowerRow[]
+      genderRows?: TiktokInsightAudienceRow[]
+      territoryRows?: TiktokInsightAudienceRow[]
+    } = {}
+    const importedStatus = getEmptyTiktokInsightFileStatus()
+    const unknownFiles: string[] = []
+
+    try {
+      for (const file of csvFiles) {
+        const fileText = await readTiktokInsightFileText(file)
+        const rows = parseTiktokInsightCsvRows(fileText)
+        const kind = detectTiktokInsightFileKind(file.name, rows)
+
+        if (kind === 'overview') {
+          imported.overviewRows = buildTiktokInsightOverviewRows(rows, tiktokInsightYear)
+          importedStatus.overview = true
+        } else if (kind === 'followerHistory') {
+          imported.followerRows = buildTiktokInsightFollowerRows(rows, tiktokInsightYear)
+          importedStatus.followerHistory = true
+        } else if (kind === 'gender') {
+          imported.genderRows = buildTiktokInsightAudienceRows(rows, 'Gender')
+          importedStatus.gender = true
+        } else if (kind === 'territories') {
+          imported.territoryRows = buildTiktokInsightAudienceRows(rows, 'Top territories')
+          importedStatus.territories = true
+        } else {
+          unknownFiles.push(file.name)
+        }
+      }
+
+      if (!importedStatus.overview && !importedStatus.followerHistory && !importedStatus.gender && !importedStatus.territories) {
+        throw new Error('TikTok分析用のCSVを見つけられませんでした。OverviewなどのCSVを入れてください。')
+      }
+
+      const monthKey = getTiktokInsightMonthKeyFromRows(
+        imported.overviewRows || [],
+        imported.followerRows || [],
+        tiktokInsightYear,
+        tiktokInsightSelectedMonthKey,
+      )
+      const [yearText, monthText] = monthKey.split('-')
+      const previousMonth = tiktokInsightStoredMonths[monthKey]
+      const nextMonth: TiktokInsightStoredMonth = {
+        monthKey,
+        year: Number(yearText),
+        month: Number(monthText),
+        overviewRows: imported.overviewRows ?? previousMonth?.overviewRows ?? [],
+        followerRows: imported.followerRows ?? previousMonth?.followerRows ?? [],
+        genderRows: imported.genderRows ?? previousMonth?.genderRows ?? [],
+        territoryRows: imported.territoryRows ?? previousMonth?.territoryRows ?? [],
+        fileStatus: {
+          overview: importedStatus.overview || Boolean(previousMonth?.fileStatus.overview),
+          followerHistory: importedStatus.followerHistory || Boolean(previousMonth?.fileStatus.followerHistory),
+          gender: importedStatus.gender || Boolean(previousMonth?.fileStatus.gender),
+          territories: importedStatus.territories || Boolean(previousMonth?.fileStatus.territories),
+        },
+        updatedAt: new Date().toISOString(),
+      }
+      const { error: saveError } = await supabase.from('tiktok_insight_months').upsert({
+        month_key: nextMonth.monthKey,
+        year: nextMonth.year,
+        month: nextMonth.month,
+        overview_rows: nextMonth.overviewRows,
+        follower_rows: nextMonth.followerRows,
+        gender_rows: nextMonth.genderRows,
+        territory_rows: nextMonth.territoryRows,
+        file_status: nextMonth.fileStatus,
+        updated_at: nextMonth.updatedAt,
+      }, { onConflict: 'month_key' })
+
+      if (saveError) throw saveError
+
+      setTiktokInsightStoredMonths((current) => ({
+        ...current,
+        [monthKey]: nextMonth,
+      }))
+      setTiktokInsightSelectedMonthKey(monthKey)
+      setTiktokInsightYear(nextMonth.year)
+      setSelectedYear(nextMonth.year)
+      setTiktokInsightMessage(
+        unknownFiles.length
+          ? `${getTiktokInsightMonthLabel(monthKey)}を保存しました。不明なファイル: ${unknownFiles.join('、')}`
+          : `${getTiktokInsightMonthLabel(monthKey)}を共有保存しました。同じ月をもう一度入れると上書きします。`,
+      )
+      setTiktokInsightMessageType(unknownFiles.length ? 'error' : 'success')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'CSVの読み込みに失敗しました。'
+      setTiktokInsightMessage(message)
+      setTiktokInsightMessageType('error')
+    } finally {
+      setTiktokInsightDragActive(false)
+    }
+  }
+
+  async function fetchTiktokInsightPostProperties(startDate: string, endDate: string) {
+    const pageSize = 1000
+    const allRows: TiktokInsightPropertyRow[] = []
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('sns_tiktok_properties')
+        .select('id,post_date,property_number,property_name')
+        .range(from, from + pageSize - 1)
+
+      if (error) {
+        setTiktokInsightPostProperties([])
+        setTiktokInsightMessage(`TikTok投稿の読み込みに失敗しました: ${error.message}`)
+        setTiktokInsightMessageType('error')
+        return
+      }
+
+      const rows = (data || []) as TiktokInsightPropertyRow[]
+      allRows.push(...rows)
+      if (rows.length < pageSize) break
+    }
+
+    const rowsInCsvPeriod = allRows
+      .filter((row) => {
+        const dateKey = getTiktokInsightPropertyDateKey(row.post_date, row.property_number, tiktokInsightYear)
+        return dateKey >= startDate && dateKey <= endDate
+      })
+      .sort((a, b) => {
+        const aDate = getTiktokInsightPropertyDateKey(a.post_date, a.property_number, tiktokInsightYear)
+        const bDate = getTiktokInsightPropertyDateKey(b.post_date, b.property_number, tiktokInsightYear)
+        return aDate.localeCompare(bDate) || (a.property_number || '').localeCompare(b.property_number || '')
+      })
+
+    setTiktokInsightPostProperties(rowsInCsvPeriod)
+  }
+
+  useEffect(() => {
+    if (tiktokInsightDailyRows.length === 0) {
+      setTiktokInsightPostProperties([])
+      return
+    }
+
+    const startDate = tiktokInsightDailyRows[0].dateKey
+    const endDate = tiktokInsightDailyRows[tiktokInsightDailyRows.length - 1].dateKey
+    void fetchTiktokInsightPostProperties(startDate, endDate)
+  }, [tiktokInsightDailyRows, tiktokInsightYear])
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -4746,6 +5366,14 @@ function App() {
     fetchAnalysisInstaSheet()
     void fetchAnalysisThreadsSheet()
     void fetchAnalysisYoutubeSheet()
+    void fetchTiktokInsightMonths()
+
+    const debouncedFetchHankyo = createRealtimeDebouncedHandler(() => { void fetchHankyo() })
+    const debouncedFetchDm = createRealtimeDebouncedHandler(() => { void fetchDm() })
+    const debouncedFetchJishaShukyaku = createRealtimeDebouncedHandler(() => { void fetchJishaShukyaku() })
+    const debouncedFetchBusho = createRealtimeDebouncedHandler(() => { void fetchBusho() })
+    const debouncedFetchMembers = createRealtimeDebouncedHandler(() => { void fetchMembers() })
+    const debouncedFetchAnalysisYoutubeSheet = createRealtimeDebouncedHandler(() => { void fetchAnalysisYoutubeSheet() })
 
     const channel = supabase
       .channel('db-changes')
@@ -4755,6 +5383,13 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stock' }, () => { void fetchStock() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_records' }, () => { void fetchTiktokProgressForStock() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_sessions' }, () => { void fetchAnalysisSessions() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tiktok_insight_months' }, () => { void fetchTiktokInsightMonths() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hankyo' }, debouncedFetchHankyo)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm' }, debouncedFetchDm)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jisha_shukyaku' }, debouncedFetchJishaShukyaku)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busho_schedules' }, debouncedFetchBusho)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, debouncedFetchMembers)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_youtube_metrics' }, debouncedFetchAnalysisYoutubeSheet)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'analysis_tiktok_metrics' },
@@ -4902,6 +5537,7 @@ function App() {
       new Date().getFullYear(),
       ...tasks.flatMap((task) => [getYear(task.taskDate), getYear(task.dueDate)]),
       ...recruitment.map((record) => getYear(record.date)),
+      ...Object.values(tiktokInsightStoredMonths).map((month) => month.year),
     ]),
   )
     .filter(Boolean)
@@ -6949,6 +7585,337 @@ function App() {
                 </section>
               )
             })()}
+
+            {activeAnalysisSubTab === 'tiktok-insight' && (
+              <section className="tiktok-insight-page">
+                <section className="panel table-panel">
+                  <div className="panel-heading analysis-sheet-heading">
+                    <div>
+                      <h2>TikTok分析</h2>
+                      <p>KarilunのTikTokインサイトCSVと、SNS物件管理の投稿日を見比べます。</p>
+                    </div>
+                    <div className="analysis-actions tiktok-insight-actions">
+                      {tiktokInsightMessage && (
+                        <span className={`analysis-import-message ${tiktokInsightMessageType === 'error' ? 'is-error' : 'is-success'}`}>
+                          {tiktokInsightMessage}
+                        </span>
+                      )}
+                      <div className="tiktok-insight-toolbar" aria-label="TikTok分析の表示月">
+                        <button type="button" className="primary" onClick={() => tiktokInsightFileInputRef.current?.click()}>
+                          CSV選択
+                        </button>
+                        <button
+                          type="button"
+                          className={tiktokInsightViewMode === 'cumulative' ? 'active' : ''}
+                          onClick={() => {
+                            setTiktokInsightViewMode('cumulative')
+                            setTiktokInsightMessage('')
+                          }}
+                        >
+                          累計
+                        </button>
+                        {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
+                          const monthKey = `${tiktokInsightYear}-${String(month).padStart(2, '0')}`
+                          const hasCsv = Boolean(tiktokInsightStoredMonths[monthKey])
+                          return (
+                            <button
+                              key={monthKey}
+                              type="button"
+                              className={[
+                                tiktokInsightViewMode === 'monthly' && tiktokInsightSelectedMonthKey === monthKey ? 'active' : '',
+                                hasCsv ? 'has-csv' : '',
+                              ].filter(Boolean).join(' ')}
+                              title={hasCsv ? `${tiktokInsightYear}年${month}月のCSVあり` : `${tiktokInsightYear}年${month}月はCSV待ち`}
+                              onClick={() => {
+                                setTiktokInsightViewMode('monthly')
+                                setTiktokInsightSelectedMonthKey(monthKey)
+                                setTiktokInsightMessage('')
+                              }}
+                            >
+                              {month}月
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <input
+                        ref={tiktokInsightFileInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        multiple
+                        className="visually-hidden-file"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        onChange={(e) => {
+                          if (e.target.files) void importTiktokInsightCsvFiles(e.target.files)
+                          e.currentTarget.value = ''
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div
+                    className={`tiktok-insight-dropzone ${tiktokInsightDragActive ? 'is-active' : ''}`}
+                    onDragEnter={(e) => {
+                      e.preventDefault()
+                      setTiktokInsightDragActive(true)
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setTiktokInsightDragActive(true)
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      setTiktokInsightDragActive(false)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      void importTiktokInsightCsvFiles(e.dataTransfer.files)
+                    }}
+                  >
+                    <strong>CSVをここにドロップ</strong>
+                    <span>Overview / FollowerHistory / FollowerGender / FollowerTopTerritories</span>
+                  </div>
+
+                  <div className="tiktok-insight-file-list">
+                    {[
+                      ['Overview', tiktokInsightFileStatus.overview],
+                      ['フォロワー履歴', tiktokInsightFileStatus.followerHistory],
+                      ['性別', tiktokInsightFileStatus.gender],
+                      ['国・地域', tiktokInsightFileStatus.territories],
+                    ].map(([label, loaded]) => (
+                      <span key={String(label)} className={loaded ? 'is-loaded' : ''}>
+                        {String(label)}：{loaded ? '読込済み' : '未読込'}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+
+                {!tiktokInsightLoading && tiktokInsightDailyRows.length > 0 ? (
+                  <>
+                    <div className="tiktok-insight-kpis">
+                      <div>
+                        <span>期間</span>
+                        <strong>{tiktokInsightSummary.periodLabel}</strong>
+                      </div>
+                      <div>
+                        <span>再生数合計</span>
+                        <strong>{formatInteger(tiktokInsightSummary.totalViews)}</strong>
+                      </div>
+                      <div>
+                        <span>プロフィール表示</span>
+                        <strong>{formatInteger(tiktokInsightSummary.totalProfileViews)}</strong>
+                      </div>
+                      <div>
+                        <span>フォロワー増減</span>
+                        <strong>{formatInteger(tiktokInsightSummary.totalFollowerDiff)}</strong>
+                      </div>
+                      <div>
+                        <span>再生が多い日</span>
+                        <strong>{tiktokInsightSummary.bestViewDay ? `${tiktokInsightSummary.bestViewDay.dateLabel} ${formatInteger(tiktokInsightSummary.bestViewDay.videoViews)}` : '-'}</strong>
+                      </div>
+                      <div>
+                        <span>フォロワー増が多い日</span>
+                        <strong>{tiktokInsightSummary.bestFollowerDay ? `${tiktokInsightSummary.bestFollowerDay.dateLabel} ${formatInteger(tiktokInsightSummary.bestFollowerDay.followerDiff)}` : '-'}</strong>
+                      </div>
+                    </div>
+
+                    <section className="panel table-panel tiktok-insight-chart-panel">
+                      <div className="panel-heading">
+                        <div><h2>日別の動き</h2></div>
+                      </div>
+                      <div className="tiktok-insight-chart-grid">
+                        <div>
+                          <h3>再生数・プロフィール表示</h3>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <LineChart data={tiktokInsightDailyRows} margin={{ top: 10, right: 36, left: 8, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                              <YAxis
+                                yAxisId="views"
+                                tick={{ fontSize: 11 }}
+                                label={{ value: '再生数', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#111827' } }}
+                              />
+                              <YAxis
+                                yAxisId="profile"
+                                orientation="right"
+                                tick={{ fontSize: 11 }}
+                                label={{ value: 'プロフィール表示', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#2563eb' } }}
+                              />
+                              <Tooltip formatter={(value, name) => [Number(value ?? 0).toLocaleString(), String(name)]} />
+                              <Legend wrapperStyle={{ fontSize: 12 }} />
+                              <Line yAxisId="views" type="monotone" dataKey="videoViews" name="再生数" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
+                              <Line yAxisId="profile" type="monotone" dataKey="profileViews" name="プロフィール表示" stroke="#2563eb" strokeWidth={2.2} dot={{ r: 3 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div>
+                          <h3>フォロワー増減</h3>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={tiktokInsightDailyRows} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis dataKey="dateLabel" tick={{ fontSize: 12 }} />
+                              <YAxis tick={{ fontSize: 11 }} />
+                              <Tooltip formatter={(value, name) => [Number(value ?? 0).toLocaleString(), String(name)]} />
+                              <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.5} />
+                              <Bar dataKey="followerDiff" name="フォロワー増減" radius={[3, 3, 0, 0]}>
+                                {tiktokInsightDailyRows.map((row) => (
+                                  <Cell key={row.dateKey} fill={row.followerDiff >= 0 ? '#2563eb' : '#dc2626'} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="panel table-panel">
+                      <div className="panel-heading">
+                        <div>
+                          <h2>投稿日の動き</h2>
+                          <p>SNS物件管理「Karilun｜TikTok」の投稿日と、CSVの日別データを合わせています。</p>
+                        </div>
+                      </div>
+                      <div className="table-wrap analysis-monthly-table-wrap">
+                        <table className="analysis-monthly-table tiktok-insight-post-table">
+                          <thead>
+                            <tr>
+                              <th>投稿日</th>
+                              <th>物件番号</th>
+                              <th>物件名</th>
+                              <th>前日再生</th>
+                              <th>投稿日再生</th>
+                              <th>再生 前日差</th>
+                              <th>投稿日フォロワー</th>
+                              <th>翌日フォロワー</th>
+                              <th>見えた動き</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tiktokInsightPostRows.length === 0 && (
+                              <tr>
+                                <td colSpan={9} className="analysis-empty-cell">
+                                  CSV期間内のTikTok投稿日がありません。
+                                </td>
+                              </tr>
+                            )}
+                            {tiktokInsightPostRows.map((row) => (
+                              <tr key={row.id}>
+                                <td>{row.dateLabel}</td>
+                                <td>{row.propertyNumber}</td>
+                                <td className="tiktok-insight-text-cell">{row.propertyName}</td>
+                                <td>{row.previousViews === null ? '-' : formatInteger(row.previousViews)}</td>
+                                <td>{row.videoViews === null ? '-' : formatInteger(row.videoViews)}</td>
+                                <td className={(row.viewDiffFromPrevious ?? 0) > 0 ? 'tiktok-insight-positive' : (row.viewDiffFromPrevious ?? 0) < 0 ? 'tiktok-insight-negative' : ''}>
+                                  {row.viewDiffFromPrevious === null ? '-' : formatInteger(row.viewDiffFromPrevious)}
+                                </td>
+                                <td className={(row.followerDiff ?? 0) > 0 ? 'tiktok-insight-positive' : (row.followerDiff ?? 0) < 0 ? 'tiktok-insight-negative' : ''}>
+                                  {row.followerDiff === null ? '-' : formatInteger(row.followerDiff)}
+                                </td>
+                                <td className={(row.nextFollowerDiff ?? 0) > 0 ? 'tiktok-insight-positive' : (row.nextFollowerDiff ?? 0) < 0 ? 'tiktok-insight-negative' : ''}>
+                                  {row.nextFollowerDiff === null ? '-' : formatInteger(row.nextFollowerDiff)}
+                                </td>
+                                <td className="tiktok-insight-text-cell">{row.signalLabel}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section className="panel table-panel">
+                      <div className="panel-heading">
+                        <div><h2>日別データ</h2></div>
+                      </div>
+                      <div className="table-wrap analysis-monthly-table-wrap">
+                        <table className="analysis-monthly-table tiktok-insight-daily-table">
+                          <thead>
+                            <tr>
+                              <th>日付</th>
+                              <th>再生数</th>
+                              <th>プロフィール表示</th>
+                              <th>いいね</th>
+                              <th>コメント</th>
+                              <th>シェア</th>
+                              <th>フォロワー数</th>
+                              <th>フォロワー増減</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tiktokInsightDailyRows.map((row) => (
+                              <tr key={row.dateKey}>
+                                <td>{row.dateLabel}</td>
+                                <td>{formatInteger(row.videoViews)}</td>
+                                <td>{formatInteger(row.profileViews)}</td>
+                                <td>{formatInteger(row.likes)}</td>
+                                <td>{formatInteger(row.comments)}</td>
+                                <td>{formatInteger(row.shares)}</td>
+                                <td>{formatInteger(row.followers)}</td>
+                                <td className={row.followerDiff > 0 ? 'tiktok-insight-positive' : row.followerDiff < 0 ? 'tiktok-insight-negative' : ''}>
+                                  {formatInteger(row.followerDiff)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    {(tiktokInsightGenderRows.length > 0 || tiktokInsightTerritoryRows.length > 0) && (
+                      <section className="panel table-panel tiktok-insight-chart-panel">
+                        <div className="panel-heading">
+                          <div><h2>フォロワー内訳</h2></div>
+                        </div>
+                        <div className="tiktok-insight-chart-grid">
+                          {tiktokInsightGenderRows.length > 0 && (
+                            <div>
+                              <h3>性別</h3>
+                              <ResponsiveContainer width="100%" height={240}>
+                                <BarChart data={tiktokInsightGenderChartData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                                  <YAxis tick={{ fontSize: 11 }} unit="%" />
+                                  <Tooltip formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()}%`, String(name)]} />
+                                  <Bar dataKey="割合" fill="#ec4899" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                              <div className="tiktok-insight-mini-list">
+                                {tiktokInsightGenderRows.map((row) => (
+                                  <span key={row.label}>{getTiktokInsightGenderLabel(row.label)} {formatTiktokInsightPercent(row.distribution)}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {tiktokInsightTerritoryRows.length > 0 && (
+                            <div>
+                              <h3>国・地域 上位10件</h3>
+                              <ResponsiveContainer width="100%" height={240}>
+                                <BarChart data={tiktokInsightTerritoryChartData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                                  <YAxis tick={{ fontSize: 11 }} unit="%" />
+                                  <Tooltip formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()}%`, String(name)]} />
+                                  <Bar dataKey="割合" fill="#06b6d4" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                              <div className="tiktok-insight-mini-list">
+                                {tiktokInsightTerritoryRows.slice(0, 10).map((row) => (
+                                  <span key={row.label}>{getTiktokInsightCountryLabel(row.label)} {formatTiktokInsightPercent(row.distribution)}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    )}
+                  </>
+                ) : (
+                  <section className="panel table-panel tiktok-insight-empty">
+                    <h2>{tiktokInsightLoading ? '読込中' : 'CSV待ち'}</h2>
+                    <p>{tiktokInsightLoading ? '共有保存されたCSVを確認しています。' : 'OverviewとFollowerHistoryを読み込むと、日別グラフと投稿日の表が表示されます。'}</p>
+                  </section>
+                )}
+              </section>
+            )}
           </>
         )}
 

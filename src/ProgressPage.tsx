@@ -11,6 +11,15 @@ import {
 
 const integer = new Intl.NumberFormat('ja-JP')
 
+function createRealtimeDebouncedHandler(callback: () => void, delay = 300) {
+  let timer: ReturnType<typeof window.setTimeout> | undefined
+
+  return () => {
+    if (timer !== undefined) window.clearTimeout(timer)
+    timer = window.setTimeout(callback, delay)
+  }
+}
+
 function formatInteger(value: number | string | null | undefined): string {
   const numericValue = typeof value === 'string' ? Number(value.replace(/,/g, '')) : Number(value ?? 0)
   return integer.format(Number.isFinite(numericValue) ? numericValue : 0)
@@ -987,6 +996,20 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
   useEffect(() => {
     fetchRecords()
+  }, [])
+
+  useEffect(() => {
+    const debouncedFetchRecords = createRealtimeDebouncedHandler(() => {
+      void fetchRecords({ keepScroll: true, showLoading: false })
+    })
+    const channel = supabase
+      .channel('progress-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_records' }, debouncedFetchRecords)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   useEffect(() => {
