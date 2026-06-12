@@ -12293,6 +12293,7 @@ function TodayTasksPanel() {
   const [newTaskMinutes, setNewTaskMinutes] = useState('')
   const [newTaskCategory, setNewTaskCategory] = useState('')
   const [manualTaskSaving, setManualTaskSaving] = useState(false)
+  const [realtimeReloadKey, setRealtimeReloadKey] = useState(0)
   const [openMemoMemberId, setOpenMemoMemberId] = useState<string | null>(null)
   const [memoDraft, setMemoDraft] = useState('')
   const [memoSavingMemberId, setMemoSavingMemberId] = useState<string | null>(null)
@@ -12406,7 +12407,21 @@ function TodayTasksPanel() {
     fetchSelectedDateState()
     const interval = setInterval(fetchSelectedDateState, 3000)
     return () => clearInterval(interval)
-  }, [selectedViewDate])
+  }, [selectedViewDate, realtimeReloadKey])
+
+  useEffect(() => {
+    const reloadSelectedDateState = createRealtimeDebouncedHandler(() => {
+      setRealtimeReloadKey((key) => key + 1)
+    })
+
+    const channel = supabase
+      .channel('today-tasks-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checked_events' }, reloadSelectedDateState)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'manual_tasks' }, reloadSelectedDateState)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   useEffect(() => {
     setOpenAddFormMemberId(null)
@@ -12575,7 +12590,9 @@ function TodayTasksPanel() {
 
     setManualTasks(prev => ({
       ...prev,
-      [memberCalendarId]: [...(prev[memberCalendarId] || []), data as ManualTask],
+      [memberCalendarId]: (prev[memberCalendarId] || []).some((item) => item.id === data.id)
+        ? prev[memberCalendarId]
+        : [...(prev[memberCalendarId] || []), data as ManualTask],
     }))
     setNewTaskName('')
     setNewTaskCategory('')
