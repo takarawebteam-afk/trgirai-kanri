@@ -971,13 +971,19 @@
 @media (max-width: 760px) {
   .note-page {
     grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: calc(100dvh - 132px);
+    max-width: 100%;
+    overflow: visible;
   }
 
   .note-sidebar {
     width: 100%;
     min-width: 0;
+    max-height: 42dvh;
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
+    overflow: auto;
   }
 
   .note-page.sidebar-closed {
@@ -999,5 +1005,78 @@
 
   .note-save-button {
     margin-left: 0;
+  }
+
+  .note-main {
+    min-width: 0;
+  }
+
+  .note-editor-head,
+  .note-editor-tags,
+  .note-toolbar {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .note-toolbar {
+    top: 0;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .note-toolbar > button,
+  .note-toolbar-table-ops > button,
+  .note-toolbar-menu > button,
+  .note-access-button,
+  .note-font-size-ctrl button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .note-toolbar-table-ops {
+    flex: 0 0 auto;
+  }
+
+  .note-search input,
+  .note-section-add input,
+  .note-new-chip-input,
+  .note-section-name-input,
+  .note-title-input,
+  .note-font-size-input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .note-title-input {
+    width: 100%;
+  }
+
+  .note-editor {
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .note-editor table {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .note-access-popover,
+  .note-tag-menu,
+  .note-toolbar-popover {
+    position: fixed;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+
+  .note-empty-editor {
+    min-height: 280px;
+    padding: 24px 12px;
   }
 }
