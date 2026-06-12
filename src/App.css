@@ -6318,12 +6318,20 @@ button.secondary.small {
   min-width: 86px;
 }
 
-.tiktok-insight-post-table .tiktok-insight-text-cell {
+.tiktok-insight-post-table .tiktok-insight-text-cell,
+.tiktok-insight-daily-table .tiktok-insight-text-cell {
   min-width: 180px;
   max-width: 280px;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
+}
+
+.tiktok-insight-daily-table .tiktok-insight-post-cell {
+  min-width: 120px;
+  max-width: 280px;
+  text-align: left;
+  white-space: pre-line;
 }
 
 .tiktok-insight-positive {

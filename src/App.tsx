@@ -672,6 +672,12 @@ type TiktokInsightFileStatus = {
 
 type TiktokInsightPropertyRow = Pick<TiktokPropertyRecord, 'id' | 'post_date' | 'property_number' | 'property_name'>
 
+type TiktokInsightDailyPostCell = {
+  id: string
+  propertyNumber: string
+  propertyName: string
+}
+
 type TiktokInsightViewMode = 'monthly' | 'cumulative'
 
 type TiktokInsightStoredMonth = {
@@ -1058,18 +1064,6 @@ function getTiktokInsightGenderLabel(gender: string) {
 
 function formatTiktokInsightPercent(value: number) {
   return `${Math.round(value * 1000) / 10}%`
-}
-
-function getTiktokInsightPreviousDateKey(dateKey: string) {
-  const date = new Date(`${dateKey}T00:00:00`)
-  date.setDate(date.getDate() - 1)
-  return date.toISOString().slice(0, 10)
-}
-
-function getTiktokInsightNextDateKey(dateKey: string) {
-  const date = new Date(`${dateKey}T00:00:00`)
-  date.setDate(date.getDate() + 1)
-  return date.toISOString().slice(0, 10)
 }
 
 function getTiktokInsightPropertyDateKey(postDate: string | null | undefined, propertyNumber: string | null | undefined, year: number) {
@@ -2569,6 +2563,36 @@ function App() {
       }
     })
   }, [tiktokInsightOverviewRows, tiktokInsightFollowerRows])
+  const tiktokInsightDailyRowsWithPosts = useMemo(() => {
+    const postsByDate = new Map<string, TiktokInsightDailyPostCell[]>()
+
+    tiktokInsightPostProperties.forEach((property) => {
+      const dateKey = getTiktokInsightPropertyDateKey(property.post_date, property.property_number, tiktokInsightYear)
+      if (!dateKey) return
+
+      const posts = postsByDate.get(dateKey) || []
+      posts.push({
+        id: property.id,
+        propertyNumber: property.property_number || '',
+        propertyName: property.property_name || '',
+      })
+      postsByDate.set(dateKey, posts)
+    })
+
+    postsByDate.forEach((posts) => {
+      posts.sort((a, b) => a.propertyNumber.localeCompare(b.propertyNumber) || a.propertyName.localeCompare(b.propertyName))
+    })
+
+    return tiktokInsightDailyRows.map((row) => {
+      const posts = postsByDate.get(row.dateKey) || []
+      return {
+        ...row,
+        postDateLabel: posts.length > 0 ? row.dateLabel : '',
+        propertyNumbers: posts.map((post) => post.propertyNumber).filter(Boolean),
+        propertyNames: posts.map((post) => post.propertyName).filter(Boolean),
+      }
+    })
+  }, [tiktokInsightDailyRows, tiktokInsightPostProperties, tiktokInsightYear])
   const tiktokInsightSummary = useMemo(() => {
     const totalViews = tiktokInsightDailyRows.reduce((sum, row) => sum + row.videoViews, 0)
     const totalProfileViews = tiktokInsightDailyRows.reduce((sum, row) => sum + row.profileViews, 0)
@@ -2593,49 +2617,6 @@ function App() {
         : '未読み込み',
     }
   }, [tiktokInsightDailyRows, tiktokInsightFollowerRows])
-  const tiktokInsightPostRows = useMemo(() => {
-    const overviewMap = new Map(tiktokInsightOverviewRows.map((row) => [row.dateKey, row]))
-    const followerMap = new Map(tiktokInsightFollowerRows.map((row) => [row.dateKey, row]))
-
-    return tiktokInsightPostProperties
-      .flatMap((property) => {
-        const dateKey = getTiktokInsightPropertyDateKey(property.post_date, property.property_number, tiktokInsightYear)
-        if (!dateKey || (!overviewMap.has(dateKey) && !followerMap.has(dateKey))) return []
-
-        const overview = overviewMap.get(dateKey)
-        const previousOverview = overviewMap.get(getTiktokInsightPreviousDateKey(dateKey))
-        const nextOverview = overviewMap.get(getTiktokInsightNextDateKey(dateKey))
-        const follower = followerMap.get(dateKey)
-        const previousFollower = followerMap.get(getTiktokInsightPreviousDateKey(dateKey))
-        const nextFollower = followerMap.get(getTiktokInsightNextDateKey(dateKey))
-        const viewDiffFromPrevious = overview && previousOverview ? overview.videoViews - previousOverview.videoViews : null
-        const nextViewDiff = nextOverview && overview ? nextOverview.videoViews - overview.videoViews : null
-        const followerDiff = follower?.followerDiff ?? null
-        const nextFollowerDiff = nextFollower?.followerDiff ?? null
-        const signals = [
-          typeof viewDiffFromPrevious === 'number' && viewDiffFromPrevious > 0 ? '再生数が前日より増加' : '',
-          typeof followerDiff === 'number' && followerDiff > 0 ? '投稿日にフォロワー増' : '',
-          typeof nextFollowerDiff === 'number' && nextFollowerDiff > 0 ? '翌日にフォロワー増' : '',
-        ].filter(Boolean)
-
-        return [{
-          id: property.id,
-          propertyNumber: property.property_number || '-',
-          propertyName: property.property_name || '-',
-          postDate: dateKey,
-          dateLabel: overview?.dateLabel || follower?.dateLabel || dateKey,
-          previousViews: previousOverview?.videoViews ?? null,
-          videoViews: overview?.videoViews ?? null,
-          viewDiffFromPrevious,
-          nextViewDiff,
-          previousFollowerDiff: previousFollower?.followerDiff ?? null,
-          followerDiff,
-          nextFollowerDiff,
-          signalLabel: signals.length ? signals.join(' / ') : '大きな増加なし',
-        }]
-      })
-      .sort((a, b) => a.postDate.localeCompare(b.postDate) || a.propertyNumber.localeCompare(b.propertyNumber))
-  }, [tiktokInsightOverviewRows, tiktokInsightFollowerRows, tiktokInsightPostProperties, tiktokInsightYear])
   const tiktokInsightGenderChartData = useMemo(() => (
     tiktokInsightGenderRows.map((row) => ({
       label: getTiktokInsightGenderLabel(row.label),
@@ -7785,60 +7766,6 @@ function App() {
 
                     <section className="panel table-panel">
                       <div className="panel-heading">
-                        <div>
-                          <h2>投稿日の動き</h2>
-                          <p>SNS物件管理「Karilun｜TikTok」の投稿日と、CSVの日別データを合わせています。</p>
-                        </div>
-                      </div>
-                      <div className="table-wrap analysis-monthly-table-wrap">
-                        <table className="analysis-monthly-table tiktok-insight-post-table">
-                          <thead>
-                            <tr>
-                              <th>投稿日</th>
-                              <th>物件番号</th>
-                              <th>物件名</th>
-                              <th>前日再生</th>
-                              <th>投稿日再生</th>
-                              <th>再生 前日差</th>
-                              <th>投稿日フォロワー</th>
-                              <th>翌日フォロワー</th>
-                              <th>見えた動き</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tiktokInsightPostRows.length === 0 && (
-                              <tr>
-                                <td colSpan={9} className="analysis-empty-cell">
-                                  CSV期間内のTikTok投稿日がありません。
-                                </td>
-                              </tr>
-                            )}
-                            {tiktokInsightPostRows.map((row) => (
-                              <tr key={row.id}>
-                                <td>{row.dateLabel}</td>
-                                <td>{row.propertyNumber}</td>
-                                <td className="tiktok-insight-text-cell">{row.propertyName}</td>
-                                <td>{row.previousViews === null ? '-' : formatInteger(row.previousViews)}</td>
-                                <td>{row.videoViews === null ? '-' : formatInteger(row.videoViews)}</td>
-                                <td className={(row.viewDiffFromPrevious ?? 0) > 0 ? 'tiktok-insight-positive' : (row.viewDiffFromPrevious ?? 0) < 0 ? 'tiktok-insight-negative' : ''}>
-                                  {row.viewDiffFromPrevious === null ? '-' : formatInteger(row.viewDiffFromPrevious)}
-                                </td>
-                                <td className={(row.followerDiff ?? 0) > 0 ? 'tiktok-insight-positive' : (row.followerDiff ?? 0) < 0 ? 'tiktok-insight-negative' : ''}>
-                                  {row.followerDiff === null ? '-' : formatInteger(row.followerDiff)}
-                                </td>
-                                <td className={(row.nextFollowerDiff ?? 0) > 0 ? 'tiktok-insight-positive' : (row.nextFollowerDiff ?? 0) < 0 ? 'tiktok-insight-negative' : ''}>
-                                  {row.nextFollowerDiff === null ? '-' : formatInteger(row.nextFollowerDiff)}
-                                </td>
-                                <td className="tiktok-insight-text-cell">{row.signalLabel}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </section>
-
-                    <section className="panel table-panel">
-                      <div className="panel-heading">
                         <div><h2>日別データ</h2></div>
                       </div>
                       <div className="table-wrap analysis-monthly-table-wrap">
@@ -7846,6 +7773,9 @@ function App() {
                           <thead>
                             <tr>
                               <th>日付</th>
+                              <th>投稿日</th>
+                              <th>物件番号</th>
+                              <th>物件名</th>
                               <th>再生数</th>
                               <th>プロフィール表示</th>
                               <th>いいね</th>
@@ -7856,9 +7786,12 @@ function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {tiktokInsightDailyRows.map((row) => (
+                            {tiktokInsightDailyRowsWithPosts.map((row) => (
                               <tr key={row.dateKey}>
                                 <td>{row.dateLabel}</td>
+                                <td>{row.postDateLabel}</td>
+                                <td className="tiktok-insight-post-cell">{row.propertyNumbers.join('\n')}</td>
+                                <td className="tiktok-insight-post-cell tiktok-insight-text-cell">{row.propertyNames.join('\n')}</td>
                                 <td>{formatInteger(row.videoViews)}</td>
                                 <td>{formatInteger(row.profileViews)}</td>
                                 <td>{formatInteger(row.likes)}</td>
