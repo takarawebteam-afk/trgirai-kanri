@@ -7840,7 +7840,7 @@ function App() {
                               <tr key={row.dateKey}>
                                 <td>{row.dateLabel}</td>
                                 <td>{row.postDateLabel}</td>
-                                <td className="tiktok-insight-post-cell">{row.propertyNumbers.join('\n')}</td>
+                                <td className="tiktok-insight-post-cell tiktok-insight-property-number-cell">{row.propertyNumbers.join('\n')}</td>
                                 <td className="tiktok-insight-post-cell tiktok-insight-text-cell">{row.propertyNames.join('\n')}</td>
                                 <td>{formatInteger(row.videoViews)}</td>
                                 <td>{formatInteger(row.profileViews)}</td>

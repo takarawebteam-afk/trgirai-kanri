@@ -6379,6 +6379,10 @@ button.secondary.small {
   white-space: pre-line;
 }
 
+.tiktok-insight-daily-table .tiktok-insight-property-number-cell {
+  text-align: right;
+}
+
 .tiktok-insight-daily-table .tiktok-insight-insight-cell {
   text-align: left;
   white-space: normal;
