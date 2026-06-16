@@ -561,6 +561,7 @@ const hankyoInquiryTypes = ['物件問合', 'アンケート', '来店予約', '
 const hankyoContactMethods = ['LINE', 'メール', 'DM', 'コメント', '電話']
 const hankyoMoveInTimings = ['2週間以内', '1ヶ月以内', '2ヶ月以内', '3ヶ月以内', '4ヶ月以内', '時期先', '良いのがあれば', '時期未定', '不明']
 const hankyoStores = ['対象外', '店舗誘導済', '大阪店', '京橋店', '放出店', '淡路店', '長瀬店', '西北店', '枚方店', '八尾店', '塚口店', 'JR西宮店', '寝屋川店', '守口店', '高槻店', '長田店', '布施店', '小阪店', '瓢箪山店', '深井店', 'WEB', '反響C', '重複']
+const hankyoNewEntryStores = hankyoStores.filter((s) => s !== '深井店' && s !== '小阪店')
 const hankyoStorePlaceholder = '選択してください'
 
 const defaultTaskItemForm: Omit<TaskItem, 'id' | 'created_at'> = {
@@ -2850,6 +2851,195 @@ function App() {
     } finally {
       setTiktokInsightDragActive(false)
     }
+  }
+
+  async function exportTiktokInsightExcel() {
+    if (tiktokInsightDailyRowsWithPosts.length === 0) {
+      setTiktokInsightMessage('出力できるTikTok分析データがありません。CSVを読み込んでから出力してください。')
+      setTiktokInsightMessageType('error')
+      return
+    }
+
+    const ExcelJS = await import('exceljs')
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = 'trgirai-kanri'
+    workbook.created = new Date()
+
+    const selectedLabel = tiktokInsightViewMode === 'cumulative'
+      ? `${tiktokInsightYear}年累計`
+      : getTiktokInsightMonthLabel(tiktokInsightSelectedMonth?.monthKey || tiktokInsightSelectedMonthKey)
+    const safePeriod = selectedLabel.replace(/[\\/:*?"<>|]/g, '')
+
+    const thinBorder = {
+      top: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } },
+      left: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } },
+      bottom: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } },
+      right: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } },
+    }
+    const headerFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF111827' } }
+    const subHeaderFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFEFF6FF' } }
+
+    const summarySheet = workbook.addWorksheet('概要', {
+      views: [{ state: 'frozen', ySplit: 7 }],
+    })
+    summarySheet.addRows([
+      ['TikTok分析 Gemini資料用'],
+      ['出力対象', selectedLabel],
+      ['期間', tiktokInsightSummary.periodLabel],
+      ['表示', tiktokInsightViewMode === 'cumulative' ? '累計' : '月別'],
+      ['出力日', new Date().toLocaleString('ja-JP')],
+      [],
+      ['項目', '数値'],
+      ['再生数合計', tiktokInsightSummary.totalViews],
+      ['プロフィール表示合計', tiktokInsightSummary.totalProfileViews],
+      ['フォロワー増減合計', tiktokInsightSummary.totalFollowerDiff],
+      ['再生が多い日', tiktokInsightSummary.bestViewDay ? `${tiktokInsightSummary.bestViewDay.dateLabel} ${formatInteger(tiktokInsightSummary.bestViewDay.videoViews)}` : '-'],
+      ['フォロワー増加が多い日', tiktokInsightSummary.bestFollowerDay ? `${tiktokInsightSummary.bestFollowerDay.dateLabel} ${formatInteger(tiktokInsightSummary.bestFollowerDay.followerDiff)}` : '-'],
+      [],
+      ['読み込み状況', '状態'],
+      ['Overview', tiktokInsightFileStatus.overview ? '読み込み済み' : '未読み込み'],
+      ['FollowerHistory', tiktokInsightFileStatus.followerHistory ? '読み込み済み' : '未読み込み'],
+      ['FollowerGender', tiktokInsightFileStatus.gender ? '読み込み済み' : '未読み込み'],
+      ['FollowerTopTerritories', tiktokInsightFileStatus.territories ? '読み込み済み' : '未読み込み'],
+    ])
+    summarySheet.mergeCells('A1:B1')
+    summarySheet.columns = [{ width: 28 }, { width: 36 }]
+    summarySheet.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF111827' } }
+    ;[7, 14].forEach((rowNumber) => {
+      summarySheet.getRow(rowNumber).eachCell((cell) => {
+        cell.fill = headerFill
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        cell.border = thinBorder
+        cell.alignment = { vertical: 'middle', horizontal: 'center' }
+      })
+    })
+    summarySheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell, colNumber) => {
+        cell.border = thinBorder
+        if (rowNumber !== 7 && rowNumber !== 14) {
+          cell.alignment = { vertical: 'middle', horizontal: colNumber === 2 && typeof cell.value === 'number' ? 'right' : 'left', wrapText: true }
+        }
+      })
+    })
+
+    const dailySheet = workbook.addWorksheet('日別データ', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    })
+    dailySheet.addRow([
+      '日付',
+      '投稿日',
+      '物件番号',
+      '物件名',
+      '再生数',
+      'プロフィール表示',
+      'いいね',
+      'コメント',
+      'シェア',
+      'フォロワー数',
+      'フォロワー増減',
+      '見解',
+    ])
+    tiktokInsightDailyRowsWithPosts.forEach((row) => {
+      dailySheet.addRow([
+        row.dateLabel,
+        row.postDateLabel,
+        row.propertyNumbers.join('\n'),
+        row.propertyNames.join('\n'),
+        row.videoViews,
+        row.profileViews,
+        row.likes,
+        row.comments,
+        row.shares,
+        row.followers,
+        row.followerDiff,
+        row.insightText,
+      ])
+    })
+    dailySheet.columns = [
+      { width: 12 },
+      { width: 12 },
+      { width: 18 },
+      { width: 28 },
+      { width: 12 },
+      { width: 16 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+      { width: 14 },
+      { width: 14 },
+      { width: 46 },
+    ]
+    dailySheet.getRow(1).eachCell((cell) => {
+      cell.fill = headerFill
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.border = thinBorder
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    })
+    dailySheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell, colNumber) => {
+        cell.border = thinBorder
+        if (rowNumber > 1) {
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: colNumber >= 5 && colNumber <= 11 ? 'right' : 'left',
+            wrapText: colNumber === 3 || colNumber === 4 || colNumber === 12,
+          }
+        }
+      })
+    })
+
+    const genderSheet = workbook.addWorksheet('性別')
+    genderSheet.addRow(['性別', '割合(%)'])
+    tiktokInsightGenderRows.forEach((row) => {
+      genderSheet.addRow([getTiktokInsightGenderLabel(row.label), Math.round(row.distribution * 1000) / 10])
+    })
+    genderSheet.columns = [{ width: 18 }, { width: 14 }]
+    genderSheet.getRow(1).eachCell((cell) => {
+      cell.fill = subHeaderFill
+      cell.font = { bold: true }
+      cell.border = thinBorder
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    })
+    genderSheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell, colNumber) => {
+        cell.border = thinBorder
+        if (rowNumber > 1) cell.alignment = { vertical: 'middle', horizontal: colNumber === 2 ? 'right' : 'left' }
+      })
+    })
+
+    const territorySheet = workbook.addWorksheet('国・地域')
+    territorySheet.addRow(['国・地域', '割合(%)'])
+    tiktokInsightTerritoryRows.forEach((row) => {
+      territorySheet.addRow([getTiktokInsightCountryLabel(row.label), Math.round(row.distribution * 1000) / 10])
+    })
+    territorySheet.columns = [{ width: 24 }, { width: 14 }]
+    territorySheet.getRow(1).eachCell((cell) => {
+      cell.fill = subHeaderFill
+      cell.font = { bold: true }
+      cell.border = thinBorder
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    })
+    territorySheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell, colNumber) => {
+        cell.border = thinBorder
+        if (rowNumber > 1) cell.alignment = { vertical: 'middle', horizontal: colNumber === 2 ? 'right' : 'left' }
+      })
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `TikTok分析_Gemini資料用_${safePeriod}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setTiktokInsightMessage('TikTok分析をExcelで出力しました。')
+    setTiktokInsightMessageType('success')
   }
 
   async function fetchTiktokInsightPostProperties(startDate: string, endDate: string) {
@@ -7637,6 +7827,14 @@ function App() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => void exportTiktokInsightExcel()}
+                          disabled={tiktokInsightDailyRowsWithPosts.length === 0}
+                          title={tiktokInsightDailyRowsWithPosts.length === 0 ? 'CSVを読み込むと出力できます' : '画面のTikTok分析をExcelで出力'}
+                        >
+                          Excel出力
+                        </button>
+                        <button
+                          type="button"
                           className={tiktokInsightViewMode === 'cumulative' ? 'active' : ''}
                           onClick={() => {
                             setTiktokInsightViewMode('cumulative')
@@ -10613,7 +10811,7 @@ function App() {
                 <label className="form-label">送客先店舗
                   <select value={hankyoForm.store} onChange={(e) => setHankyoForm({ ...hankyoForm, store: e.target.value })} required>
                     <option value="">{hankyoStorePlaceholder}</option>
-                    {hankyoStores.map((s) => <option key={s}>{s}</option>)}
+                    {hankyoNewEntryStores.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </label>
                 <label className="form-label">希望エリア
