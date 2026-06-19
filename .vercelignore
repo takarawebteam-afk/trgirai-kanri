@@ -1,0 +1,10 @@
+.env
+.env.*
+.claude/
+scratch/
+supabase/.temp/
+codex_prompt*.md
+codex_sns_property.md
+CLAUDE.md
+AGENTS.md
+手動
