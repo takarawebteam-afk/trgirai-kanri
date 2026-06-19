@@ -846,6 +846,16 @@ function getWeekdayLabel(dateText: string) {
   return ['日', '月', '火', '水', '木', '金', '土'][date.getDay()]
 }
 
+function compareScheduledPostDateEmptyLast(a: ProductionRecord, b: ProductionRecord) {
+  const dateA = a.scheduled_post_date.trim()
+  const dateB = b.scheduled_post_date.trim()
+
+  if (dateA && dateB) return dateA.localeCompare(dateB)
+  if (dateA) return -1
+  if (dateB) return 1
+  return 0
+}
+
 function toRegisteredLabel(value: boolean) {
   return value ? '登録済' : ''
 }
@@ -1095,7 +1105,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         media,
         records: records
           .filter((record) => getMediaDisplayName(record.media) === media)
-          .sort((a, b) => (a.scheduled_post_date || '').localeCompare(b.scheduled_post_date || '')),
+          .sort(compareScheduledPostDateEmptyLast),
       }))
       .filter(({ media, records: mediaRecords }) => mediaRecords.length > 0 || ALWAYS_SHOW_MEDIA.has(media))
   }, [records])
@@ -1104,7 +1114,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     () =>
       records
         .filter((record) => isTikTokMedia(record.media))
-        .sort((a, b) => (a.scheduled_post_date || '').localeCompare(b.scheduled_post_date || '')),
+        .sort(compareScheduledPostDateEmptyLast),
     [records],
   )
 
