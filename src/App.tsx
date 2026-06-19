@@ -36,7 +36,7 @@ type JobType = '正社員' | 'パート'
 type TaskItemStatus = '未着手' | '進行中' | '完了'
 type TaskItemRecurrence = 'none' | 'monthly'
 type RecurringDateRule = 'same_day' | 'month_end'
-type PageKey = 'dashboard' | 'analysis' | 'tasks' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'dm' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
+type PageKey = 'dashboard' | 'analysis' | 'tasks' | 'recruitment' | 'taskmanagement' | 'members' | 'hankyo' | 'manuals' | 'stock' | 'busho' | 'jishashukyaku' | 'progress' | 'taskreport' | 'snsproperty'
 
 type StockRecord = {
   id: string
@@ -212,16 +212,6 @@ type HankyoRecord = {
   confirmed?: boolean
   created_at?: string
   updated_at?: string
-}
-
-type DMRecord = {
-  id: string
-  date: string
-  account: string
-  sns: string
-  area: string
-  property_number: string
-  created_at?: string
 }
 
 type SnsPropertyPlatform =
@@ -490,7 +480,6 @@ const TAB_ITEMS: { key: PageKey; label: string }[] = [
   { key: 'taskmanagement', label: 'タスク管理' },
   { key: 'recruitment', label: '採用管理' },
   { key: 'hankyo', label: '反響管理' },
-  { key: 'dm', label: 'DM管理' },
   { key: 'jishashukyaku', label: '自社集客売上' },
   { key: 'members', label: '当日業務管理' },
   { key: 'taskreport', label: '業務棚卸し' },
@@ -548,10 +537,6 @@ const taskStatuses: TaskStatus[] = ['未実施', '作業中', '完了']
 const taskItemStatuses: TaskItemStatus[] = ['未着手', '進行中', '完了']
 const priorityOptions: Priority[] = ['高', '中', '低']
 const assigneeOptions = ['泉', '坂本', '吉田', '新居']
-
-// DM管理 マスターデータ
-const dmAccounts = ['Karilun', '京阪Karilun', '西宮Karilun', '近鉄八尾店', '近大一人暮らし', '関学一人暮らし']
-const dmSnsList = ['TikTok', 'Instagram', 'Threads', 'YouTube']
 
 // 反響管理 マスターデータ
 const hankyoAccounts = ['Karilun', '西宮Karilun', '京阪Karilun', '近大', '関学', '外大', '摂南', '大商', '大経', '武庫女', '学生ポータル', '八尾', '売買', '採用', '管理', '店舗']
@@ -1306,16 +1291,6 @@ const defaultHankyoForm: Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'> 
   note: '',
 }
 
-const DM_PAGE_SIZE = 20
-
-const defaultDmForm: Omit<DMRecord, 'id' | 'created_at'> = {
-  date: new Date().toISOString().split('T')[0],
-  account: 'Karilun',
-  sns: 'TikTok',
-  area: '',
-  property_number: '',
-}
-
 const defaultTiktokPropertyForm: Omit<TiktokPropertyRecord, 'id' | 'created_at'> = {
   memo: '', wp_registered: '', aos_registered: '', post_date: '', property_number: '',
   floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
@@ -1898,12 +1873,6 @@ function SnsPropertyHeader({
 
 const defaultStockForm = { deadline: '', required_count: 1, label: '', note: '', achieved_count: 0 }
 
-const DM_ACCOUNT_KARILUN = dmAccounts[0]
-const DM_ACCOUNT_KEIHAN = dmAccounts[1]
-const DM_ACCOUNT_NISHINOMIYA = dmAccounts[2]
-const DM_ACCOUNT_YAO = dmAccounts[3]
-const DM_ACCOUNT_KINDAI = dmAccounts[4]
-const DM_ACCOUNT_KANGAKU = dmAccounts[5]
 const MASTER_EMAIL = 'trg.yshini@gmail.com'
 const DEFAULT_ALLOWED_EMAILS = [
   MASTER_EMAIL,
@@ -1931,35 +1900,6 @@ function formatDashboardScheduleDate(dateText: string, startTime?: string | null
   const weekdays = ['日', '月', '火', '水', '木', '金', '土']
   const baseText = `${target.getMonth() + 1}/${target.getDate()}(${weekdays[target.getDay()]})`
   return startTime ? `${baseText} ${startTime}` : baseText
-}
-
-type DmAreaLookup =
-  | { mode: 'fixed'; area: string }
-  | { mode: 'sheet'; sheetName: string }
-  | { mode: 'blank' }
-  | { mode: 'unknown' }
-
-function getDmAreaLookup(account: string, propertyNumber: string): DmAreaLookup {
-  const normalizedPropertyNumber = propertyNumber.trim().toUpperCase()
-
-  if (account === DM_ACCOUNT_NISHINOMIYA) return { mode: 'fixed', area: '西宮市' }
-  if (account === DM_ACCOUNT_YAO) return { mode: 'fixed', area: '八尾市' }
-  if (account === DM_ACCOUNT_KINDAI) return { mode: 'fixed', area: '近大近く' }
-  if (account === DM_ACCOUNT_KANGAKU) return { mode: 'fixed', area: '関学近く' }
-
-  if (account === DM_ACCOUNT_KEIHAN) {
-    return { mode: 'sheet', sheetName: '京阪' }
-  }
-
-  if (account === DM_ACCOUNT_KARILUN) {
-    const prefix = normalizedPropertyNumber.charAt(0)
-    if (prefix === 'K') return { mode: 'sheet', sheetName: 'TikTok(K000)' }
-    if (prefix === 'G') return { mode: 'sheet', sheetName: 'INSUTA(G000)' }
-    if (prefix === 'R' || prefix === 'Y') return { mode: 'blank' }
-    return { mode: 'unknown' }
-  }
-
-  return { mode: 'unknown' }
 }
 
 const currency = new Intl.NumberFormat('ja-JP', {
@@ -2291,15 +2231,6 @@ function App() {
   const [checkedHankyoIds, setCheckedHankyoIds] = useState<Set<string>>(new Set())
   const [showModal, setShowModal] = useState(false)
 
-  // DM管理
-  const [dmRecords, setDmRecords] = useState<DMRecord[]>([])
-  const [dmForm, setDmForm] = useState(defaultDmForm)
-  const [dmInlineId, setDmInlineId] = useState<string | null>(null)
-  const [dmInlineForm, setDmInlineForm] = useState<Omit<DMRecord, 'id' | 'created_at'>>(defaultDmForm)
-  const [dmMonthFilter, setDmMonthFilter] = useState('all')
-  const [dmAccountFilter, setDmAccountFilter] = useState('all')
-  const [dmPage, setDmPage] = useState(1)
-  const [dmAreaLoading, setDmAreaLoading] = useState(false)
   const [activeSnsPropertyPlatform, setActiveSnsPropertyPlatform] = useState<SnsPropertyPlatform>('sokanri')
   const [snsPropertyRealtimeReloadKey, setSnsPropertyRealtimeReloadKey] = useState(0)
   const [tiktokProperties, setTiktokProperties] = useState<TiktokPropertyRecord[]>([])
@@ -3828,11 +3759,6 @@ function App() {
       const confirmedIds = new Set<string>((data as HankyoRecord[]).filter(r => r.confirmed).map(r => r.id))
       setCheckedHankyoIds(confirmedIds)
     }
-  }
-
-  async function fetchDm() {
-    const { data } = await supabase.from('dm').select('*').order('date', { ascending: false }).order('created_at', { ascending: false })
-    if (data) setDmRecords(data as DMRecord[])
   }
 
   async function fetchSnsPropertyPage<T extends { property_number: string; created_at?: string }>(
@@ -5563,7 +5489,6 @@ function App() {
     fetchTaskItems()
     fetchMembers()
     fetchHankyo()
-    fetchDm()
     fetchStock()
     fetchTiktokProgressForStock()
     fetchBusho()
@@ -5576,7 +5501,6 @@ function App() {
     void fetchTiktokInsightMonths()
 
     const debouncedFetchHankyo = createRealtimeDebouncedHandler(() => { void fetchHankyo() })
-    const debouncedFetchDm = createRealtimeDebouncedHandler(() => { void fetchDm() })
     const debouncedFetchJishaShukyaku = createRealtimeDebouncedHandler(() => { void fetchJishaShukyaku() })
     const debouncedFetchBusho = createRealtimeDebouncedHandler(() => { void fetchBusho() })
     const debouncedFetchMembers = createRealtimeDebouncedHandler(() => { void fetchMembers() })
@@ -5595,7 +5519,6 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'analysis_sessions' }, () => { void fetchAnalysisSessions() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tiktok_insight_months' }, () => { void fetchTiktokInsightMonths() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hankyo' }, debouncedFetchHankyo)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm' }, debouncedFetchDm)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jisha_shukyaku' }, debouncedFetchJishaShukyaku)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busho_schedules' }, debouncedFetchBusho)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, debouncedFetchMembers)
@@ -6250,63 +6173,6 @@ function App() {
     fetchMembers()
   }
 
-  // ===== Google Sheets からエリアを取得 =====
-  async function fetchAreaFromSheets(account: string, propertyNumber: string): Promise<string> {
-    const normalizedPropertyNumber = propertyNumber.trim()
-    if (!normalizedPropertyNumber) return ''
-
-    const lookup = getDmAreaLookup(account, normalizedPropertyNumber)
-
-    if (lookup.mode === 'fixed') return lookup.area
-    if (lookup.mode === 'blank') return ''
-    if (lookup.mode === 'unknown') return '\u4e0d\u660e'
-
-    try {
-      const params = new URLSearchParams({
-        sheetName: lookup.sheetName,
-        propertyNumber: normalizedPropertyNumber,
-      })
-      const response = await fetch(`/api/dm-area?${params.toString()}`)
-      if (!response.ok) return '\u4e0d\u660e'
-      const data = await response.json() as { area?: string }
-      return (data.area || '').trim() || '\u4e0d\u660e'
-    } catch {
-      return '\u4e0d\u660e'
-    }
-  }
-
-  // ===== DM管理ハンドラー =====
-  const handleDmSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    await supabase.from('dm').insert({ ...dmForm, id: crypto.randomUUID() })
-    setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] })
-    setDmPage(1)
-    fetchDm()
-  }
-
-  const handleDmAccountChange = (account: string) => {
-    setDmForm((current) => ({ ...current, account, area: '' }))
-  }
-
-
-  const startDmInline = (r: DMRecord) => {
-    setDmInlineId(r.id)
-    setDmInlineForm({
-      date: r.date || '',
-      account: r.account || '',
-      sns: r.sns || '',
-      area: r.area || '',
-      property_number: r.property_number || '',
-    })
-  }
-
-  const saveDmInline = async () => {
-    if (!dmInlineId) return
-    await supabase.from('dm').update(dmInlineForm).eq('id', dmInlineId)
-    setDmInlineId(null)
-    fetchDm()
-  }
-
   async function getNextSnsPropertyNumber(platform: SnsPropertyPlatform) {
     if (platform === 'recruitment') {
       const { data, error } = await supabase
@@ -6708,38 +6574,6 @@ function App() {
     setStockCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  useEffect(() => {
-    const propertyNumber = dmForm.property_number.trim()
-
-    if (!propertyNumber) {
-      setDmAreaLoading(false)
-      setDmForm((current) => (current.area ? { ...current, area: '' } : current))
-      return
-    }
-
-    let cancelled = false
-    setDmAreaLoading(true)
-
-    const timer = window.setTimeout(async () => {
-      try {
-        const area = await fetchAreaFromSheets(dmForm.account, propertyNumber)
-        if (!cancelled) {
-          setDmForm((current) => {
-            if (current.property_number.trim() !== propertyNumber || current.account !== dmForm.account) return current
-            return { ...current, area }
-          })
-        }
-      } finally {
-        if (!cancelled) setDmAreaLoading(false)
-      }
-    }, 400)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [dmForm.account, dmForm.property_number])
-
   // ストックカレンダーの月が変わったら天気を取得
   useEffect(() => {
     if (hankyoOpenFilter === null) return
@@ -6854,18 +6688,6 @@ function App() {
     })
     setShowModal(true)
   }
-
-  // DM管理 フィルタリング & ページネーション
-  const filteredDm = dmRecords.filter((r) => {
-    if (dmMonthFilter !== 'all' && r.date) {
-      const m = new Date(r.date).getMonth() + 1
-      if (String(m) !== dmMonthFilter) return false
-    }
-    if (dmAccountFilter !== 'all' && r.account !== dmAccountFilter) return false
-    return true
-  })
-  const dmTotalPages = Math.max(1, Math.ceil(filteredDm.length / DM_PAGE_SIZE))
-  const paginatedDm = filteredDm.slice((dmPage - 1) * DM_PAGE_SIZE, dmPage * DM_PAGE_SIZE)
 
   // 反響管理 フィルタリング & ページネーション
   const filteredHankyo = hankyoRecords.filter((r) => {
@@ -9436,116 +9258,6 @@ function App() {
           </>
         )}
 
-        {/* ===== DM管理 ===== */}
-        {activePage === 'dm' && (
-          <>
-            <section className="panel table-panel">
-              <div className="panel-heading">
-                <div><h2>DM一覧</h2><p>全{formatInteger(filteredDm.length)}件 / {formatInteger(dmRecords.length)}件中</p></div>
-              </div>
-
-              {/* フィルター */}
-              <div className="hankyo-toolbar">
-                <select value={dmMonthFilter} onChange={(e) => { setDmMonthFilter(e.target.value); setDmPage(1) }}>
-                  <option value="all">全月</option>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={String(m)}>{m}月</option>
-                  ))}
-                </select>
-                <select value={dmAccountFilter} onChange={(e) => { setDmAccountFilter(e.target.value); setDmPage(1) }}>
-                  <option value="all">全アカウント</option>
-                  {dmAccounts.map((a) => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-
-              <div className="table-wrap">
-                <table className="compact-list-table">
-                  <thead>
-                    <tr>
-                      <th>日付</th>
-                      <th>アカウント名</th>
-                      <th>SNS</th>
-                      <th>エリア</th>
-                      <th>反響物件番号</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedDm.length === 0 && (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
-                    )}
-                    {paginatedDm.map((r) => {
-                      const isEditing = dmInlineId === r.id
-                      const f = dmInlineForm
-                      return (
-                        <tr
-                          key={r.id}
-                          className={isEditing ? 'row-editing' : 'row-hoverable'}
-                          onClick={() => { if (!isEditing) startDmInline(r) }}
-                        >
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" type="date" value={f.date} onChange={(e) => setDmInlineForm({ ...f, date: e.target.value })} />
-                              : r.date}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.account} onChange={(e) => setDmInlineForm({ ...f, account: e.target.value })}>{dmAccounts.map((a) => <option key={a}>{a}</option>)}</select>
-                              : r.account}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.sns} onChange={(e) => setDmInlineForm({ ...f, sns: e.target.value })}>{dmSnsList.map((s) => <option key={s}>{s}</option>)}</select>
-                              : r.sns}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.area} onChange={(e) => setDmInlineForm({ ...f, area: e.target.value })} />
-                              : <span className="cell-truncate" title={r.area}>{r.area}</span>}
-                          </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.property_number} onChange={(e) => setDmInlineForm({ ...f, property_number: e.target.value })} />
-                              : r.property_number}
-                          </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <div className="row-actions">
-                              {isEditing ? (
-                                <>
-                                  <button className="primary" onClick={saveDmInline}>保存</button>
-                                  <button className="secondary" onClick={() => setDmInlineId(null)}>×</button>
-                                </>
-                              ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('dm', r.id, fetchDm, 'このDM記録を本当に削除しますか？')}>削除</button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* ページネーション */}
-              {dmTotalPages > 1 && (
-                <div className="hankyo-pagination">
-                  <button onClick={() => setDmPage(1)} disabled={dmPage === 1}>«</button>
-                  <button onClick={() => setDmPage(p => Math.max(1, p - 1))} disabled={dmPage === 1}>‹</button>
-                  {Array.from({ length: dmTotalPages }, (_, i) => i + 1)
-                    .filter((p) => Math.abs(p - dmPage) <= 2)
-                    .map((p) => (
-                      <button key={p} className={p === dmPage ? 'active' : ''} onClick={() => setDmPage(p)}>{p}</button>
-                    ))}
-                  <button onClick={() => setDmPage(p => Math.min(dmTotalPages, p + 1))} disabled={dmPage === dmTotalPages}>›</button>
-                  <button onClick={() => setDmPage(dmTotalPages)} disabled={dmPage === dmTotalPages}>»</button>
-                  <span className="hankyo-page-info">{formatInteger(dmPage)} / {formatInteger(dmTotalPages)}ページ</span>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-
         {/* ===== メンバー ===== */}
         {activePage === 'members' && (
           <section className="members-page">
@@ -10585,7 +10297,6 @@ function App() {
                 {activePage === 'taskmanagement' && 'タスクを追加'}
                 {activePage === 'recruitment' && '採用データを追加'}
                 {activePage === 'hankyo' && '反響を追加'}
-                {activePage === 'dm' && 'DMを追加'}
                 {activePage === 'stock' && 'ストックを追加'}
                 {activePage === 'busho' && (editingBushoId ? '予定を編集' : '予定を追加')}
               </h2>
@@ -10823,46 +10534,6 @@ function App() {
                 <div className="form-actions">
                   <button type="submit" className="primary">追加する</button>
                   <button type="button" className="secondary" onClick={() => { setShowModal(false); setHankyoForm({ ...defaultHankyoForm, inquiry_date: new Date().toISOString().split('T')[0] }) }}>キャンセル</button>
-                </div>
-              </form>
-            )}
-
-            {/* DM管理フォーム */}
-            {activePage === 'dm' && (
-              <form className="data-form" onSubmit={(e) => { handleDmSubmit(e); setShowModal(false) }}>
-                <label className="form-label">日付
-                  <input type="date" value={dmForm.date} onChange={(e) => setDmForm({ ...dmForm, date: e.target.value })} required />
-                </label>
-                <div className="form-label">アカウント名
-                  <div className="radio-group">
-                    {dmAccounts.map((a) => (
-                      <label key={a} className="radio-item">
-                        <input type="radio" name="dm-account" value={a} checked={dmForm.account === a} onChange={() => handleDmAccountChange(a)} />
-                        {a}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="form-label">SNS
-                  <div className="radio-group">
-                    {dmSnsList.map((s) => (
-                      <label key={s} className="radio-item">
-                        <input type="radio" name="dm-sns" value={s} checked={dmForm.sns === s} onChange={() => setDmForm({ ...dmForm, sns: s })} />
-                        {s}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <label className="form-label">反響物件番号
-                  <input placeholder="例: K001" value={dmForm.property_number} onChange={(e) => setDmForm({ ...dmForm, property_number: e.target.value })} />
-                </label>
-                <label className="form-label">エリア
-                  {dmAreaLoading && <span className="dm-area-loading">取得中…</span>}
-                  <input placeholder="物件番号入力で自動取得" value={dmForm.area} onChange={(e) => setDmForm({ ...dmForm, area: e.target.value })} />
-                </label>
-                <div className="form-actions">
-                  <button type="submit" className="primary">追加する</button>
-                  <button type="button" className="secondary" onClick={() => { setShowModal(false); setDmForm({ ...defaultDmForm, date: new Date().toISOString().split('T')[0] }) }}>キャンセル</button>
                 </div>
               </form>
             )}

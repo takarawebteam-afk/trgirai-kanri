@@ -15,10 +15,6 @@ CREATE POLICY "anon_all" ON public.busho_schedules FOR ALL TO anon USING (true) 
 ALTER TABLE public.checked_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_all" ON public.checked_events FOR ALL TO anon USING (true) WITH CHECK (true);
 
--- dm
-ALTER TABLE public.dm ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anon_all" ON public.dm FOR ALL TO anon USING (true) WITH CHECK (true);
-
 -- hankyo
 ALTER TABLE public.hankyo ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_all" ON public.hankyo FOR ALL TO anon USING (true) WITH CHECK (true);

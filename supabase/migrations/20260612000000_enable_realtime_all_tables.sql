@@ -3,7 +3,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'hankyo','dm','jisha_shukyaku','busho_schedules','members','stock','task_items',
+    'hankyo','jisha_shukyaku','busho_schedules','members','stock','task_items',
     'production_records','analysis_sessions','analysis_tiktok_metrics','analysis_insta_metrics',
     'analysis_threads_metrics','analysis_youtube_metrics','tiktok_insight_months'
   ] loop
