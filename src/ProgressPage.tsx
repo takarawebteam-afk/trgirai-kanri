@@ -1421,7 +1421,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             property_number: await getNextPropertyNumber(tableName),
             ...buildExtendedSnsPropertyData(record),
             ...(tableName === 'sns_tiktok_properties'
-              ? { aos_registered: record.aos_registered || '' }
+              ? { aos_registered: record.aos_registered || '', category: record.post_type || '' }
               : { category: record.post_type || '' }),
           }
 
@@ -2042,6 +2042,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: 74 }} />
           <col style={{ width: 200 }} />
           <col style={{ width: 74 }} />
           <col style={{ width: 296 }} />
@@ -2076,6 +2077,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             <th className="ptcol-group-1">素材保存</th>
             <th className="ptcol-group-1">撮影期日</th>
             <th className="ptcol-group-1">投稿予定日</th>
+            <th className="ptcol-group-1">種別</th>
             <th className="ptcol-group-2">物件名</th>
             <th className="ptcol-group-2">号室</th>
             <th className="ptcol-group-3 progress-col-memo-wide">メモ</th>
@@ -2112,6 +2114,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
               <td className="ptcell-group-1">{renderDateCell(record, 'material_saved')}</td>
               <td className="ptcell-group-1">{renderShootingPeriodCell(record)}</td>
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
+              <td className="ptcell-group-1">{renderPostTypeCell(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
               <td className="ptcell-group-3 progress-col-memo-wide">{renderTextCell(record, 'memo', 'メモ')}</td>

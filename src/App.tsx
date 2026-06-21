@@ -258,6 +258,7 @@ type TiktokPropertyRecord = {
   memo: string
   wp_registered: string
   aos_registered: string
+  category: string
   post_date: string
   property_number: string
   floor_plan: string
@@ -1292,7 +1293,7 @@ const defaultHankyoForm: Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'> 
 }
 
 const defaultTiktokPropertyForm: Omit<TiktokPropertyRecord, 'id' | 'created_at'> = {
-  memo: '', wp_registered: '', aos_registered: '', post_date: '', property_number: '',
+  memo: '', wp_registered: '', aos_registered: '', category: '', post_date: '', property_number: '',
   floor_plan: '', rent: '', area: '', nearest_station: '', document_url: '',
   property_name: '', room_number: '', address: '', acquisition_source: '', management_company: '', contact: ''
 }
@@ -6409,6 +6410,7 @@ function App() {
           {renderSnsPropertyCreateInput('メモ', 'memo', tiktokPropertyForm, setTiktokPropertyForm, { textarea: true })}
           {renderSnsPropertyCreateSelect('WP登録', 'wp_registered', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('wp_registered'))}
           {renderSnsPropertyCreateSelect('AOS登録', 'aos_registered', tiktokPropertyForm, setTiktokPropertyForm, getSnsPropertySelectOptions('aos_registered'))}
+          {renderSnsPropertyCreateSelect('種別', 'category', tiktokPropertyForm, setTiktokPropertyForm, [...SNS_PROPERTY_CATEGORY_OPTIONS])}
           {renderSnsPropertyCreateInput('投稿日', 'post_date', tiktokPropertyForm, setTiktokPropertyForm, { type: 'date' })}
           {renderSnsPropertyCreateInput('物件番号', 'property_number', tiktokPropertyForm, setTiktokPropertyForm)}
           {renderSnsPropertyCreateInput('間取り', 'floor_plan', tiktokPropertyForm, setTiktokPropertyForm)}
@@ -8615,6 +8617,7 @@ function App() {
                         <th className="sns-col-check">
                           <SnsPropertyHeader title="AOS登録" />
                         </th>
+                        <th className="sns-col-plan">種別</th>
                         <th className="sns-col-date">投稿日</th>
                         <th className="sns-col-code">物件番号</th><th className="sns-col-plan">間取り</th><th className="sns-col-rent">家賃</th><th className="sns-col-area">エリア</th>
                         <th className="sns-col-station">最寄り駅</th><th className="sns-col-link">資料</th><th className="sns-col-property-name">物件名</th><th className="sns-col-room">号室</th>
@@ -8631,6 +8634,7 @@ function App() {
                             <td className="sns-col-memo">{renderSnsMemoCell('sns_tiktok_properties', r.id, r.memo)}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.wp_registered, getSnsPropertySelectOptions('wp_registered'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'wp_registered', value, setTiktokProperties), () => openSnsPropertyOptionEditor('wp_registered', 'WP登録'))}</td>
                             <td className="sns-col-check">{renderSnsSelect(r.aos_registered, getSnsPropertySelectOptions('aos_registered'), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'aos_registered', value, setTiktokProperties), () => openSnsPropertyOptionEditor('aos_registered', 'AOS登録'))}</td>
+                            <td className="sns-col-plan">{renderSnsSelect(r.category, [...SNS_PROPERTY_CATEGORY_OPTIONS], (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'category', value, setTiktokProperties))}</td>
                             <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'post_date', value, setTiktokProperties), { type: 'date' })}</td>
                             <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'property_number', value, setTiktokProperties))}</td>
                             <td className="sns-col-plan">{renderSnsTextInput(`${r.id}:floor_plan`, r.floor_plan, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'floor_plan', value, setTiktokProperties))}</td>
