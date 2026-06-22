@@ -1388,6 +1388,14 @@ function getWeekdayLabel(dateText: string) {
   return DAY_LABELS[date.getDay()]
 }
 
+function formatLocalDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 const storeSnsPropertyPlatforms: StoreSnsPropertyPlatform[] = [
   'keihan-karilun',
   'nishinomiya-karilun',
@@ -1623,17 +1631,13 @@ function normalizeSnsPropertyPostDate(postDate: string | null | undefined, prope
   const isoDateMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (isoDateMatch) {
     const [, year, month, day] = isoDateMatch
-    const storedYear = Number(year)
-    const fixedYear = propertyYear && storedYear < propertyYear ? propertyYear : storedYear
-    return `${fixedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
   const slashDateMatch = rawDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
   if (slashDateMatch) {
     const [, year, month, day] = slashDateMatch
-    const storedYear = Number(year)
-    const fixedYear = propertyYear && storedYear < propertyYear ? propertyYear : storedYear
-    return `${fixedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
   }
 
   const normalized = rawDate
@@ -3945,10 +3949,10 @@ function App() {
     setSokanriLoading(true)
     const base = new Date()
     base.setDate(base.getDate() + sokanriWeekOffset * 7)
-    const todayStr = base.toISOString().slice(0, 10)
+    const todayStr = formatLocalDateKey(base)
     const end = new Date(base)
     end.setDate(end.getDate() + 6)
-    const endStr = end.toISOString().slice(0, 10)
+    const endStr = formatLocalDateKey(end)
 
     const { data: rules } = await supabase.from('sns_posting_rules').select('*')
     setSnsPostingRules((rules || []) as SnsPostingRule[])
@@ -4086,7 +4090,7 @@ function App() {
 
   function getSokanriCellStatus(apKey: string, date: Date): '✅' | '⚠️' | '─' {
     const dayOfWeek = date.getDay()
-    const dateStr = date.toISOString().slice(0, 10)
+    const dateStr = formatLocalDateKey(date)
 
     const hasWeekdayRule = snsPostingRules.some(
       (rule) => rule.account_platform_key === apKey && rule.rule_type === 'weekday' && rule.day_of_week === dayOfWeek,
