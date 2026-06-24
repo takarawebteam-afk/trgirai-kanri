@@ -391,6 +391,119 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   flex-wrap: nowrap;
 }
 
+.tasks-sheet-table {
+  min-width: 1540px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tasks-sheet-table th:nth-child(1) { width: 96px; }
+.tasks-sheet-table th:nth-child(2) { width: 150px; }
+.tasks-sheet-table th:nth-child(3) { width: 86px; }
+.tasks-sheet-table th:nth-child(4) { width: 180px; }
+.tasks-sheet-table th:nth-child(5) { width: 430px; }
+.tasks-sheet-table th:nth-child(6) { width: 70px; }
+.tasks-sheet-table th:nth-child(7) { width: 118px; }
+.tasks-sheet-table th:nth-child(8) { width: 70px; }
+.tasks-sheet-table th:nth-child(9) { width: 92px; }
+.tasks-sheet-table th:nth-child(10) { width: 130px; }
+.tasks-sheet-table th:nth-child(11) { width: 180px; }
+.tasks-sheet-table th:nth-child(12) { width: 84px; }
+
+.tasks-sheet-table .sheet-row {
+  cursor: default;
+}
+
+.tasks-sheet-table .sheet-row:hover td:not(:last-child) {
+  background: #f3f8ff;
+}
+
+.tasks-sheet-table .sheet-cell {
+  position: relative;
+  padding: 0;
+  cursor: cell;
+}
+
+.tasks-sheet-table .sheet-cell:hover {
+  box-shadow: inset 0 0 0 1px #93c5fd;
+}
+
+.tasks-sheet-table .sheet-cell-editing {
+  z-index: 4;
+  background: var(--white) !important;
+  box-shadow: inset 0 0 0 2px var(--blue-600);
+}
+
+.tasks-sheet-table .sheet-cell-value {
+  display: block;
+  min-height: 28px;
+  padding: 6px 8px 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.tasks-sheet-table .sheet-cell-input {
+  display: block;
+  width: 100%;
+  height: 28px;
+  min-width: 0;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 0;
+  background: var(--white);
+  color: var(--gray-900);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.tasks-sheet-table .sheet-cell-input[type="date"] {
+  padding-right: 3px;
+}
+
+.tasks-sheet-table select.sheet-cell-input {
+  cursor: pointer;
+}
+
+.tasks-sheet-table .sheet-status-cell {
+  padding: 3px 8px;
+  cursor: default;
+}
+
+.tasks-sheet-table .sheet-assignee-cell {
+  overflow: visible;
+}
+
+.tasks-sheet-table .sheet-assignee-editor {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 30;
+  width: 190px;
+  padding: 8px;
+  border: 1px solid var(--blue-300);
+  border-radius: 6px;
+  background: var(--white);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.tasks-sheet-table .sheet-assignee-options {
+  display: grid;
+  gap: 5px;
+}
+
+.tasks-sheet-table .sheet-assignee-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 8px;
+}
+
 /* ===== 分析ページ ===== */
 .analysis-subtabs {
   display: flex;

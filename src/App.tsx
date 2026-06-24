@@ -398,6 +398,8 @@ type Task = {
   note: string
 }
 
+type TaskEditableField = keyof Omit<Task, 'id'>
+
 type RecruitmentRecord = {
   id: string
   date: string
@@ -2193,6 +2195,7 @@ function App() {
 
   // インライン編集
   const [taskInlineId, setTaskInlineId] = useState<string | null>(null)
+  const [taskInlineField, setTaskInlineField] = useState<TaskEditableField | null>(null)
   const [taskInlineForm, setTaskInlineForm] = useState<Omit<Task, 'id'>>(defaultTaskForm)
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all')
   const [taskShowCompleted, setTaskShowCompleted] = useState(true)
@@ -6745,8 +6748,9 @@ function App() {
   }
 
   // インライン編集 開始
-  const startTaskInline = (task: Task) => {
+  const startTaskInline = (task: Task, field: TaskEditableField) => {
     setTaskInlineId(task.id)
+    setTaskInlineField(field)
     setTaskInlineForm({
       taskDate: task.taskDate || '',
       assignees: task.assignees || [],
@@ -6768,15 +6772,35 @@ function App() {
 
   // インライン編集 保存
   const saveTaskInline = async () => {
-    if (!taskInlineId) return
+    if (!taskInlineId || !taskInlineField) return
+    const inlineId = taskInlineId
+    const inlineField = taskInlineField
     let formToSave = { ...taskInlineForm }
+    const updateData = { [inlineField]: formToSave[inlineField] } as Partial<Task>
+    if (inlineField === 'savings') updateData.savings = Number(formToSave.savings) || 0
     // 継続案件を完了にした際、完了日が未設定なら今日をセット
     if (formToSave.taskType === '継続' && formToSave.status === '完了' && !formToSave.dueDate) {
       formToSave = { ...formToSave, dueDate: new Date().toISOString().split('T')[0] }
+      updateData.dueDate = formToSave.dueDate
     }
-    await supabase.from('tasks').update(normalizeTask(formToSave)).eq('id', taskInlineId)
     setTaskInlineId(null)
+    setTaskInlineField(null)
+    await supabase.from('tasks').update(updateData).eq('id', inlineId)
     fetchTasks()
+  }
+  const cancelTaskInline = () => {
+    setTaskInlineId(null)
+    setTaskInlineField(null)
+  }
+  const handleTaskCellKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.currentTarget.blur()
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelTaskInline()
+    }
   }
   const saveRecruitmentInline = async () => {
     if (!recruitmentInlineId) return
@@ -7969,7 +7993,7 @@ function App() {
                 </div>
               </div>
               <div className="table-wrap">
-                <table className="compact-list-table">
+                <table className="compact-list-table tasks-sheet-table">
                   <thead>
                     <tr>
                       <th>案件日</th><th>担当者</th><th>依頼部署</th><th>案件名</th><th>案件内容</th>
@@ -7981,81 +8005,98 @@ function App() {
                       <tr><td colSpan={12} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>該当する案件がありません</td></tr>
                     )}
                     {filteredAndSortedTasks.map((task) => {
-                      const isEditing = taskInlineId === task.id
                       const f = taskInlineForm
+                      const isCellEditing = (field: TaskEditableField) => taskInlineId === task.id && taskInlineField === field
+                      const startCellEdit = (field: TaskEditableField) => {
+                        if (!isCellEditing(field)) startTaskInline(task, field)
+                      }
+                      const cellClass = (field: TaskEditableField, extra = '') => (
+                        `sheet-cell ${isCellEditing(field) ? 'sheet-cell-editing' : ''} ${extra}`.trim()
+                      )
+
                       return (
-                        <tr
-                          key={task.id}
-                          className={isEditing ? 'row-editing' : 'row-hoverable'}
-                          onClick={() => { if (!isEditing) startTaskInline(task) }}
-                        >
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="date" value={f.taskDate} onChange={(e) => setTaskInlineForm({ ...f, taskDate: e.target.value })} /> : task.taskDate}
+                        <tr key={task.id} className="sheet-row">
+                          <td className={cellClass('taskDate')} onClick={() => startCellEdit('taskDate')}>
+                            {isCellEditing('taskDate')
+                              ? <input autoFocus className="sheet-cell-input" type="date" value={f.taskDate} onChange={(e) => setTaskInlineForm({ ...f, taskDate: e.target.value })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown} />
+                              : <span className="sheet-cell-value">{task.taskDate}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <div className="inline-checkbox-group">{assigneeOptions.map((a) => (
-                                  <label key={a} className="inline-checkbox-item">
-                                    <input type="checkbox" checked={f.assignees.includes(a)} onChange={(e) => {
-                                      const next = e.target.checked ? [...f.assignees, a] : f.assignees.filter((x) => x !== a)
-                                      setTaskInlineForm({ ...f, assignees: next })
-                                    }} />{a}
-                                  </label>
-                                ))}</div>
-                              : (task.assignees || []).join('・')}
+                          <td className={cellClass('assignees', 'sheet-assignee-cell')} onClick={() => startCellEdit('assignees')}>
+                            {isCellEditing('assignees') ? (
+                              <div className="sheet-assignee-editor" onClick={(e) => e.stopPropagation()}>
+                                <div className="sheet-assignee-options">
+                                  {assigneeOptions.map((a) => (
+                                    <label key={a} className="inline-checkbox-item">
+                                      <input type="checkbox" checked={f.assignees.includes(a)} onChange={(e) => {
+                                        const next = e.target.checked ? [...f.assignees, a] : f.assignees.filter((x) => x !== a)
+                                        setTaskInlineForm({ ...f, assignees: next })
+                                      }} />{a}
+                                    </label>
+                                  ))}
+                                </div>
+                                <div className="sheet-assignee-actions">
+                                  <button type="button" className="primary" onClick={() => { void saveTaskInline() }}>保存</button>
+                                  <button type="button" className="secondary" onClick={cancelTaskInline}>×</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="sheet-cell-value">{(task.assignees || []).join('・')}</span>
+                            )}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <select className="inline-select" value={f.department} onChange={(e) => setTaskInlineForm({ ...f, department: e.target.value as Department })}>{departments.map((d) => <option key={d}>{d}</option>)}</select> : task.department}
+                          <td className={cellClass('department')} onClick={() => startCellEdit('department')}>
+                            {isCellEditing('department')
+                              ? <select autoFocus className="sheet-cell-input" value={f.department} onChange={(e) => setTaskInlineForm({ ...f, department: e.target.value as Department })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown}>{departments.map((d) => <option key={d}>{d}</option>)}</select>
+                              : <span className="sheet-cell-value">{task.department}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.name} onChange={(e) => setTaskInlineForm({ ...f, name: e.target.value })} /> : task.name}
+                          <td className={cellClass('name')} onClick={() => startCellEdit('name')}>
+                            {isCellEditing('name')
+                              ? <input autoFocus className="sheet-cell-input" value={f.name} onChange={(e) => setTaskInlineForm({ ...f, name: e.target.value })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown} />
+                              : <span className="sheet-cell-value" title={task.name}>{task.name}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.content} onChange={(e) => setTaskInlineForm({ ...f, content: e.target.value })} /> : <span className="cell-truncate" title={task.content}>{task.content}</span>}
+                          <td className={cellClass('content', 'sheet-wide-cell')} onClick={() => startCellEdit('content')}>
+                            {isCellEditing('content')
+                              ? <input autoFocus className="sheet-cell-input" value={f.content} onChange={(e) => setTaskInlineForm({ ...f, content: e.target.value })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown} />
+                              : <span className="sheet-cell-value" title={task.content}>{task.content}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <select className="inline-select" value={f.taskType} onChange={(e) => setTaskInlineForm({ ...f, taskType: e.target.value as TaskType })}>{taskTypes.map((t) => <option key={t}>{t}</option>)}</select> : task.taskType}
+                          <td className={cellClass('taskType')} onClick={() => startCellEdit('taskType')}>
+                            {isCellEditing('taskType')
+                              ? <select autoFocus className="sheet-cell-input" value={f.taskType} onChange={(e) => setTaskInlineForm({ ...f, taskType: e.target.value as TaskType })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown}>{taskTypes.map((t) => <option key={t}>{t}</option>)}</select>
+                              : <span className="sheet-cell-value">{task.taskType}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="date" value={f.dueDate} onChange={(e) => setTaskInlineForm({ ...f, dueDate: e.target.value })} /> : task.dueDate}
+                          <td className={cellClass('dueDate')} onClick={() => startCellEdit('dueDate')}>
+                            {isCellEditing('dueDate')
+                              ? <input autoFocus className="sheet-cell-input" type="date" value={f.dueDate} onChange={(e) => setTaskInlineForm({ ...f, dueDate: e.target.value })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown} />
+                              : <span className="sheet-cell-value">{task.dueDate}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.priority} onChange={(e) => setTaskInlineForm({ ...f, priority: e.target.value as Priority })}>{priorityOptions.map((p) => <option key={p}>{p}</option>)}</select>
+                          <td className={cellClass('priority')} onClick={() => startCellEdit('priority')}>
+                            {isCellEditing('priority')
+                              ? <select autoFocus className="sheet-cell-input" value={f.priority} onChange={(e) => setTaskInlineForm({ ...f, priority: e.target.value as Priority })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown}>{priorityOptions.map((p) => <option key={p}>{p}</option>)}</select>
                               : <span className={`priority priority-${task.priority}`}>{task.priority}</span>}
                           </td>
-                          <td onClick={(e) => e.stopPropagation()}>
+                          <td className="sheet-cell sheet-status-cell" onClick={(e) => e.stopPropagation()}>
                             <select
-                              className={`status-select status-${isEditing ? f.status : task.status}`}
-                              value={isEditing ? f.status : task.status}
+                              className={`status-select status-${task.status}`}
+                              value={task.status}
                               onChange={async (e) => {
-                                const newStatus = e.target.value as TaskStatus
-                                if (isEditing) {
-                                  setTaskInlineForm({ ...f, status: newStatus })
-                                } else {
-                                  await updateTaskStatus(task.id, newStatus)
-                                }
+                                await updateTaskStatus(task.id, e.target.value as TaskStatus)
                               }}
                             >
                               {taskStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" type="number" value={f.savings} onChange={(e) => setTaskInlineForm({ ...f, savings: Number(e.target.value) })} /> : currency.format(task.savings)}
+                          <td className={cellClass('savings')} onClick={() => startCellEdit('savings')}>
+                            {isCellEditing('savings')
+                              ? <input autoFocus className="sheet-cell-input" type="number" value={f.savings} onChange={(e) => setTaskInlineForm({ ...f, savings: Number(e.target.value) })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown} />
+                              : <span className="sheet-cell-value">{currency.format(task.savings)}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing ? <input className="inline-input" value={f.note} onChange={(e) => setTaskInlineForm({ ...f, note: e.target.value })} /> : <span className="cell-truncate" title={task.note}>{task.note}</span>}
+                          <td className={cellClass('note', 'sheet-note-cell')} onClick={() => startCellEdit('note')}>
+                            {isCellEditing('note')
+                              ? <input autoFocus className="sheet-cell-input" value={f.note} onChange={(e) => setTaskInlineForm({ ...f, note: e.target.value })} onBlur={() => { void saveTaskInline() }} onKeyDown={handleTaskCellKeyDown} />
+                              : <span className="sheet-cell-value" title={task.note}>{task.note}</span>}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="row-actions">
-                              {isEditing ? (
-                                <>
-                                  <button className="primary" onClick={saveTaskInline}>保存</button>
-                                  <button className="secondary" onClick={() => setTaskInlineId(null)}>×</button>
-                                </>
-                              ) : (
-                                <button className="danger" onClick={() => confirmAndDeleteRecord('tasks', task.id, fetchTasks, 'この業務管理の項目を本当に削除しますか？')}>削除</button>
-                              )}
+                              <button className="danger" onClick={() => confirmAndDeleteRecord('tasks', task.id, fetchTasks, 'この案件を本当に削除しますか？')}>削除</button>
                             </div>
                           </td>
                         </tr>
