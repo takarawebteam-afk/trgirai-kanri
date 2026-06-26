@@ -3767,7 +3767,7 @@ function App() {
     const PAGE = 1000
     const all: HankyoRecord[] = []
     for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase.from('hankyo').select('*').order('inquiry_date', { ascending: false }).order('created_at', { ascending: false }).range(from, from + PAGE - 1)
+      const { data, error } = await supabase.from('hankyo').select('*').order('inquiry_date', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, from + PAGE - 1)
       if (error || !data || data.length === 0) break
       all.push(...(data as HankyoRecord[]))
       if (data.length < PAGE) break
