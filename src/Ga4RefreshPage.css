@@ -1,0 +1,49 @@
+.ga4-refresh-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f7fb;
+  color: #172033;
+}
+
+.ga4-refresh-panel {
+  width: min(520px, 100%);
+  padding: 28px;
+  border: 1px solid #d7e0ee;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 38px rgba(28, 42, 70, .12);
+}
+
+.ga4-refresh-panel h1 {
+  margin: 0 0 12px;
+  font-size: 24px;
+}
+
+.ga4-refresh-panel p {
+  margin: 0 0 18px;
+  line-height: 1.7;
+}
+
+.ga4-refresh-panel button {
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ga4-refresh-panel button:disabled {
+  background: #9badc7;
+  cursor: wait;
+}
+
+.ga4-refresh-status {
+  margin-top: 16px;
+  font-weight: 700;
+}
