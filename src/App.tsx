@@ -698,8 +698,11 @@ type TiktokInsightDbRow = {
   updated_at: string | null
 }
 
-const ANALYSIS_YEAR = 2026
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
+const ANALYSIS_YEARS = [2025, 2026] as const
+const ANALYSIS_TABLE_COLUMNS = ANALYSIS_YEARS.flatMap((year) =>
+  ANALYSIS_MONTHS.map((month) => ({ year, month })),
+)
 
 function getEmptyTiktokInsightFileStatus(): TiktokInsightFileStatus {
   return {
@@ -881,13 +884,21 @@ function getAnalysisMonthlyDiff(group: AnalysisMonthlyAccountGroup, monthIndex: 
   return getAnalysisMonthlyTotal(group, monthIndex) - getAnalysisMonthlyTotal(group, monthIndex - 1)
 }
 
-function buildAnalysisGroupsFromImportedRows(rows: AnalysisSessionImportRow[]) {
+function buildAnalysisGroupsFromImportedRows(
+  rows: Array<{ account: string; media: string; year: number; month: number; sessions: number }>,
+) {
   return ANALYSIS_MONTHLY_TABLE_GROUPS.map((group) => ({
     ...group,
     rows: group.rows.map((mediaRow) => ({
       ...mediaRow,
-      values: ANALYSIS_MONTHS.map((month) => (
-        rows.find((row) => row.account === group.account && row.media === mediaRow.media && row.month === month)?.sessions ?? 0
+      values: ANALYSIS_TABLE_COLUMNS.map(({ year, month }) => (
+        rows.find(
+          (row) =>
+            row.account === group.account &&
+            row.media === mediaRow.media &&
+            row.year === year &&
+            row.month === month,
+        )?.sessions ?? 0
       )),
     })),
   }))
@@ -3042,39 +3053,41 @@ function App() {
     setAnalysisImportMessageType('success')
 
     try {
-      const response = await fetch('/api/analytics-sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: 2026 }),
-      })
-      const data = await response.json() as {
-        ok?: boolean
-        message?: string
-        rows?: AnalysisSessionImportRow[]
-        fetchedAt?: string
+      const allRows: AnalysisSessionSavedRow[] = []
+      let lastFetchedAt = ''
+
+      for (const year of ANALYSIS_YEARS) {
+        const response = await fetch('/api/analytics-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year }),
+        })
+        const data = await response.json() as {
+          ok?: boolean
+          message?: string
+          rows?: AnalysisSessionImportRow[]
+          fetchedAt?: string
+        }
+
+        if (!response.ok || !data.ok || !data.rows) {
+          throw new Error(data.message || 'GA4から数字を取れませんでした。')
+        }
+
+        lastFetchedAt = data.fetchedAt || lastFetchedAt
+        for (const row of data.rows) {
+          allRows.push({ year, account: row.account, media: row.media, month: row.month, sessions: row.sessions })
+        }
       }
 
-      if (!response.ok || !data.ok || !data.rows) {
-        throw new Error(data.message || 'GA4から数字を取れませんでした。')
-      }
+      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(allRows))
 
-      const importedRows = data.rows || []
-      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(importedRows))
-
-      const rowsToSave: AnalysisSessionSavedRow[] = importedRows.map((row) => ({
-        year: ANALYSIS_YEAR,
-        account: row.account,
-        media: row.media,
-        month: row.month,
-        sessions: row.sessions,
-      }))
-      const { error } = await supabase.from('analysis_sessions').upsert(rowsToSave, {
+      const { error } = await supabase.from('analysis_sessions').upsert(allRows, {
         onConflict: 'year,account,media,month',
       })
       if (error) throw error
 
       setAnalysisImportMessageType('success')
-      setAnalysisImportMessage(`最終更新: ${new Date(data.fetchedAt || Date.now()).toLocaleString('ja-JP')}`)
+      setAnalysisImportMessage(`最終更新: ${new Date(lastFetchedAt || Date.now()).toLocaleString('ja-JP')}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'GA4取込に失敗しました。'
       setAnalysisImportMessageType('error')
@@ -3087,12 +3100,16 @@ function App() {
   async function fetchAnalysisSessions() {
     const { data, error } = await supabase
       .from('analysis_sessions')
-      .select('account, media, month, sessions')
-      .eq('year', ANALYSIS_YEAR)
+      .select('account, media, year, month, sessions')
+      .in('year', [...ANALYSIS_YEARS])
 
     if (error) return
     if (data && data.length > 0) {
-      setAnalysisTableGroups(buildAnalysisGroupsFromImportedRows(data as AnalysisSessionImportRow[]))
+      setAnalysisTableGroups(
+        buildAnalysisGroupsFromImportedRows(
+          data as Array<{ account: string; media: string; year: number; month: number; sessions: number }>,
+        ),
+      )
     }
   }
 
@@ -7099,8 +7116,8 @@ function App() {
                       <tr>
                         <th>アカウント</th>
                         <th>媒体</th>
-                        {ANALYSIS_MONTHS.map((month) => (
-                          <th key={month}>2026年{month}月</th>
+                        {ANALYSIS_TABLE_COLUMNS.map(({ year, month }) => (
+                          <th key={`${year}-${month}`}>{year}年{month}月</th>
                         ))}
                       </tr>
                     </thead>
@@ -7115,20 +7132,20 @@ function App() {
                                 </th>
                               )}
                               <th className="analysis-media-cell">{row.media}</th>
-                              {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                              {ANALYSIS_TABLE_COLUMNS.map((_, monthIndex) => (
                                 <td key={monthIndex}>{formatInteger(row.values[monthIndex] ?? 0)}</td>
                               ))}
                             </tr>
                           ))}
                           <tr className="analysis-total-row">
                             <th className="analysis-media-cell">計</th>
-                            {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                            {ANALYSIS_TABLE_COLUMNS.map((_, monthIndex) => (
                               <td key={monthIndex}>{formatInteger(getAnalysisMonthlyTotal(group, monthIndex))}</td>
                             ))}
                           </tr>
                           <tr className="analysis-diff-row">
                             <th className="analysis-media-cell">前月比</th>
-                            {ANALYSIS_MONTHS.map((_, monthIndex) => (
+                            {ANALYSIS_TABLE_COLUMNS.map((_, monthIndex) => (
                               <td key={monthIndex}>{formatInteger(getAnalysisMonthlyDiff(group, monthIndex))}</td>
                             ))}
                           </tr>
