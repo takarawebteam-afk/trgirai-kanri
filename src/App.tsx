@@ -399,6 +399,7 @@ type Task = {
 }
 
 type TaskEditableField = keyof Omit<Task, 'id'>
+type HankyoEditableField = keyof Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>
 
 type RecruitmentRecord = {
   id: string
@@ -2238,6 +2239,7 @@ function App() {
   const [hankyoRecords, setHankyoRecords] = useState<HankyoRecord[]>([])
   const [hankyoForm, setHankyoForm] = useState(defaultHankyoForm)
   const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
+  const [hankyoInlineField, setHankyoInlineField] = useState<HankyoEditableField | null>(null)
   const [hankyoInlineForm, setHankyoInlineForm] = useState<Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>>(defaultHankyoForm)
   const [hankyoSearch, setHankyoSearch] = useState('')
   const [hankyoYearFilters, setHankyoYearFilters] = useState<string[]>([String(new Date().getFullYear())])
@@ -6677,8 +6679,9 @@ function App() {
     setShowModal(false)
   }
 
-  const startHankyoInline = (r: HankyoRecord) => {
+  const startHankyoInline = (r: HankyoRecord, field: HankyoEditableField) => {
     setHankyoInlineId(r.id)
+    setHankyoInlineField(field)
     setHankyoInlineForm({
       inquiry_date: r.inquiry_date || '',
       account: r.account || '',
@@ -6695,22 +6698,35 @@ function App() {
   }
 
   const saveHankyoInline = async () => {
-    if (!hankyoInlineId) return
-    if (!hankyoInlineForm.store) {
-      window.alert('送客先店舗を選んでください')
-      return
-    }
-    const updateData = { ...hankyoInlineForm, updated_at: new Date().toISOString() }
-    const { error } = await supabase.from('hankyo').update(updateData).eq('id', hankyoInlineId)
+    if (!hankyoInlineId || !hankyoInlineField) return
+    const inlineId = hankyoInlineId
+    const inlineField = hankyoInlineField
+    const updateData = { [inlineField]: hankyoInlineForm[inlineField], updated_at: new Date().toISOString() } as Partial<HankyoRecord>
+    setHankyoInlineId(null)
+    setHankyoInlineField(null)
+    const { error } = await supabase.from('hankyo').update(updateData).eq('id', inlineId)
     if (error) {
       window.alert(`保存できませんでした: ${error.message}`)
       return
     }
     setHankyoRecords((records) => records.map((record) => (
-      record.id === hankyoInlineId ? { ...record, ...updateData } : record
+      record.id === inlineId ? { ...record, ...updateData } : record
     )))
+  }
+
+  const cancelHankyoInline = () => {
     setHankyoInlineId(null)
-    await fetchHankyo()
+    setHankyoInlineField(null)
+  }
+  const handleHankyoCellKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.currentTarget.blur()
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelHankyoInline()
+    }
   }
 
   const duplicateHankyo = (r: HankyoRecord) => {
@@ -9240,27 +9256,20 @@ function App() {
                       <tr><td colSpan={13} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray-400)' }}>データがありません</td></tr>
                     )}
                     {filteredHankyo.map((r) => {
-                      const isEditing = hankyoInlineId === r.id
                       const f = hankyoInlineForm
+                      const isCellEditing = (field: HankyoEditableField) => hankyoInlineId === r.id && hankyoInlineField === field
+                      const startCellEdit = (field: HankyoEditableField) => {
+                        if (!isCellEditing(field)) startHankyoInline(r, field)
+                      }
                       return (
                         <tr
                           key={r.id}
-                          className={isEditing ? 'row-editing' : (r.store === '対象外' || r.store === '重複') ? 'row-gray' : checkedHankyoIds.has(r.id) ? 'row-yellow' : 'row-hoverable'}
-                          onClick={() => { if (!isEditing) startHankyoInline(r) }}
+                          className={(r.store === '対象外' || r.store === '重複') ? 'row-gray' : checkedHankyoIds.has(r.id) ? 'row-yellow' : 'row-hoverable'}
                         >
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="row-actions">
-                              {isEditing ? (
-                                <>
-                                  <button type="button" className="primary" onClick={saveHankyoInline}>保存</button>
-                                  <button type="button" className="secondary" onClick={() => setHankyoInlineId(null)}>×</button>
-                                </>
-                              ) : (
-                                <>
-                                  <button type="button" className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
-                                  <button type="button" className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
-                                </>
-                              )}
+                              <button type="button" className="hankyo-dup-btn" onClick={() => duplicateHankyo(r)} title="このデータを複製">複製</button>
+                              <button type="button" className="danger" onClick={() => confirmAndDeleteRecord('hankyo', r.id, fetchHankyo, 'この反響記録を本当に削除しますか？')}>削除</button>
                             </div>
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
@@ -9276,59 +9285,59 @@ function App() {
                               }}
                             />
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" type="date" value={f.inquiry_date} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_date: e.target.value })} />
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('inquiry_date') }}>
+                            {isCellEditing('inquiry_date')
+                              ? <input autoFocus className="inline-input" type="date" value={f.inquiry_date} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_date: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown} />
                               : r.inquiry_date}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.customer_name} onChange={(e) => setHankyoInlineForm({ ...f, customer_name: e.target.value })} />
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('customer_name') }}>
+                            {isCellEditing('customer_name')
+                              ? <input autoFocus className="inline-input" value={f.customer_name} onChange={(e) => setHankyoInlineForm({ ...f, customer_name: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown} />
                               : r.customer_name}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.account} onChange={(e) => setHankyoInlineForm({ ...f, account: e.target.value })}>{hankyoAccounts.map((a) => <option key={a}>{a}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('account') }}>
+                            {isCellEditing('account')
+                              ? <select autoFocus className="inline-select" value={f.account} onChange={(e) => setHankyoInlineForm({ ...f, account: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}>{hankyoAccounts.map((a) => <option key={a}>{a}</option>)}</select>
                               : r.account}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.trigger} onChange={(e) => setHankyoInlineForm({ ...f, trigger: e.target.value })}>{hankyoTriggers.map((t) => <option key={t}>{t}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('trigger') }}>
+                            {isCellEditing('trigger')
+                              ? <select autoFocus className="inline-select" value={f.trigger} onChange={(e) => setHankyoInlineForm({ ...f, trigger: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}>{hankyoTriggers.map((t) => <option key={t}>{t}</option>)}</select>
                               : r.trigger}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.media} onChange={(e) => setHankyoInlineForm({ ...f, media: e.target.value })}>{hankyoMedias.map((m) => <option key={m}>{m}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('media') }}>
+                            {isCellEditing('media')
+                              ? <select autoFocus className="inline-select" value={f.media} onChange={(e) => setHankyoInlineForm({ ...f, media: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}>{hankyoMedias.map((m) => <option key={m}>{m}</option>)}</select>
                               : r.media}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.inquiry_type} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_type: e.target.value })}>{hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('inquiry_type') }}>
+                            {isCellEditing('inquiry_type')
+                              ? <select autoFocus className="inline-select" value={f.inquiry_type} onChange={(e) => setHankyoInlineForm({ ...f, inquiry_type: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}>{hankyoInquiryTypes.map((t) => <option key={t}>{t}</option>)}</select>
                               : r.inquiry_type}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.contact_method} onChange={(e) => setHankyoInlineForm({ ...f, contact_method: e.target.value })}>{hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('contact_method') }}>
+                            {isCellEditing('contact_method')
+                              ? <select autoFocus className="inline-select" value={f.contact_method} onChange={(e) => setHankyoInlineForm({ ...f, contact_method: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}>{hankyoContactMethods.map((c) => <option key={c}>{c}</option>)}</select>
                               : r.contact_method}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.move_in_timing} onChange={(e) => setHankyoInlineForm({ ...f, move_in_timing: e.target.value })}>{hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('move_in_timing') }}>
+                            {isCellEditing('move_in_timing')
+                              ? <select autoFocus className="inline-select" value={f.move_in_timing} onChange={(e) => setHankyoInlineForm({ ...f, move_in_timing: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}>{hankyoMoveInTimings.map((t) => <option key={t}>{t}</option>)}</select>
                               : r.move_in_timing}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <select className="inline-select" value={f.store} onChange={(e) => setHankyoInlineForm({ ...f, store: e.target.value })}><option value="">{hankyoStorePlaceholder}</option>{hankyoStores.map((s) => <option key={s}>{s}</option>)}</select>
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('store') }}>
+                            {isCellEditing('store')
+                              ? <select autoFocus className="inline-select" value={f.store} onChange={(e) => setHankyoInlineForm({ ...f, store: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown}><option value="">{hankyoStorePlaceholder}</option>{hankyoStores.map((s) => <option key={s}>{s}</option>)}</select>
                               : r.store || '未選択'}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.area} onChange={(e) => setHankyoInlineForm({ ...f, area: e.target.value })} />
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('area') }}>
+                            {isCellEditing('area')
+                              ? <input autoFocus className="inline-input" value={f.area} onChange={(e) => setHankyoInlineForm({ ...f, area: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown} />
                               : <span className="cell-truncate" title={r.area}>{r.area}</span>}
                           </td>
-                          <td onClick={(e) => isEditing && e.stopPropagation()}>
-                            {isEditing
-                              ? <input className="inline-input" value={f.note} onChange={(e) => setHankyoInlineForm({ ...f, note: e.target.value })} />
+                          <td onClick={(e) => { e.stopPropagation(); startCellEdit('note') }}>
+                            {isCellEditing('note')
+                              ? <input autoFocus className="inline-input" value={f.note} onChange={(e) => setHankyoInlineForm({ ...f, note: e.target.value })} onBlur={() => { void saveHankyoInline() }} onKeyDown={handleHankyoCellKeyDown} />
                               : <span className="cell-truncate" title={r.note}>{r.note}</span>}
                           </td>
                         </tr>
