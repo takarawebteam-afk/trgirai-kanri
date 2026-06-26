@@ -2229,6 +2229,7 @@ function App() {
   const [hankyoInlineId, setHankyoInlineId] = useState<string | null>(null)
   const [hankyoInlineForm, setHankyoInlineForm] = useState<Omit<HankyoRecord, 'id' | 'created_at' | 'updated_at'>>(defaultHankyoForm)
   const [hankyoSearch, setHankyoSearch] = useState('')
+  const [hankyoYearFilters, setHankyoYearFilters] = useState<string[]>([String(new Date().getFullYear())])
   const [hankyoMonthFilters, setHankyoMonthFilters] = useState<string[]>([String(new Date().getMonth() + 1)])
   const [hankyoAccountFilters, setHankyoAccountFilters] = useState<string[]>([])
   const [hankyoTriggerFilters, setHankyoTriggerFilters] = useState<string[]>([])
@@ -6713,8 +6714,18 @@ function App() {
   }
 
   // 反響管理 フィルタリング & ページネーション
+  const hankyoYearOptions = useMemo(() => {
+    const years = new Set<string>()
+    hankyoRecords.forEach((r) => { if (r.inquiry_date) years.add(String(new Date(r.inquiry_date).getFullYear())) })
+    return Array.from(years).sort((a, b) => Number(b) - Number(a)).map((y) => ({ value: y, label: `${y}年` }))
+  }, [hankyoRecords])
+
   const filteredHankyo = hankyoRecords.filter((r) => {
     if (hankyoSearch && !r.customer_name.includes(hankyoSearch)) return false
+    if (hankyoYearFilters.length > 0 && r.inquiry_date) {
+      const y = String(new Date(r.inquiry_date).getFullYear())
+      if (!hankyoYearFilters.includes(y)) return false
+    }
     if (hankyoMonthFilters.length > 0 && r.inquiry_date) {
       const m = String(new Date(r.inquiry_date).getMonth() + 1)
       if (!hankyoMonthFilters.includes(m)) return false
@@ -9126,6 +9137,7 @@ function App() {
                     onClick={(e) => e.stopPropagation()}
                   />
                   {([
+                    { key: 'year', label: '年', selected: hankyoYearFilters, setSelected: setHankyoYearFilters, options: hankyoYearOptions },
                     { key: 'month', label: '月', selected: hankyoMonthFilters, setSelected: setHankyoMonthFilters, options: Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}月` })) },
                     { key: 'account', label: 'アカウント', selected: hankyoAccountFilters, setSelected: setHankyoAccountFilters, options: hankyoAccounts.map(v => ({ value: v, label: v })) },
                     { key: 'trigger', label: 'きっかけ', selected: hankyoTriggerFilters, setSelected: setHankyoTriggerFilters, options: hankyoTriggers.map(v => ({ value: v, label: v })) },
