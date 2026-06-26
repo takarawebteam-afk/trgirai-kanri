@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/ga4-refresh",
+      "destination": "/index.html"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/monthly-task-items",

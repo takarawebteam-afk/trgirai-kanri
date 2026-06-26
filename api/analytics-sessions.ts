@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createSign } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
 
 type GaReportRow = {
   dimensionValues?: { value?: string }[]
@@ -18,6 +19,16 @@ type AnalysisSessionRow = {
   media: AnalysisMedia
   month: number
   sessions: number
+}
+
+type AnalyticsRequestBody = {
+  accessToken?: unknown
+  action?: unknown
+  code?: unknown
+  expiresIn?: unknown
+  redirectUri?: unknown
+  setupKey?: unknown
+  year?: unknown
 }
 
 const ANALYSIS_ACCOUNTS: AnalysisAccount[] = ['Karilun', '京阪', '西宮市', '八尾', '長瀬', '西北']
@@ -47,11 +58,174 @@ function base64Url(value: string | Buffer) {
 }
 
 function getPrivateKey() {
-  return (process.env.GA4_PRIVATE_KEY || process.env.GOOGLE_ANALYTICS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  return (
+    process.env.GA4_PRIVATE_KEY
+    || process.env.GOOGLE_ANALYTICS_PRIVATE_KEY
+    || process.env.GOOGLE_PRIVATE_KEY
+    || ''
+  ).replace(/\\n/g, '\n')
 }
 
 function envText(value: string | undefined) {
   return (value || '').trim()
+}
+
+function getQueryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function getSupabaseAdmin() {
+  const url = envText(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
+  const key = envText(process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
+async function getStoredRefreshToken() {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return ''
+
+  const { data } = await supabase
+    .from('app_secrets')
+    .select('value')
+    .eq('key', 'ga4_refresh_token')
+    .maybeSingle()
+
+  return typeof data?.value === 'string' ? data.value.trim() : ''
+}
+
+async function getStoredAccessToken() {
+  const supabase = getSupabaseAdmin()
+  if (!supabase) return ''
+
+  const { data } = await supabase
+    .from('app_secrets')
+    .select('key, value')
+    .in('key', ['ga4_access_token', 'ga4_access_token_expires_at'])
+
+  const values = new Map((data || []).map((row) => [row.key, row.value]))
+  const accessToken = values.get('ga4_access_token') || ''
+  const expiresAt = values.get('ga4_access_token_expires_at') || ''
+  const expiresAtMs = Date.parse(expiresAt)
+
+  if (!accessToken || !Number.isFinite(expiresAtMs) || expiresAtMs < Date.now() + 60_000) {
+    return ''
+  }
+
+  return accessToken
+}
+
+function isValidSetupKey(value: unknown) {
+  const setupKey = envText(process.env.GA4_SETUP_KEY)
+  return Boolean(setupKey && value === setupKey)
+}
+
+function handleOauthConfig(req: VercelRequest, res: VercelResponse) {
+  if (!isValidSetupKey(getQueryValue(req.query.key))) {
+    return res.status(403).json({ ok: false, message: 'not_allowed' })
+  }
+
+  const clientId = envText(
+    process.env.GA4_OAUTH_CLIENT_ID
+    || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_ID
+    || process.env.VITE_GOOGLE_CLIENT_ID
+  )
+  if (!clientId) {
+    return res.status(200).json({ ok: false, message: 'GA4のGoogleログイン設定がありません。' })
+  }
+
+  return res.status(200).json({ ok: true, clientId })
+}
+
+async function handleRefreshExchange(body: AnalyticsRequestBody, res: VercelResponse) {
+  if (!isValidSetupKey(body.setupKey)) {
+    return res.status(403).json({ ok: false, message: 'not_allowed' })
+  }
+
+  const code = typeof body.code === 'string' ? body.code : ''
+  const redirectUri = typeof body.redirectUri === 'string' ? body.redirectUri : 'postmessage'
+  const clientId = envText(process.env.GA4_OAUTH_CLIENT_ID || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_ID)
+  const clientSecret = envText(process.env.GA4_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_SECRET)
+
+  if (!code || !clientId || !clientSecret) {
+    return res.status(200).json({ ok: false, message: 'GA4の再接続に必要な設定が足りません。' })
+  }
+
+  const tokenResponse = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    }),
+  })
+  const tokenData = await tokenResponse.json() as { refresh_token?: string, error?: string }
+
+  if (!tokenResponse.ok) {
+    return res.status(200).json({ ok: false, message: `Googleが接続を断りました: ${tokenData.error || 'unknown_error'}` })
+  }
+  if (!tokenData.refresh_token) {
+    return res.status(200).json({
+      ok: false,
+      message: '新しい接続設定が返ってきませんでした。別のGoogleアカウントで試してください。',
+    })
+  }
+
+  const supabase = getSupabaseAdmin()
+  if (!supabase) {
+    return res.status(200).json({ ok: false, message: 'Supabaseの保存設定がありません。' })
+  }
+
+  const { error } = await supabase
+    .from('app_secrets')
+    .upsert({
+      key: 'ga4_refresh_token',
+      value: tokenData.refresh_token,
+      updated_at: new Date().toISOString(),
+    })
+
+  if (error) {
+    return res.status(200).json({ ok: false, message: `保存に失敗しました: ${error.message}` })
+  }
+
+  cachedToken = null
+  return res.status(200).json({ ok: true, scope: GA_SCOPE })
+}
+
+async function handleStoreAccessToken(body: AnalyticsRequestBody, res: VercelResponse) {
+  if (!isValidSetupKey(body.setupKey)) {
+    return res.status(403).json({ ok: false, message: 'not_allowed' })
+  }
+
+  const accessToken = typeof body.accessToken === 'string' ? body.accessToken.trim() : ''
+  const expiresIn = Number(body.expiresIn || 3600)
+  const supabase = getSupabaseAdmin()
+
+  if (!accessToken) {
+    return res.status(200).json({ ok: false, message: 'Googleログインの鍵が届きませんでした。' })
+  }
+  if (!supabase) {
+    return res.status(200).json({ ok: false, message: 'Supabaseの保存設定がありません。' })
+  }
+
+  const expiresAt = new Date(Date.now() + Math.max(300, Number.isFinite(expiresIn) ? expiresIn : 3600) * 1000).toISOString()
+  const { error } = await supabase
+    .from('app_secrets')
+    .upsert([
+      { key: 'ga4_access_token', value: accessToken, updated_at: new Date().toISOString() },
+      { key: 'ga4_access_token_expires_at', value: expiresAt, updated_at: new Date().toISOString() },
+    ])
+
+  if (error) {
+    return res.status(200).json({ ok: false, message: `保存に失敗しました: ${error.message}` })
+  }
+
+  cachedToken = { accessToken, expiresAt: Math.floor(Date.parse(expiresAt) / 1000) }
+  return res.status(200).json({ ok: true })
 }
 
 function normalizeAccount(value: string): AnalysisAccount | null {
@@ -186,11 +360,31 @@ async function getAnalyticsAccessToken() {
   const refreshClientSecret = envText(process.env.GA4_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ANALYTICS_OAUTH_CLIENT_SECRET)
   const refreshToken = envText(process.env.GA4_REFRESH_TOKEN || process.env.GOOGLE_ANALYTICS_REFRESH_TOKEN)
 
+  const storedAccessToken = await getStoredAccessToken().catch(() => '')
+  if (storedAccessToken) return storedAccessToken
+
   if (refreshClientId && refreshClientSecret && refreshToken) {
-    return await getAccessTokenFromRefreshToken(refreshClientId, refreshClientSecret, refreshToken)
+    try {
+      return await getAccessTokenFromRefreshToken(refreshClientId, refreshClientSecret, refreshToken)
+    } catch {
+      cachedToken = null
+    }
   }
 
-  const clientEmail = envText(process.env.GA4_CLIENT_EMAIL || process.env.GOOGLE_ANALYTICS_CLIENT_EMAIL)
+  const storedRefreshToken = await getStoredRefreshToken().catch(() => '')
+  if (refreshClientId && refreshClientSecret && storedRefreshToken) {
+    try {
+      return await getAccessTokenFromRefreshToken(refreshClientId, refreshClientSecret, storedRefreshToken)
+    } catch {
+      cachedToken = null
+    }
+  }
+
+  const clientEmail = envText(
+    process.env.GA4_CLIENT_EMAIL
+    || process.env.GOOGLE_ANALYTICS_CLIENT_EMAIL
+    || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+  )
   const privateKey = getPrivateKey()
 
   if (clientEmail && privateKey) {
@@ -227,19 +421,30 @@ async function fetchPropertyRows(propertyId: string, year: number, accessToken: 
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET' && getQueryValue(req.query.action) === 'oauth-config') {
+    return handleOauthConfig(req, res)
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, message: 'method_not_allowed' })
   }
 
-  let requestBody: { year?: unknown } = {}
+  let requestBody: AnalyticsRequestBody = {}
   try {
     if (typeof req.body === 'string') {
-      requestBody = req.body ? JSON.parse(req.body) as { year?: unknown } : {}
+      requestBody = req.body ? JSON.parse(req.body) as AnalyticsRequestBody : {}
     } else {
-      requestBody = (req.body || {}) as { year?: unknown }
+      requestBody = (req.body || {}) as AnalyticsRequestBody
     }
   } catch {
     requestBody = {}
+  }
+
+  if (requestBody.action === 'refresh-exchange') {
+    return await handleRefreshExchange(requestBody, res)
+  }
+  if (requestBody.action === 'store-access-token') {
+    return await handleStoreAccessToken(requestBody, res)
   }
 
   const year = Number(requestBody.year || 2026)
