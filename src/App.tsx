@@ -1372,6 +1372,7 @@ const SOKANRI_ROWS = [
   { apKey: 'yao-tiktok', account: '八尾店', platform: 'TikTok', accountColor: '#F9EBF8' },
   { apKey: 'yao-instagram', account: '八尾店', platform: 'Instagram', accountColor: '#F9EBF8' },
   { apKey: 'yao-youtube', account: '八尾店', platform: 'YouTube', accountColor: '#F9EBF8' },
+  { apKey: 'recruitment', account: '採用', platform: '採用', accountColor: '#FBEEE6' },
 ]
 
 const PLATFORM_LABEL_STYLE: Record<string, { bg: string; color: string }> = {
@@ -1379,6 +1380,7 @@ const PLATFORM_LABEL_STYLE: Record<string, { bg: string; color: string }> = {
   Instagram: { bg: '#C13584', color: '#fff' },
   YouTube: { bg: '#FF0000', color: '#fff' },
   Threads: { bg: '#101010', color: '#fff' },
+  '採用': { bg: '#1a73e8', color: '#fff' },
 }
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
@@ -4046,6 +4048,16 @@ function App() {
         result[apKey] = doneDates
       }
     }
+
+    const { data: recruitmentRows } = await supabase
+      .from('sns_recruitment_properties')
+      .select('post_date')
+      .gte('post_date', todayStr)
+      .lte('post_date', endStr)
+
+    result['recruitment'] = ((recruitmentRows || []) as { post_date?: string | null }[])
+      .map((row) => normalizeSnsPropertyPostDate(row.post_date, null).slice(0, 10))
+      .filter((date): date is string => Boolean(date))
 
     setSokanriData(result)
     setSokanriLoading(false)
