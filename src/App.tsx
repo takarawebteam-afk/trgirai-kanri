@@ -3763,12 +3763,17 @@ function App() {
   }
 
   async function fetchHankyo() {
-    const { data } = await supabase.from('hankyo').select('*').order('inquiry_date', { ascending: false }).order('created_at', { ascending: false })
-    if (data) {
-      setHankyoRecords(data as HankyoRecord[])
-      const confirmedIds = new Set<string>((data as HankyoRecord[]).filter(r => r.confirmed).map(r => r.id))
-      setCheckedHankyoIds(confirmedIds)
+    const PAGE = 1000
+    const all: HankyoRecord[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase.from('hankyo').select('*').order('inquiry_date', { ascending: false }).order('created_at', { ascending: false }).range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      all.push(...(data as HankyoRecord[]))
+      if (data.length < PAGE) break
     }
+    setHankyoRecords(all)
+    const confirmedIds = new Set<string>(all.filter(r => r.confirmed).map(r => r.id))
+    setCheckedHankyoIds(confirmedIds)
   }
 
   async function fetchSnsPropertyPage<T extends { property_number: string; created_at?: string }>(
