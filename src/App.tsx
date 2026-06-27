@@ -2462,6 +2462,7 @@ function App() {
   const [analysisTableGroups, setAnalysisTableGroups] = useState<AnalysisMonthlyAccountGroup[]>(ANALYSIS_MONTHLY_TABLE_GROUPS)
   const [activeAnalysisSubTab, setActiveAnalysisSubTab] = useState<AnalysisSubTab>('analytics')
   const [activeSiteInflowSite, setActiveSiteInflowSite] = useState<string>('karilun')
+  const [siteInflowYear, setSiteInflowYear] = useState<number>(2026)
   const [analysisImporting, setAnalysisImporting] = useState(false)
   const [analysisImportMessage, setAnalysisImportMessage] = useState('')
   const [analysisImportMessageType, setAnalysisImportMessageType] = useState<'success' | 'error'>('success')
@@ -7583,6 +7584,8 @@ function App() {
               const SITE_MEDIA_LIST = ['TikTok', 'Instagram', 'Threads', 'YouTube', 'その他']
               const site = SITE_INFLOW_SITES.find(s => s.key === activeSiteInflowSite) ?? SITE_INFLOW_SITES[0]
               const siteAccounts = site.accounts as readonly string[]
+              const yearIdx = ANALYSIS_YEARS.indexOf(siteInflowYear as typeof ANALYSIS_YEARS[number])
+              const yearOffset = (yearIdx >= 0 ? yearIdx : 0) * ANALYSIS_MONTHS.length
 
               // 媒体別積み上げ棒グラフ用データ
               const barChartData = ANALYSIS_MONTHS.map((month, monthIdx) => {
@@ -7593,7 +7596,7 @@ function App() {
                     .reduce((sum, group) => {
                       const mediaRow = group.rows.find(r => r.media === media)
                       if (!mediaRow) return sum
-                      const v = mediaRow.values[monthIdx]
+                      const v = mediaRow.values[yearOffset + monthIdx]
                       return sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
                     }, 0)
                 }
@@ -7608,7 +7611,7 @@ function App() {
                   const group = analysisTableGroups.find(g => g.account === acc)
                   row[acc] = group
                     ? group.rows.reduce((sum, r) => {
-                        const v = r.values[monthIdx]
+                        const v = r.values[yearOffset + monthIdx]
                         return sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
                       }, 0)
                     : 0
@@ -7637,6 +7640,25 @@ function App() {
                       <p style={{ fontSize: 12, color: '#888', marginTop: 2 }}>各SNS媒体からサイトへの月別流入数</p>
                     </div>
                     <div className="analysis-actions">
+                      {ANALYSIS_YEARS.map(year => {
+                        const isActive = siteInflowYear === year
+                        return (
+                          <button
+                            key={year}
+                            type="button"
+                            style={{
+                              ...btnBase,
+                              background: isActive ? '#1558D6' : '#fff',
+                              color: isActive ? '#fff' : '#333',
+                              borderColor: isActive ? '#1558D6' : '#ccc',
+                            }}
+                            onClick={() => setSiteInflowYear(year)}
+                          >
+                            {year}年
+                          </button>
+                        )
+                      })}
+                      <span style={{ width: 1, alignSelf: 'stretch', background: '#e0e0e0', margin: '0 4px' }} />
                       {SITE_INFLOW_SITES.map(s => {
                         const isActive = activeSiteInflowSite === s.key
                         return (
