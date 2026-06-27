@@ -620,7 +620,8 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .analysis-monthly-table-wrap {
   border: 1px solid #cfd7e3;
-  overflow-y: visible;
+  max-height: 70vh;
+  overflow: auto;
 }
 
 .table-wrap table.analysis-monthly-table {
@@ -682,121 +683,46 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
   border-bottom: 2px solid #1f2937;
 }
 
-/* === アナリティクス: アカウント左右スライド（転置表） === */
-.analysis-account-slider {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.analysis-account-slider-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.analysis-slide-arrow {
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  border: 1px solid #cfd7e3;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1f2937;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.analysis-slide-arrow:hover:not(:disabled) {
-  background: #eef3fb;
-}
-
-.analysis-slide-arrow:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.analysis-account-slider-title {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 10px;
-}
-
-.analysis-account-name {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.analysis-account-count {
-  font-size: 0.8rem;
-  color: #64748b;
-  font-variant-numeric: tabular-nums;
-}
-
-.analysis-account-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.analysis-account-dot {
-  width: 9px;
-  height: 9px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: #cbd5e1;
-  cursor: pointer;
-}
-
-.analysis-account-dot.active {
-  background: #2563eb;
-}
-
-/* 転置表本体 */
-.analysis-pivot-wrap {
-  max-height: 70vh;
-  overflow: auto;
-}
-
-.analysis-pivot-table .analysis-pivot-corner,
-.analysis-pivot-table .analysis-pivot-month {
+/* === アナリティクス: スクロール固定（左2列＋ヘッダー行） === */
+/* 本体: アカウント列を左端に固定 */
+.analysis-monthly-table .analysis-account-cell {
   position: sticky;
   left: 0;
   z-index: 3;
-  min-width: 92px;
-  width: 92px;
-  text-align: right;
-  background: #f8fafc;
-  border-right: 2px solid #111827;
+  width: 86px;
+  min-width: 86px;
+  background: #ffffff;
 }
 
-/* 左上角は縦横どちらでも固定 */
-.analysis-pivot-table thead .analysis-pivot-corner {
+/* 本体: 媒体列をアカウント列の右隣に固定 */
+.analysis-monthly-table .analysis-media-cell {
+  position: sticky;
+  left: 86px;
+  z-index: 3;
+  width: 90px;
+  min-width: 90px;
+  background: #ffffff;
+}
+
+/* ヘッダー行の「アカウント」「媒体」セルは縦横どちらでも固定（最前面） */
+.analysis-monthly-table thead th:nth-child(1) {
+  position: sticky;
+  left: 0;
+  top: 0;
   z-index: 5;
+  width: 86px;
+  min-width: 86px;
   background: #dbe7f8;
 }
 
-.analysis-pivot-table tbody .analysis-pivot-month {
-  font-weight: 800;
-}
-
-.analysis-pivot-table .analysis-pivot-total,
-.analysis-pivot-table .analysis-pivot-diff {
-  font-weight: 800;
-}
-
-.analysis-pivot-table .analysis-pivot-total {
-  border-left: 2px solid #1f2937;
+.analysis-monthly-table thead th:nth-child(2) {
+  position: sticky;
+  left: 86px;
+  top: 0;
+  z-index: 5;
+  width: 90px;
+  min-width: 90px;
+  background: #dbe7f8;
 }
 
 .analysis-tiktok-sheet-table .analysis-account-cell {

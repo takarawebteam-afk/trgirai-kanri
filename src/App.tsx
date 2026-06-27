@@ -2460,8 +2460,6 @@ function App() {
   const [allowedIpMessage, setAllowedIpMessage] = useState('')
   const [showAllowedAccountsModal, setShowAllowedAccountsModal] = useState(false)
   const [analysisTableGroups, setAnalysisTableGroups] = useState<AnalysisMonthlyAccountGroup[]>(ANALYSIS_MONTHLY_TABLE_GROUPS)
-  const [analysisAccountIndex, setAnalysisAccountIndex] = useState(0)
-  const analysisSwipeStartX = useRef<number | null>(null)
   const [activeAnalysisSubTab, setActiveAnalysisSubTab] = useState<AnalysisSubTab>('analytics')
   const [activeSiteInflowSite, setActiveSiteInflowSite] = useState<string>('karilun')
   const [analysisImporting, setAnalysisImporting] = useState(false)
@@ -7128,90 +7126,50 @@ function App() {
                     </button>
                   </div>
                 </div>
-                {(() => {
-                  const accountCount = analysisTableGroups.length
-                  const safeIndex = accountCount === 0 ? 0 : Math.min(analysisAccountIndex, accountCount - 1)
-                  const currentGroup = analysisTableGroups[safeIndex]
-                  const goPrev = () => setAnalysisAccountIndex(() => Math.max(0, safeIndex - 1))
-                  const goNext = () => setAnalysisAccountIndex(() => Math.min(accountCount - 1, safeIndex + 1))
-                  if (!currentGroup) return null
-                  return (
-                    <div className="analysis-account-slider">
-                      <div className="analysis-account-slider-head">
-                        <button
-                          type="button"
-                          className="analysis-slide-arrow"
-                          onClick={goPrev}
-                          disabled={safeIndex === 0}
-                          aria-label="前のアカウント"
-                        >
-                          ‹
-                        </button>
-                        <div className="analysis-account-slider-title">
-                          <span className="analysis-account-name">{currentGroup.account}</span>
-                          <span className="analysis-account-count">{safeIndex + 1} / {accountCount}</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="analysis-slide-arrow"
-                          onClick={goNext}
-                          disabled={safeIndex >= accountCount - 1}
-                          aria-label="次のアカウント"
-                        >
-                          ›
-                        </button>
-                      </div>
-                      <div className="analysis-account-dots">
-                        {analysisTableGroups.map((g, i) => (
-                          <button
-                            key={g.account}
-                            type="button"
-                            className={`analysis-account-dot ${i === safeIndex ? 'active' : ''}`}
-                            onClick={() => setAnalysisAccountIndex(() => i)}
-                            aria-label={g.account}
-                          />
+                <div className="table-wrap analysis-monthly-table-wrap">
+                  <table className="analysis-monthly-table">
+                    <thead>
+                      <tr>
+                        <th>アカウント</th>
+                        <th>媒体</th>
+                        {ANALYSIS_TABLE_COLUMNS.map(({ year, month }) => (
+                          <th key={`${year}-${month}`}>{year}年{month}月</th>
                         ))}
-                      </div>
-                      <div
-                        className="table-wrap analysis-monthly-table-wrap analysis-pivot-wrap"
-                        onTouchStart={(e) => { analysisSwipeStartX.current = e.touches[0]?.clientX ?? null }}
-                        onTouchEnd={(e) => {
-                          const startX = analysisSwipeStartX.current
-                          analysisSwipeStartX.current = null
-                          if (startX == null) return
-                          const dx = (e.changedTouches[0]?.clientX ?? startX) - startX
-                          if (dx <= -50) goNext()
-                          else if (dx >= 50) goPrev()
-                        }}
-                      >
-                        <table className="analysis-monthly-table analysis-pivot-table">
-                          <thead>
-                            <tr>
-                              <th className="analysis-pivot-corner">年月</th>
-                              {currentGroup.rows.map((row) => (
-                                <th key={row.media} className="analysis-media-cell">{row.media}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisTableGroups.map((group) => (
+                        <Fragment key={group.account}>
+                          {group.rows.map((row, rowIndex) => (
+                            <tr key={`${group.account}-${row.media}`}>
+                              {rowIndex === 0 && (
+                                <th className="analysis-account-cell" rowSpan={group.rows.length + 2}>
+                                  {group.account}
+                                </th>
+                              )}
+                              <th className="analysis-media-cell">{row.media}</th>
+                              {ANALYSIS_TABLE_COLUMNS.map((_, monthIndex) => (
+                                <td key={monthIndex}>{formatInteger(row.values[monthIndex] ?? 0)}</td>
                               ))}
-                              <th className="analysis-media-cell">計</th>
-                              <th className="analysis-media-cell">前月比</th>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {ANALYSIS_TABLE_COLUMNS.map(({ year, month }, monthIndex) => (
-                              <tr key={`${year}-${month}`}>
-                                <th className="analysis-pivot-month">{year}年{month}月</th>
-                                {currentGroup.rows.map((row) => (
-                                  <td key={row.media}>{formatInteger(row.values[monthIndex] ?? 0)}</td>
-                                ))}
-                                <td className="analysis-pivot-total">{formatInteger(getAnalysisMonthlyTotal(currentGroup, monthIndex))}</td>
-                                <td className="analysis-pivot-diff">{formatInteger(getAnalysisMonthlyDiff(currentGroup, monthIndex))}</td>
-                              </tr>
+                          ))}
+                          <tr className="analysis-total-row">
+                            <th className="analysis-media-cell">計</th>
+                            {ANALYSIS_TABLE_COLUMNS.map((_, monthIndex) => (
+                              <td key={monthIndex}>{formatInteger(getAnalysisMonthlyTotal(group, monthIndex))}</td>
                             ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )
-                })()}
+                          </tr>
+                          <tr className="analysis-diff-row">
+                            <th className="analysis-media-cell">前月比</th>
+                            {ANALYSIS_TABLE_COLUMNS.map((_, monthIndex) => (
+                              <td key={monthIndex}>{formatInteger(getAnalysisMonthlyDiff(group, monthIndex))}</td>
+                            ))}
+                          </tr>
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             )}
 
