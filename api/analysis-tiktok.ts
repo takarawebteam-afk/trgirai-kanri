@@ -943,6 +943,18 @@ type YouTubeAccountConfig = {
   refreshToken?: string
 }
 
+const YOUTUBE_METRIC_SUBSCRIBERS = '\u30c1\u30e3\u30f3\u30cd\u30eb\u767b\u9332\u6570'
+const YOUTUBE_METRIC_SUBSCRIBER_GROWTH = '\u767b\u9332\u8005\u5897\u52a0\u6570'
+const YOUTUBE_METRIC_SUBSCRIBERS_PER_POST = '\u767b\u9332\u8005/\u6295\u7a3f'
+const YOUTUBE_METRIC_POSTS = '\u6295\u7a3f\u6570'
+const YOUTUBE_METRIC_LIKES = '\u3044\u3044\u306d\u6570'
+const YOUTUBE_METRIC_COMMENTS = '\u30b3\u30e1\u30f3\u30c8\u6570'
+const YOUTUBE_METRIC_VIEWS = '\u518d\u751f\u6570'
+const YOUTUBE_METRIC_AVG_VIEW_DURATION = '\u5e73\u5747\u8996\u8074\u6642\u9593\uff08\u79d2\uff09'
+const YOUTUBE_ANALYTICS_FAILURE_LABEL = '\u518d\u751f\u6570\u30fb\u5e73\u5747\u8996\u8074\u6642\u9593'
+const YOUTUBE_ANALYTICS_DEFAULT_FAILURE = '\u53d6\u5f97\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f'
+const YOUTUBE_REFRESH_TOKEN_MISSING = 'refresh token\u672a\u8a2d\u5b9a'
+
 function getYoutubeAccounts(): YouTubeAccountConfig[] {
   const raw = process.env.YOUTUBE_CHANNEL_IDS ?? ''
   if (!raw) return []
@@ -1028,9 +1040,47 @@ async function fetchYoutubeMonthlyVideos(channelId: string, apiKey: string, year
   return { videoCount, totalLikes, totalComments }
 }
 
+async function fetchPreviousYoutubeSubscribers(
+  supabase: { from: (table: string) => any },
+  accountNames: string[],
+  prevYear: number,
+  prevMonth: number,
+): Promise<Record<string, number | null>> {
+  try {
+    const { data } = await supabase
+      .from('analysis_youtube_metrics')
+      .select('account, value')
+      .eq('metric', YOUTUBE_METRIC_SUBSCRIBERS)
+      .eq('year', prevYear)
+      .eq('month', prevMonth)
+      .in('account', accountNames)
+    const result: Record<string, number | null> = {}
+    const rows = (data ?? []) as Array<{ account: string; value: string | null }>
+    for (const name of accountNames) {
+      const row = rows.find((r) => r.account === name)
+      result[name] = parseStoredNumber(row?.value ?? null)
+    }
+    return result
+  } catch {
+    return Object.fromEntries(accountNames.map((name) => [name, null]))
+  }
+}
+
+function formatYoutubeAnalyticsDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 async function fetchYoutubeAnalytics(channelId: string, accessToken: string, year: number, month: number): Promise<{ views: number; avgViewDuration: number }> {
-  const since = new Date(year, month - 1, 1).toISOString().split('T')[0]
-  const until = new Date(year, month, 0).toISOString().split('T')[0]
+  const since = formatYoutubeAnalyticsDate(year, month, 1)
+  const monthEndDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const monthEnd = formatYoutubeAnalyticsDate(year, month, monthEndDay)
+  const today = new Date().toISOString().split('T')[0]
+
+  if (since > today) {
+    return { views: 0, avgViewDuration: 0 }
+  }
+
+  const until = monthEnd < today ? monthEnd : today
   const url = 'https://youtubeanalytics.googleapis.com/v2/reports?ids=channel%3D%3D' + channelId + '&startDate=' + since + '&endDate=' + until + '&metrics=views%2CaverageViewDuration'
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } })
   if (!res.ok) throw new Error('YouTube Analytics API error: ' + res.status)
@@ -1052,6 +1102,14 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
     }
 
     const { year, month, skipSubscriberCount } = req.body as { year: number; month: number; skipSubscriberCount?: boolean }
+    const { year: prevYear, month: prevMonth } = getPrevYearMonth(year, month)
+    const supabase = getSupabaseClient()
+    const previousSubscribers = await fetchPreviousYoutubeSubscribers(
+      supabase,
+      accounts.map((acc) => acc.account),
+      prevYear,
+      prevMonth,
+    )
 
     const results = await Promise.all(accounts.map(async (acc) => {
       try {
@@ -1062,23 +1120,39 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
 
         const rows: Array<{ year: number; month: number; account: string; metric: string; value: string; updated_at: string }> = []
         const updatedAt = new Date().toISOString()
+        const currentSubscriber = parseStoredNumber(stats.subscriberCount)
+        const previousSubscriber = previousSubscribers[acc.account] ?? null
 
-        if (!skipSubscriberCount && stats.subscriberCount !== undefined) {
-          rows.push({ year, month, account: acc.account, metric: 'チャンネル登録数', value: stats.subscriberCount, updated_at: updatedAt })
+        if (!skipSubscriberCount && currentSubscriber !== null) {
+          rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_SUBSCRIBERS, value: String(currentSubscriber), updated_at: updatedAt })
         }
-        rows.push({ year, month, account: acc.account, metric: '投稿数', value: String(monthlyVideos.videoCount), updated_at: updatedAt })
-        rows.push({ year, month, account: acc.account, metric: 'いいね数', value: String(monthlyVideos.totalLikes), updated_at: updatedAt })
-        rows.push({ year, month, account: acc.account, metric: 'コメント数', value: String(monthlyVideos.totalComments), updated_at: updatedAt })
+        if (!skipSubscriberCount && currentSubscriber !== null && previousSubscriber !== null) {
+          const growth = currentSubscriber - previousSubscriber
+          rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_SUBSCRIBER_GROWTH, value: String(growth), updated_at: updatedAt })
+          if (monthlyVideos.videoCount > 0) {
+            rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_SUBSCRIBERS_PER_POST, value: String(Math.round((growth / monthlyVideos.videoCount) * 10) / 10), updated_at: updatedAt })
+          }
+        }
+        rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_POSTS, value: String(monthlyVideos.videoCount), updated_at: updatedAt })
+        rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_LIKES, value: String(monthlyVideos.totalLikes), updated_at: updatedAt })
+        rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_COMMENTS, value: String(monthlyVideos.totalComments), updated_at: updatedAt })
 
+        let analyticsFailure: { account: string; reason: string } | null = null
         if (acc.refreshToken) {
           try {
             const accessToken = await getYoutubeAccessToken(acc.refreshToken)
             const analytics = await fetchYoutubeAnalytics(acc.channelId, accessToken, year, month)
-            rows.push({ year, month, account: acc.account, metric: '再生数', value: String(analytics.views), updated_at: updatedAt })
-            rows.push({ year, month, account: acc.account, metric: '平均視聴時間（秒）', value: String(Math.round(analytics.avgViewDuration)), updated_at: updatedAt })
+            rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_VIEWS, value: String(analytics.views), updated_at: updatedAt })
+            rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_AVG_VIEW_DURATION, value: String(Math.round(analytics.avgViewDuration)), updated_at: updatedAt })
           } catch (error) {
             console.error(error)
+            analyticsFailure = {
+              account: acc.account,
+              reason: error instanceof Error ? error.message : YOUTUBE_ANALYTICS_DEFAULT_FAILURE,
+            }
           }
+        } else {
+          analyticsFailure = { account: acc.account, reason: YOUTUBE_REFRESH_TOKEN_MISSING }
         }
 
         return {
@@ -1092,6 +1166,7 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
             totalComments: monthlyVideos.totalComments,
           },
           rows,
+          analyticsFailure,
         }
       } catch (error) {
         return {
@@ -1102,6 +1177,7 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
             message: error instanceof Error ? error.message : '取得できませんでした。',
           },
           rows: [],
+          analyticsFailure: null,
         }
       }
     }))
@@ -1109,23 +1185,30 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
     const summaries = results.flatMap((result) => (result.ok ? [result.summary] : []))
     const failures = results.flatMap((result) => (result.ok ? [] : [result.failure]))
     const rows = results.flatMap((result) => result.rows)
+    const analyticsFailures = results.flatMap((result) => (
+      result.ok && result.analyticsFailure ? [result.analyticsFailure] : []
+    ))
 
     if (rows.length > 0) {
-      const supabase = getSupabaseClient()
       const { error } = await supabase.from('analysis_youtube_metrics').upsert(rows, { onConflict: 'year,month,account,metric' })
       if (error) {
         return res.status(500).json({ ok: false, message: `Supabase保存エラー: ${error.message}` })
       }
     }
 
+    const baseMessage = failures.length > 0
+      ? `一部のYouTubeは取得できませんでした: ${failures.map((failure) => failure.key).join(', ')}`
+      : `${rows.length}件を保存しました。`
+    const message = analyticsFailures.length > 0
+      ? `${baseMessage}\n${YOUTUBE_ANALYTICS_FAILURE_LABEL}を取得できませんでした（${analyticsFailures.map((failure) => `${failure.account}: ${failure.reason}`).join('、')}）。`
+      : baseMessage
+
     return res.status(200).json({
       ok: failures.length < accounts.length,
       saved: rows.length,
       summaries,
       failures,
-      message: failures.length > 0
-        ? `一部のYouTubeは取得できませんでした: ${failures.map((failure) => failure.key).join(', ')}`
-        : `${rows.length}件を保存しました。`,
+      message,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'YouTubeの自動取得に失敗しました。'
