@@ -3606,7 +3606,7 @@ function App() {
     setAnalysisYoutubeMessage('YouTubeから数字を取得中...')
 
     try {
-      await Promise.all([
+      const youtubeSyncResults = await Promise.all([
         fetch('/api/analysis-tiktok?action=sync-youtube-insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3623,7 +3623,18 @@ function App() {
         if (!response.ok || !data.ok) {
           throw new Error(data.message || 'YouTubeの数字を取得できませんでした。')
         }
+        return data
       }))
+      const youtubeSyncFailureNotes = youtubeSyncResults
+        .map((data) => data.message)
+        .filter((message): message is string => Boolean(message?.includes('取得できませんでした')))
+        .flatMap((message) => message.split('\n').map((line) => {
+          const trimmedLine = line.trim()
+          const failureNoteStart = trimmedLine.indexOf('再生数・平均視聴時間')
+          return failureNoteStart >= 0 ? trimmedLine.slice(failureNoteStart) : trimmedLine
+        }))
+        .filter((line) => line.includes('取得できませんでした'))
+      const youtubeSyncFailureNote = [...new Set(youtubeSyncFailureNotes)][0]
 
       const { data: freshRows } = await supabase
         .from('analysis_youtube_metrics')
@@ -3652,7 +3663,8 @@ function App() {
           })),
         }))
       }
-      setAnalysisYoutubeMessage(`YouTubeから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`)
+      const successMessage = `YouTubeから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`
+      setAnalysisYoutubeMessage(youtubeSyncFailureNote ? `${successMessage}\n${youtubeSyncFailureNote}` : successMessage)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'YouTubeの自動反映に失敗しました。'
       setAnalysisYoutubeMessage(message)
