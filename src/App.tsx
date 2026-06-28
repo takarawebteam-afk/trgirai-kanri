@@ -7586,6 +7586,10 @@ function App() {
               const siteAccounts = site.accounts as readonly string[]
               const yearIdx = ANALYSIS_YEARS.indexOf(siteInflowYear as typeof ANALYSIS_YEARS[number])
               const yearOffset = (yearIdx >= 0 ? yearIdx : 0) * ANALYSIS_MONTHS.length
+              const prevYearIdx = (yearIdx >= 0 ? yearIdx : 0) - 1
+              const hasPrevYear = prevYearIdx >= 0
+              const prevYearOffset = (hasPrevYear ? prevYearIdx : 0) * ANALYSIS_MONTHS.length
+              const prevYearValue = hasPrevYear ? ANALYSIS_YEARS[prevYearIdx] : null
 
               // 媒体別積み上げ棒グラフ用データ
               const barChartData = ANALYSIS_MONTHS.map((month, monthIdx) => {
@@ -7619,12 +7623,19 @@ function App() {
                 return row
               })
 
-              // 前年比折れ線グラフ用データ（今年の合計 vs 前年=未取得）
-              const lineChartData = barChartData.map(row => ({
-                month: row.month,
-                今年: row['合計'] as number,
-                前年: 0,
-              }))
+              // 前年比折れ線グラフ用データ（今年の合計 vs 前年）
+              const lineChartData = ANALYSIS_MONTHS.map((month, monthIdx) => {
+                const thisYearTotal = barChartData[monthIdx]['合計'] as number
+                const prevYearTotal = hasPrevYear
+                  ? analysisTableGroups
+                      .filter(g => siteAccounts.includes(g.account))
+                      .reduce((sum, group) => sum + group.rows.reduce((s, r) => {
+                        const v = r.values[prevYearOffset + monthIdx]
+                        return s + (typeof v === 'number' ? v : parseFloat(String(v)) || 0)
+                      }, 0), 0)
+                  : 0
+                return { month: `${month}月`, 今年: thisYearTotal, 前年: prevYearTotal }
+              })
 
               // ボタン共通スタイル
               const btnBase: React.CSSProperties = {
@@ -7733,7 +7744,9 @@ function App() {
                         <Line type="monotone" dataKey="前年" stroke="#AAAAAA" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
                       </LineChart>
                     </ResponsiveContainer>
-                    <p style={{ textAlign: 'center', fontSize: 11, color: '#bbb', marginTop: 4 }}>※ 前年データは未取得のため0表示</p>
+                    <p style={{ textAlign: 'center', fontSize: 11, color: '#bbb', marginTop: 4 }}>
+                      {hasPrevYear ? `※ 今年＝${siteInflowYear}年 ／ 前年＝${prevYearValue}年` : '※ 前年データは未取得のため0表示'}
+                    </p>
                   </div>
                 </section>
               )
