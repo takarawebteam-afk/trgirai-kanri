@@ -38,6 +38,7 @@ const ACCOUNT_BLOCK_START: Record<string, number> = {
 
 const METRIC_ROW_OFFSET: Record<string, number> = {
   フォロワー数: 0,
+  フォロワー増加数: 1,
   投稿数: 2,
   視聴者リーチ: 4,
   プロフ閲覧: 5,
