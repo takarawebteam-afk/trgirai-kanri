@@ -874,6 +874,16 @@ const ANALYSIS_MONTHLY_TABLE_GROUPS: AnalysisMonthlyAccountGroup[] = [
       { media: 'その他', values: [0, 0, 0, 0] },
     ],
   },
+  {
+    account: '採用',
+    rows: [
+      { media: 'TikTok', values: [0, 0, 0, 0] },
+      { media: 'Instagram', values: [0, 0, 0, 0] },
+      { media: 'Threads', values: [0, 0, 0, 0] },
+      { media: 'YouTube', values: [0, 0, 0, 0] },
+      { media: 'その他', values: [0, 0, 0, 0] },
+    ],
+  },
 ]
 
 function getAnalysisMonthlyTotal(group: AnalysisMonthlyAccountGroup, monthIndex: number) {

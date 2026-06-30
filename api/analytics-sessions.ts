@@ -12,7 +12,7 @@ type GaRunReportResponse = {
 }
 
 type AnalysisMedia = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube' | 'その他'
-type AnalysisAccount = 'Karilun' | '京阪' | '西宮市' | '八尾' | '長瀬' | '西北'
+type AnalysisAccount = 'Karilun' | '京阪' | '西宮市' | '八尾' | '長瀬' | '西北' | '採用'
 
 type AnalysisSessionRow = {
   account: AnalysisAccount
@@ -31,7 +31,7 @@ type AnalyticsRequestBody = {
   year?: unknown
 }
 
-const ANALYSIS_ACCOUNTS: AnalysisAccount[] = ['Karilun', '京阪', '西宮市', '八尾', '長瀬', '西北']
+const ANALYSIS_ACCOUNTS: AnalysisAccount[] = ['Karilun', '京阪', '西宮市', '八尾', '長瀬', '西北', '採用']
 const ANALYSIS_MEDIAS: AnalysisMedia[] = ['TikTok', 'Instagram', 'Threads', 'YouTube', 'その他']
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly'
@@ -45,6 +45,7 @@ const GA4_PROPERTY_CONFIGS: Array<{
   { propertyId: process.env.GA4_PROPERTY_YAO || '476571386', fixedAccount: '八尾' },
   { propertyId: process.env.GA4_PROPERTY_NAGASE || '317090157', fixedAccount: '長瀬' },
   { propertyId: process.env.GA4_PROPERTY_NISHIKITA || '317217717', fixedAccount: '西北' },
+  { propertyId: process.env.GA4_PROPERTY_SAIYO || '398577157', fixedAccount: '採用' },
 ]
 
 let cachedToken: { accessToken: string; expiresAt: number } | null = null
@@ -247,6 +248,17 @@ function normalizeMedia(...values: string[]): AnalysisMedia {
   const normalized = values.join(' ').toLowerCase()
 
   if (normalized.includes('link_in_bio')) return 'その他'
+  if (normalized.includes('tiktok')) return 'TikTok'
+  if (normalized.includes('instagram') || normalized.includes('ig')) return 'Instagram'
+  if (normalized.includes('threads')) return 'Threads'
+  if (normalized.includes('youtube') || normalized.includes('youtu.be')) return 'YouTube'
+
+  return 'その他'
+}
+
+function normalizeRecruitMedia(...values: string[]): AnalysisMedia {
+  const normalized = values.join(' ').toLowerCase()
+
   if (normalized.includes('tiktok')) return 'TikTok'
   if (normalized.includes('instagram') || normalized.includes('ig')) return 'Instagram'
   if (normalized.includes('threads')) return 'Threads'
@@ -485,7 +497,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const adContent = dimensions[4]?.value || ''
         const sessions = Number(row.metricValues?.[0]?.value || 0)
         const account = config.fixedAccount || normalizeAccount(adContent) || normalizeAccount(campaign) || config.fallbackAccount
-        const media = normalizeMedia(source, medium, campaign, adContent)
+        const media = config.fixedAccount === '採用'
+          ? normalizeRecruitMedia(source, medium, campaign, adContent)
+          : normalizeMedia(source, medium, campaign, adContent)
 
         if (!isSocialSession(source, medium, campaign, adContent)) continue
         if (!account || !Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(sessions)) continue
