@@ -17,6 +17,15 @@ type AnalysisTiktokMetricRecord = {
 
 type SheetCellValue = number | ''
 
+type SheetsMetadataResponse = {
+  sheets?: Array<{
+    properties?: {
+      sheetId?: number
+      title?: string
+    }
+  }>
+}
+
 const ACCOUNT_BLOCK_START: Record<string, number> = {
   Karilun: 3,
   京北: 13,
@@ -35,6 +44,14 @@ const METRIC_ROW_OFFSET: Record<string, number> = {
   URLクリック: 6,
   電話クリック: 8,
 }
+
+const FOLLOWERS_PER_POST_BLOCK_STARTS = [...new Set([...Object.values(ACCOUNT_BLOCK_START), 63])].sort(
+  (a, b) => a - b,
+)
+const FOLLOWERS_PER_POST_ROW_OFFSET = 3
+const FOLLOWERS_PER_POST_ROW_NUMBERS = FOLLOWERS_PER_POST_BLOCK_STARTS.map(
+  (blockStart) => blockStart + FOLLOWERS_PER_POST_ROW_OFFSET,
+)
 
 function base64Url(value: string) {
   return Buffer.from(value)
@@ -202,6 +219,67 @@ async function updateSheet(accessToken: string, data: Array<{ range: string; val
   if (!response.ok) throw new Error(`Sheet batch update failed. ${await response.text()}`)
 }
 
+async function getSheetId(accessToken: string) {
+  const fields = encodeURIComponent('sheets.properties(sheetId,title)')
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=${fields}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  )
+
+  if (!response.ok) throw new Error(`Sheet metadata fetch failed. ${await response.text()}`)
+
+  const data = await response.json() as SheetsMetadataResponse
+  const sheetId = data.sheets
+    ?.find((sheet) => sheet.properties?.title === SHEET_NAME)
+    ?.properties
+    ?.sheetId
+
+  if (sheetId === undefined) throw new Error(`Sheet not found: ${SHEET_NAME}`)
+  return sheetId
+}
+
+async function formatFollowersPerPostRows(accessToken: string) {
+  const sheetId = await getSheetId(accessToken)
+  const requests = FOLLOWERS_PER_POST_ROW_NUMBERS.map((rowNumber) => ({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: rowNumber - 1,
+        endRowIndex: rowNumber,
+        startColumnIndex: 2,
+        endColumnIndex: 26,
+      },
+      cell: {
+        userEnteredFormat: {
+          numberFormat: {
+            type: 'NUMBER',
+            pattern: '0.0',
+          },
+        },
+      },
+      fields: 'userEnteredFormat.numberFormat',
+    },
+  }))
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ requests }),
+    },
+  )
+
+  if (!response.ok) throw new Error(`Sheet format update failed. ${await response.text()}`)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -231,6 +309,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessToken = await getGoogleAccessToken()
 
     await updateSheet(accessToken, data)
+    await formatFollowersPerPostRows(accessToken)
 
     return res.status(200).json({
       ok: true,
