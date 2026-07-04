@@ -2222,6 +2222,10 @@ function App() {
   const [taskInlineField, setTaskInlineField] = useState<TaskEditableField | null>(null)
   const [taskInlineForm, setTaskInlineForm] = useState<Omit<Task, 'id'>>(defaultTaskForm)
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState('all')
+  const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | TaskType>('all')
+  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState<'all' | Department>('all')
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<'all' | Priority>('all')
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | TaskStatus>('all')
   const [taskShowCompleted, setTaskShowCompleted] = useState(true)
   const [recruitmentInlineId, setRecruitmentInlineId] = useState<string | null>(null)
   const [recruitmentInlineForm, setRecruitmentInlineForm] = useState<Omit<RecruitmentRecord, 'id'>>(defaultRecruitmentForm)
@@ -5771,8 +5775,12 @@ function App() {
   const priorityOrder: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 }
   const filteredAndSortedTasks = tasks
     .filter((task) => {
-      if (!taskShowCompleted && task.status === '完了') return false
+      if (!taskShowCompleted && taskStatusFilter !== '完了' && task.status === '完了') return false
       if (taskAssigneeFilter !== 'all' && !(task.assignees || []).includes(taskAssigneeFilter)) return false
+      if (taskTypeFilter !== 'all' && task.taskType !== taskTypeFilter) return false
+      if (taskDepartmentFilter !== 'all' && task.department !== taskDepartmentFilter) return false
+      if (taskPriorityFilter !== 'all' && task.priority !== taskPriorityFilter) return false
+      if (taskStatusFilter !== 'all' && task.status !== taskStatusFilter) return false
       return true
     })
     .sort((a, b) => {
@@ -8096,6 +8104,34 @@ function App() {
                   >
                     <option value="all">全担当者</option>
                     {assigneeOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <select
+                    value={taskTypeFilter}
+                    onChange={(e) => setTaskTypeFilter(e.target.value as 'all' | TaskType)}
+                  >
+                    <option value="all">全種類</option>
+                    {taskTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                  <select
+                    value={taskDepartmentFilter}
+                    onChange={(e) => setTaskDepartmentFilter(e.target.value as 'all' | Department)}
+                  >
+                    <option value="all">全依頼部署</option>
+                    {departments.map((department) => <option key={department} value={department}>{department}</option>)}
+                  </select>
+                  <select
+                    value={taskPriorityFilter}
+                    onChange={(e) => setTaskPriorityFilter(e.target.value as 'all' | Priority)}
+                  >
+                    <option value="all">全優先度</option>
+                    {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                  </select>
+                  <select
+                    value={taskStatusFilter}
+                    onChange={(e) => setTaskStatusFilter(e.target.value as 'all' | TaskStatus)}
+                  >
+                    <option value="all">全現状</option>
+                    {taskStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
                   <label className="task-show-completed">
                     <input
@@ -10488,7 +10524,7 @@ function App() {
                 </label>
                 {taskForm.taskType === '単発' && (
                   <label className="form-label">期日
-                    <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} required />
+                    <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} />
                   </label>
                 )}
                 {taskForm.taskType === '継続' && (
