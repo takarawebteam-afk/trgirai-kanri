@@ -3104,7 +3104,11 @@ function App() {
       if (error) throw error
 
       try {
-        const sheetSyncResponse = await fetch('/api/sync-analysis-ga-sheet', { method: 'POST' })
+        const sheetSyncResponse = await fetch('/api/analytics-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'sync-ga-sheet' }),
+        })
         const sheetSyncData = await sheetSyncResponse.json() as { ok?: boolean; message?: string }
 
         if (!sheetSyncResponse.ok || !sheetSyncData.ok) {
