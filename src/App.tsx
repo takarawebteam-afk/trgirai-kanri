@@ -3103,8 +3103,22 @@ function App() {
       })
       if (error) throw error
 
+      try {
+        const sheetSyncResponse = await fetch('/api/sync-analysis-ga-sheet', { method: 'POST' })
+        const sheetSyncData = await sheetSyncResponse.json() as { ok?: boolean; message?: string }
+
+        if (!sheetSyncResponse.ok || !sheetSyncData.ok) {
+          throw new Error(sheetSyncData.message || 'シート反映に失敗しました。')
+        }
+      } catch (sheetError) {
+        const message = sheetError instanceof Error ? sheetError.message : 'シート反映に失敗しました。'
+        setAnalysisImportMessageType('error')
+        setAnalysisImportMessage(`GA4取込は完了しましたが、シート反映に失敗しました: ${message}`)
+        return
+      }
+
       setAnalysisImportMessageType('success')
-      setAnalysisImportMessage(`最終更新: ${new Date(lastFetchedAt || Date.now()).toLocaleString('ja-JP')}`)
+      setAnalysisImportMessage(`最終更新: ${new Date(lastFetchedAt || Date.now()).toLocaleString('ja-JP')} / シート反映済み`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'GA4取込に失敗しました。'
       setAnalysisImportMessageType('error')
