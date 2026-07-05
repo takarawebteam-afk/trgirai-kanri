@@ -105,12 +105,12 @@ const JISHA_METRIC_FIELDS: JishaMetricField[] = [
   'koken_uriaage',
 ]
 
-const JISHA_EXCEL_CELL_MAP: Record<JishaMetricField, { 実績: string; 前年: string }> = {
-  hankyo_count: { 実績: 'H117', 前年: 'H118' },
-  hankyo_raikyo: { 実績: 'N117', 前年: 'N118' },
-  shinki_count: { 実績: 'W117', 前年: 'W118' },
-  keiyaku_count: { 実績: 'AB117', 前年: 'AB118' },
-  koken_uriaage: { 実績: 'AG117', 前年: 'AG118' },
+const JISHA_EXCEL_COLUMN_MAP: Record<JishaMetricField, string> = {
+  hankyo_count: 'H',
+  hankyo_raikyo: 'N',
+  shinki_count: 'W',
+  keiyaku_count: 'AB',
+  koken_uriaage: 'AG',
 }
 
 function getJishaMediaFromFileName(fileName: string): JishaShukyakuMedia | null {
@@ -140,6 +140,45 @@ function readJishaExcelNumber(sheet: XLSX.WorkSheet, address: string) {
   return Number.isFinite(value) ? value : 0
 }
 
+function readJishaExcelText(sheet: XLSX.WorkSheet, address: string) {
+  const cell = sheet[address]
+  if (!cell) return ''
+
+  return String(cell.w ?? cell.v ?? '').replace(/\s/g, '').trim()
+}
+
+function findJishaExcelTotalRows(sheet: XLSX.WorkSheet): Record<'実績' | '前年', number> {
+  const fallbackRows = { 実績: 117, 前年: 118 }
+  const ref = sheet['!ref']
+  if (!ref) return fallbackRows
+
+  const range = XLSX.utils.decode_range(ref)
+
+  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
+    const rowNumber = rowIndex + 1
+    const labelCells = ['A', 'B'].map((column) => readJishaExcelText(sheet, `${column}${rowNumber}`))
+    const isTotalRow = labelCells.some((text) => text === '全社')
+    if (!isTotalRow) continue
+
+    let previousYearRow = rowNumber + 1
+    for (let nextRow = rowNumber + 1; nextRow <= Math.min(rowNumber + 3, range.e.r + 1); nextRow += 1) {
+      const previousLabels = ['A', 'B'].map((column) => readJishaExcelText(sheet, `${column}${nextRow}`))
+      if (previousLabels.some((text) => text.includes('前年'))) {
+        previousYearRow = nextRow
+        break
+      }
+    }
+
+    return { 実績: rowNumber, 前年: previousYearRow }
+  }
+
+  return fallbackRows
+}
+
+function getJishaMonthSheetNames(workbook: XLSX.WorkBook) {
+  return workbook.SheetNames.filter((sheetName) => /^(\d{1,2})月$/.test(sheetName))
+}
+
 function extractJishaRowsFromWorkbook(workbook: XLSX.WorkBook) {
   const rows: JishaImportRow[] = []
 
@@ -153,9 +192,11 @@ function extractJishaRowsFromWorkbook(workbook: XLSX.WorkBook) {
     const sheet = workbook.Sheets[sheetName]
     if (!sheet) return
 
+    const totalRows = findJishaExcelTotalRows(sheet)
+
     ;(['実績', '前年'] as const).forEach((rowType) => {
       const values = JISHA_METRIC_FIELDS.reduce((acc, field) => {
-        acc[field] = readJishaExcelNumber(sheet, JISHA_EXCEL_CELL_MAP[field][rowType])
+        acc[field] = readJishaExcelNumber(sheet, `${JISHA_EXCEL_COLUMN_MAP[field]}${totalRows[rowType]}`)
         return acc
       }, {} as Record<JishaMetricField, number>)
 
@@ -3068,9 +3109,9 @@ function App() {
     setAnalysisImporting(true)
     setAnalysisImportMessage('')
     setAnalysisImportMessageType('success')
-
     try {
       const allRows: AnalysisSessionSavedRow[] = []
+      const warnings: string[] = []
       let lastFetchedAt = ''
 
       for (const year of ANALYSIS_YEARS) {
@@ -3084,6 +3125,7 @@ function App() {
           message?: string
           rows?: AnalysisSessionImportRow[]
           fetchedAt?: string
+          warnings?: string[]
         }
 
         if (!response.ok || !data.ok || !data.rows) {
@@ -3091,6 +3133,7 @@ function App() {
         }
 
         lastFetchedAt = data.fetchedAt || lastFetchedAt
+        if (data.warnings?.length) warnings.push(...data.warnings)
         for (const row of data.rows) {
           allRows.push({ year, account: row.account, media: row.media, month: row.month, sessions: row.sessions })
         }
@@ -3122,7 +3165,8 @@ function App() {
       }
 
       setAnalysisImportMessageType('success')
-      setAnalysisImportMessage(`最終更新: ${new Date(lastFetchedAt || Date.now()).toLocaleString('ja-JP')} / シート反映済み`)
+      const warningText = warnings.length > 0 ? ` / 一部取込不可: ${warnings.join(' / ')}` : ''
+      setAnalysisImportMessage(`最終更新: ${new Date(lastFetchedAt || Date.now()).toLocaleString('ja-JP')} / シート反映済み${warningText}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'GA4取込に失敗しました。'
       setAnalysisImportMessageType('error')
@@ -4266,7 +4310,12 @@ function App() {
         const rows = extractJishaRowsFromWorkbook(workbook)
 
         if (rows.length === 0) {
-          throw new Error(`ファイル「${file.name}」に「1月」「2月」のような月タブが見つかりませんでした。`)
+          const monthSheetNames = getJishaMonthSheetNames(workbook)
+          if (monthSheetNames.length === 0) {
+            throw new Error(`ファイル「${file.name}」に「1月」「2月」のような月タブが見つかりませんでした。`)
+          }
+
+          throw new Error(`ファイル「${file.name}」の月タブは見つかりましたが、「全社」行の実績がすべて0、または読めませんでした。`)
         }
 
         latestImportedMonth = Math.max(

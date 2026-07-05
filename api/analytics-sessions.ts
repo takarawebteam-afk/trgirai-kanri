@@ -11,6 +11,12 @@ type GaRunReportResponse = {
   rows?: GaReportRow[]
 }
 
+type GaErrorResponse = {
+  error?: {
+    message?: string
+  }
+}
+
 type AnalysisMedia = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube' | 'その他'
 type AnalysisAccount = 'Karilun' | '京阪' | '西宮市' | '八尾' | '長瀬' | '西北' | '採用'
 
@@ -293,6 +299,44 @@ function emptyRows() {
   }
 
   return rows
+}
+
+function getTokyoDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+
+  return {
+    year: Number(values.year),
+    dateKey: `${values.year}-${values.month}-${values.day}`,
+  }
+}
+
+function getGaDateRange(year: number) {
+  const today = getTokyoDateParts(new Date())
+  const startDate = `${year}-01-01`
+  const endOfYear = `${year}-12-31`
+
+  if (year < today.year) return { startDate, endDate: endOfYear }
+  if (year === today.year) return { startDate, endDate: today.dateKey }
+
+  return null
+}
+
+function getPropertyConfigAccount(config: (typeof GA4_PROPERTY_CONFIGS)[number]) {
+  return config.fixedAccount || config.fallbackAccount || '不明'
+}
+
+function getReadableGaErrorMessage(message: string) {
+  if (message.includes('User does not have sufficient permissions')) {
+    return 'このGoogleアカウントにGA4を見る権限がありません。GA4を見られるGoogleアカウントでつなぎ直してください。'
+  }
+
+  return message || 'GA4から数字を取れませんでした。'
 }
 
 async function getAccessTokenFromServiceAccount(clientEmail: string, privateKey: string) {
@@ -624,6 +668,9 @@ async function handleSyncGaSheet(res: VercelResponse) {
 }
 
 async function fetchPropertyRows(propertyId: string, year: number, accessToken: string) {
+  const dateRange = getGaDateRange(year)
+  if (!dateRange) return { rows: [] } satisfies GaRunReportResponse
+
   const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
     method: 'POST',
     headers: {
@@ -631,7 +678,7 @@ async function fetchPropertyRows(propertyId: string, year: number, accessToken: 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      dateRanges: [{ startDate: `${year}-01-01`, endDate: `${year}-12-31` }],
+      dateRanges: [dateRange],
       dimensions: [
         { name: 'month' },
         { name: 'sessionSource' },
@@ -644,7 +691,10 @@ async function fetchPropertyRows(propertyId: string, year: number, accessToken: 
     }),
   })
 
-  if (!response.ok) throw new Error('ga4_report_failed')
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as GaErrorResponse | null
+    throw new Error(getReadableGaErrorMessage(data?.error?.message || ''))
+  }
 
   return await response.json() as GaRunReportResponse
 }
@@ -703,10 +753,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rowMap.set(`${row.account}:${row.media}:${row.month}`, row)
     }
 
+    const warnings: string[] = []
+    let fetchedPropertyCount = 0
+
     for (const config of propertyConfigs) {
       if (!config.propertyId) continue
 
-      const data = await fetchPropertyRows(config.propertyId, year, accessToken)
+      let data: GaRunReportResponse
+      try {
+        data = await fetchPropertyRows(config.propertyId, year, accessToken)
+        fetchedPropertyCount += 1
+      } catch (error) {
+        const account = getPropertyConfigAccount(config)
+        const message = error instanceof Error ? error.message : 'GA4から数字を取れませんでした。'
+        warnings.push(`${account}（ID: ${config.propertyId}）: ${message}`)
+        continue
+      }
 
       for (const row of data.rows || []) {
         const dimensions = row.dimensionValues || []
@@ -730,12 +792,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    if (fetchedPropertyCount === 0 && warnings.length > 0) {
+      return res.status(200).json({
+        ok: false,
+        message: `GA4の権限がありません。${warnings.join(' / ')}`,
+        warnings,
+        rows: emptyRows(),
+      })
+    }
+
     return res.status(200).json({
       ok: true,
       rows: Array.from(rowMap.values()),
       fetchedAt: new Date().toISOString(),
+      warnings,
     })
-  } catch {
-    return res.status(200).json({ ok: false, message: 'GA4から数字を取れませんでした。', rows: emptyRows() })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'GA4から数字を取れませんでした。'
+    return res.status(200).json({ ok: false, message, rows: emptyRows() })
   }
 }
