@@ -7107,7 +7107,7 @@ function App() {
             </section>
 
             <section className="panel dashboard-list-panel">
-              <div className="panel-heading"><div><h2>WEBチームタスク</h2><p>今日から3日以内が期日のタスク</p></div></div>
+              <div className="panel-heading"><div><h2>BC部タスク</h2><p>今日から3日以内が期日のタスク</p></div></div>
               <div className="ongoing-list">
                 {webTeamTasks.length === 0 && <p className="empty-text">期日が3日以内のタスクはありません。</p>}
                 {webTeamTasks.map((item) => (
@@ -11433,7 +11433,7 @@ function TaskReportPanel() {
 
   const summaryCards = [
     {
-      name: 'WEBチーム全体',
+      name: 'BC部全体',
       count: rows.length,
       minutes: allTotalMinutes,
       workMinutes: allTotalWorkMinutes,
@@ -11723,7 +11723,7 @@ function TaskReportPanel() {
     const exportTotalCount = exportRows.length
     const exportTotalMinutes = exportRows.reduce((sum, row) => sum + row.minutes, 0)
     const exportTotalWorkMinutes = exportMemberSummaries.reduce((sum, member) => sum + member.workMinutes, 0)
-    const exportTargetLabel = selectedReportMember || 'WEBチーム全体'
+    const exportTargetLabel = selectedReportMember || 'BC部全体'
     const periodLabel = selectedReportPeriod === 'total' ? `${currentYear}年累計` : selectedReportPeriod.replace('-', '年') + '月'
 
     const getMemberHint = (member: (typeof exportMemberSummaries)[number]) => {
@@ -11753,7 +11753,7 @@ function TaskReportPanel() {
     }
 
     const csvRows: Array<Array<string | number | null | undefined>> = []
-    csvRows.push(['WEBチーム業務棚卸し AI分析用CSV'])
+    csvRows.push(['BC部業務棚卸し AI分析用CSV'])
     csvRows.push(['集計対象', exportTargetLabel])
     csvRows.push(['集計期間', periodLabel])
     csvRows.push(['開始日', startDate])
@@ -11894,7 +11894,7 @@ function TaskReportPanel() {
       <div className="panel task-report-hero">
         <div className="task-report-hero-top">
           <div className="task-report-title-block">
-            <h2>WEBチームの業務棚卸し</h2>
+            <h2>BC部の業務棚卸し</h2>
             <p>期間を選択すると、実行した業務と時間をまとめて見られます。</p>
           </div>
           <div className="task-report-hero-actions">
