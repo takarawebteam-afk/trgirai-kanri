@@ -6989,8 +6989,8 @@ function App() {
         <div className="app-sticky-header">
           <header className="app-header">
           <div>
-            <p className="eyebrow">WEB Strategic Team</p>
-            <h1>WEB戦略チーム管理表</h1>
+            <p className="eyebrow">Brand Communication</p>
+            <h1>BC部管理表</h1>
             <p className="intro">社内依頼、SNS運用、採用導線をひとつの画面で追える管理ツール</p>
           </div>
           <div className="header-panel header-panel-auth">
