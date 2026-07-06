@@ -486,9 +486,22 @@ const MEDIA_ROW_OFFSET: Record<string, number> = {
   その他: 4,
 }
 
-const INDIRECT_ACCOUNT_BLOCK_START: Record<string, number> = {
+const SITE_TRAFFIC_ROW_OFFSET: Record<string, number> = {
+  自然検索: 0,
+  指名検索: 1,
+  ダイレクト: 2,
+  外部サイト: 3,
+  AI経由: 4,
+  その他: 5,
+}
+
+const INDIRECT_SOCIAL_ACCOUNT_BLOCK_START: Record<string, number> = {
   採用: 3,
   管理: 11,
+}
+
+const INDIRECT_SITE_ACCOUNT_BLOCK_START: Record<string, number> = {
+  管理課サイト: 19,
 }
 
 function normalizePrivateKey(value: string) {
@@ -599,11 +612,11 @@ function normalizeSessions(value: number | null): SheetCellValue {
   return Number.isFinite(numberValue) ? numberValue : 0
 }
 
-function createEmptySheetRows(accountBlockStart: Record<string, number>) {
+function createEmptySheetRows(accountBlockStart: Record<string, number>, rowOffset: Record<string, number>) {
   const rowsByNumber = new Map<number, SheetCellValue[]>()
 
   for (const blockStart of Object.values(accountBlockStart)) {
-    for (const offset of Object.values(MEDIA_ROW_OFFSET)) {
+    for (const offset of Object.values(rowOffset)) {
       rowsByNumber.set(blockStart + offset, Array<SheetCellValue>(SHEET_MONTH_COUNT).fill(0))
     }
   }
@@ -615,12 +628,13 @@ function buildSheetUpdateData(
   records: AnalysisSessionRecord[],
   sheetNameValue: string,
   accountBlockStart: Record<string, number>,
+  rowOffset: Record<string, number>,
 ) {
-  const rowsByNumber = createEmptySheetRows(accountBlockStart)
+  const rowsByNumber = createEmptySheetRows(accountBlockStart, rowOffset)
 
   for (const record of records) {
     const blockStart = accountBlockStart[String(record.account ?? '').trim()]
-    const offset = MEDIA_ROW_OFFSET[String(record.media ?? '').trim()]
+    const offset = rowOffset[String(record.media ?? '').trim()]
     const monthIndex = getMonthIndex(Number(record.year), Number(record.month))
 
     if (blockStart === undefined || offset === undefined || monthIndex === null) continue
@@ -642,8 +656,9 @@ function buildSheetUpdateData(
 
 function buildBatchUpdateData(records: AnalysisSessionRecord[]) {
   return [
-    ...buildSheetUpdateData(records, ANALYSIS_GA_STORE_SHEET_NAME, ACCOUNT_BLOCK_START),
-    ...buildSheetUpdateData(records, ANALYSIS_GA_INDIRECT_SHEET_NAME, INDIRECT_ACCOUNT_BLOCK_START),
+    ...buildSheetUpdateData(records, ANALYSIS_GA_STORE_SHEET_NAME, ACCOUNT_BLOCK_START, MEDIA_ROW_OFFSET),
+    ...buildSheetUpdateData(records, ANALYSIS_GA_INDIRECT_SHEET_NAME, INDIRECT_SOCIAL_ACCOUNT_BLOCK_START, MEDIA_ROW_OFFSET),
+    ...buildSheetUpdateData(records, ANALYSIS_GA_INDIRECT_SHEET_NAME, INDIRECT_SITE_ACCOUNT_BLOCK_START, SITE_TRAFFIC_ROW_OFFSET),
   ]
 }
 
@@ -719,6 +734,53 @@ async function fetchPropertyRows(propertyId: string, year: number, accessToken: 
   return await response.json() as GaRunReportResponse
 }
 
+async function fetchPropertyChannelRows(propertyId: string, year: number, accessToken: string) {
+  const dateRange = getGaDateRange(year)
+  if (!dateRange) return { rows: [] } satisfies GaRunReportResponse
+
+  const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      dateRanges: [dateRange],
+      dimensions: [
+        { name: 'month' },
+        { name: 'sessionDefaultChannelGroup' },
+      ],
+      metrics: [{ name: 'sessions' }],
+      limit: '100000',
+    }),
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as GaErrorResponse | null
+    throw new Error(getReadableGaErrorMessage(data?.error?.message || ''))
+  }
+
+  return await response.json() as GaRunReportResponse
+}
+
+function normalizeSiteTrafficMedia(channelGroup: string) {
+  switch (channelGroup) {
+    case 'Organic Search':
+      return '自然検索'
+    case 'Direct':
+      return 'ダイレクト'
+    case 'Referral':
+      return '外部サイト'
+    case 'AI Assistant':
+      return 'AI経由'
+    case 'Organic Social':
+    case 'Paid Social':
+      return null
+    default:
+      return 'その他'
+  }
+}
+
 async function fetchSheetOnlyAnalysisSessions() {
   if (!SHEET_ONLY_KANRI_GA_PROPERTY_ID) return []
 
@@ -728,9 +790,9 @@ async function fetchSheetOnlyAnalysisSessions() {
   const rowMap = new Map<string, AnalysisSessionRecord>()
 
   for (let year = SHEET_START_YEAR; year <= SHEET_END_YEAR; year += 1) {
-    const data = await fetchPropertyRows(SHEET_ONLY_KANRI_GA_PROPERTY_ID, year, accessToken)
+    const socialData = await fetchPropertyRows(SHEET_ONLY_KANRI_GA_PROPERTY_ID, year, accessToken)
 
-    for (const row of data.rows || []) {
+    for (const row of socialData.rows || []) {
       const dimensions = row.dimensionValues || []
       const month = Number(dimensions[0]?.value || 0)
       const source = dimensions[1]?.value || ''
@@ -750,6 +812,28 @@ async function fetchSheetOnlyAnalysisSessions() {
         current.sessions = normalizeSessions(current.sessions) + sessions
       } else {
         rowMap.set(key, { year, month, account: '管理', media, sessions })
+      }
+    }
+
+    const siteData = await fetchPropertyChannelRows(SHEET_ONLY_KANRI_GA_PROPERTY_ID, year, accessToken)
+
+    for (const row of siteData.rows || []) {
+      const dimensions = row.dimensionValues || []
+      const month = Number(dimensions[0]?.value || 0)
+      const channelGroup = dimensions[1]?.value || ''
+      const sessions = Number(row.metricValues?.[0]?.value || 0)
+      const media = normalizeSiteTrafficMedia(channelGroup)
+
+      if (!media) continue
+      if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(sessions)) continue
+
+      const key = `${year}:管理課サイト:${media}:${month}`
+      const current = rowMap.get(key)
+
+      if (current) {
+        current.sessions = normalizeSessions(current.sessions) + sessions
+      } else {
+        rowMap.set(key, { year, month, account: '管理課サイト', media, sessions })
       }
     }
   }
