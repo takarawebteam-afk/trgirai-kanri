@@ -451,10 +451,13 @@ async function getAnalyticsAccessToken() {
 }
 
 const ANALYSIS_GA_SPREADSHEET_ID = process.env.ANALYSIS_GA_SPREADSHEET_ID || '1hOIT8zCmR_KGtsHvFEaqkLkBKxkrDGwbltmNULKCmkM'
-const ANALYSIS_GA_SHEET_NAME = '仲介店舗GA'
+const ANALYSIS_GA_STORE_SHEET_NAME = '仲介店舗GA'
+const ANALYSIS_GA_INDIRECT_SHEET_NAME = '間接部署GA'
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 const SHEET_START_YEAR = 2025
 const SHEET_MONTH_COUNT = 24
+const SHEET_END_YEAR = SHEET_START_YEAR + Math.ceil(SHEET_MONTH_COUNT / 12) - 1
+const SHEET_ONLY_KANRI_GA_PROPERTY_ID = process.env.GA4_PROPERTY_KANRI || '398626147'
 
 type AnalysisSessionRecord = {
   year: number
@@ -481,6 +484,11 @@ const MEDIA_ROW_OFFSET: Record<string, number> = {
   Threads: 2,
   YouTube: 3,
   その他: 4,
+}
+
+const INDIRECT_ACCOUNT_BLOCK_START: Record<string, number> = {
+  採用: 3,
+  管理: 11,
 }
 
 function normalizePrivateKey(value: string) {
@@ -591,10 +599,10 @@ function normalizeSessions(value: number | null): SheetCellValue {
   return Number.isFinite(numberValue) ? numberValue : 0
 }
 
-function createEmptySheetRows() {
+function createEmptySheetRows(accountBlockStart: Record<string, number>) {
   const rowsByNumber = new Map<number, SheetCellValue[]>()
 
-  for (const blockStart of Object.values(ACCOUNT_BLOCK_START)) {
+  for (const blockStart of Object.values(accountBlockStart)) {
     for (const offset of Object.values(MEDIA_ROW_OFFSET)) {
       rowsByNumber.set(blockStart + offset, Array<SheetCellValue>(SHEET_MONTH_COUNT).fill(0))
     }
@@ -603,11 +611,15 @@ function createEmptySheetRows() {
   return rowsByNumber
 }
 
-function buildBatchUpdateData(records: AnalysisSessionRecord[]) {
-  const rowsByNumber = createEmptySheetRows()
+function buildSheetUpdateData(
+  records: AnalysisSessionRecord[],
+  sheetNameValue: string,
+  accountBlockStart: Record<string, number>,
+) {
+  const rowsByNumber = createEmptySheetRows(accountBlockStart)
 
   for (const record of records) {
-    const blockStart = ACCOUNT_BLOCK_START[String(record.account ?? '').trim()]
+    const blockStart = accountBlockStart[String(record.account ?? '').trim()]
     const offset = MEDIA_ROW_OFFSET[String(record.media ?? '').trim()]
     const monthIndex = getMonthIndex(Number(record.year), Number(record.month))
 
@@ -619,13 +631,20 @@ function buildBatchUpdateData(records: AnalysisSessionRecord[]) {
     rowsByNumber.set(rowNumber, rowValues)
   }
 
-  const sheetName = escapeSheetName(ANALYSIS_GA_SHEET_NAME)
+  const sheetName = escapeSheetName(sheetNameValue)
   return Array.from(rowsByNumber.entries())
     .sort(([a], [b]) => a - b)
     .map(([rowNumber, values]) => ({
       range: `'${sheetName}'!C${rowNumber}:Z${rowNumber}`,
       values: [values],
     }))
+}
+
+function buildBatchUpdateData(records: AnalysisSessionRecord[]) {
+  return [
+    ...buildSheetUpdateData(records, ANALYSIS_GA_STORE_SHEET_NAME, ACCOUNT_BLOCK_START),
+    ...buildSheetUpdateData(records, ANALYSIS_GA_INDIRECT_SHEET_NAME, INDIRECT_ACCOUNT_BLOCK_START),
+  ]
 }
 
 async function updateSheet(accessToken: string, data: Array<{ range: string; values: SheetCellValue[][] }>) {
@@ -650,7 +669,8 @@ async function updateSheet(accessToken: string, data: Array<{ range: string; val
 async function handleSyncGaSheet(res: VercelResponse) {
   try {
     const records = await fetchAllAnalysisSessions()
-    const data = buildBatchUpdateData(records)
+    const sheetOnlyRecords = await fetchSheetOnlyAnalysisSessions()
+    const data = buildBatchUpdateData([...records, ...sheetOnlyRecords])
     const cellsWritten = data.reduce((sum, item) => sum + item.values[0].length, 0)
     const accessToken = await getGoogleAccessToken()
 
@@ -697,6 +717,44 @@ async function fetchPropertyRows(propertyId: string, year: number, accessToken: 
   }
 
   return await response.json() as GaRunReportResponse
+}
+
+async function fetchSheetOnlyAnalysisSessions() {
+  if (!SHEET_ONLY_KANRI_GA_PROPERTY_ID) return []
+
+  const accessToken = await getAnalyticsAccessToken()
+  if (!accessToken) throw new Error('管理課GAの接続設定がまだ入っていません。')
+
+  const rowMap = new Map<string, AnalysisSessionRecord>()
+
+  for (let year = SHEET_START_YEAR; year <= SHEET_END_YEAR; year += 1) {
+    const data = await fetchPropertyRows(SHEET_ONLY_KANRI_GA_PROPERTY_ID, year, accessToken)
+
+    for (const row of data.rows || []) {
+      const dimensions = row.dimensionValues || []
+      const month = Number(dimensions[0]?.value || 0)
+      const source = dimensions[1]?.value || ''
+      const medium = dimensions[2]?.value || ''
+      const campaign = dimensions[3]?.value || ''
+      const adContent = dimensions[4]?.value || ''
+      const sessions = Number(row.metricValues?.[0]?.value || 0)
+      const media = normalizeMedia(source, medium, campaign, adContent)
+
+      if (!isSocialSession(source, medium, campaign, adContent)) continue
+      if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(sessions)) continue
+
+      const key = `${year}:管理:${media}:${month}`
+      const current = rowMap.get(key)
+
+      if (current) {
+        current.sessions = normalizeSessions(current.sessions) + sessions
+      } else {
+        rowMap.set(key, { year, month, account: '管理', media, sessions })
+      }
+    }
+  }
+
+  return Array.from(rowMap.values())
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
