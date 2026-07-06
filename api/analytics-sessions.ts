@@ -20,6 +20,7 @@ type GaErrorResponse = {
 type SearchConsoleRow = {
   keys?: string[]
   clicks?: number
+  impressions?: number
 }
 
 type SearchConsoleResponse = {
@@ -855,20 +856,20 @@ async function fetchSearchConsoleBrandRows(year: number, accessToken: string) {
     const dateKey = row.keys?.[0] || ''
     const query = row.keys?.[1] || ''
     const month = Number(dateKey.slice(5, 7))
-    const clicks = Number(row.clicks || 0)
+    const impressions = Number(row.impressions || 0)
 
     if (!isKanriBrandSearchQuery(query)) continue
-    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(clicks)) continue
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(impressions)) continue
 
-    rowsByMonth.set(month, (rowsByMonth.get(month) || 0) + clicks)
+    rowsByMonth.set(month, (rowsByMonth.get(month) || 0) + impressions)
   }
 
-  return Array.from(rowsByMonth.entries()).map(([month, clicks]) => ({
+  return Array.from(rowsByMonth.entries()).map(([month, impressions]) => ({
     year,
     month,
     account: '管理課サイト',
     media: '指名検索',
-    sessions: clicks,
+    sessions: impressions,
   })) satisfies AnalysisSessionRecord[]
 }
 
