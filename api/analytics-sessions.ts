@@ -17,6 +17,15 @@ type GaErrorResponse = {
   }
 }
 
+type SearchConsoleRow = {
+  keys?: string[]
+  clicks?: number
+}
+
+type SearchConsoleResponse = {
+  rows?: SearchConsoleRow[]
+}
+
 type AnalysisMedia = 'TikTok' | 'Instagram' | 'Threads' | 'YouTube' | 'その他'
 type AnalysisAccount = 'Karilun' | '京阪' | '西宮市' | '八尾' | '長瀬' | '西北' | '採用'
 
@@ -41,6 +50,8 @@ const ANALYSIS_ACCOUNTS: AnalysisAccount[] = ['Karilun', '京阪', '西宮市', 
 const ANALYSIS_MEDIAS: AnalysisMedia[] = ['TikTok', 'Instagram', 'Threads', 'YouTube', 'その他']
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly'
+const SEARCH_CONSOLE_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly'
+const GOOGLE_OAUTH_SCOPE = `${GA_SCOPE} ${SEARCH_CONSOLE_SCOPE}`
 
 const GA4_PROPERTY_CONFIGS: Array<{
   propertyId: string | undefined
@@ -187,20 +198,21 @@ async function handleRefreshExchange(body: AnalyticsRequestBody, res: VercelResp
     return res.status(200).json({ ok: false, message: 'Supabaseの保存設定がありません。' })
   }
 
+  const updatedAt = new Date().toISOString()
   const { error } = await supabase
     .from('app_secrets')
-    .upsert({
-      key: 'ga4_refresh_token',
-      value: tokenData.refresh_token,
-      updated_at: new Date().toISOString(),
-    })
+    .upsert([
+      { key: 'ga4_refresh_token', value: tokenData.refresh_token, updated_at: updatedAt },
+      { key: 'ga4_access_token', value: '', updated_at: updatedAt },
+      { key: 'ga4_access_token_expires_at', value: '1970-01-01T00:00:00.000Z', updated_at: updatedAt },
+    ])
 
   if (error) {
     return res.status(200).json({ ok: false, message: `保存に失敗しました: ${error.message}` })
   }
 
   cachedToken = null
-  return res.status(200).json({ ok: true, scope: GA_SCOPE })
+  return res.status(200).json({ ok: true, scope: GOOGLE_OAUTH_SCOPE })
 }
 
 async function handleStoreAccessToken(body: AnalyticsRequestBody, res: VercelResponse) {
@@ -349,7 +361,7 @@ async function getAccessTokenFromServiceAccount(clientEmail: string, privateKey:
   const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const claim = base64Url(JSON.stringify({
     iss: clientEmail,
-    scope: GA_SCOPE,
+    scope: GOOGLE_OAUTH_SCOPE,
     aud: TOKEN_URL,
     exp: now + 3600,
     iat: now,
@@ -458,6 +470,10 @@ const SHEET_START_YEAR = 2025
 const SHEET_MONTH_COUNT = 24
 const SHEET_END_YEAR = SHEET_START_YEAR + Math.ceil(SHEET_MONTH_COUNT / 12) - 1
 const SHEET_ONLY_KANRI_GA_PROPERTY_ID = process.env.GA4_PROPERTY_KANRI || '398626147'
+const KANRI_SEARCH_CONSOLE_SITE_URLS = (process.env.SEARCH_CONSOLE_SITE_URL || process.env.GSC_SITE_URL || 'https://www.rentax.co.jp/,sc-domain:rentax.co.jp')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
 
 type AnalysisSessionRecord = {
   year: number
@@ -781,6 +797,81 @@ function normalizeSiteTrafficMedia(channelGroup: string) {
   }
 }
 
+function isKanriBrandSearchQuery(query: string) {
+  const normalized = query.normalize('NFKC').toLowerCase()
+  if (normalized.includes('takara') || normalized.includes('タカラ')) return false
+
+  return normalized.includes('rentax') || normalized.includes('レンタックス')
+}
+
+function addSheetOnlyRecord(
+  rowMap: Map<string, AnalysisSessionRecord>,
+  record: AnalysisSessionRecord,
+) {
+  const key = `${record.year}:${record.account}:${record.media}:${record.month}`
+  const current = rowMap.get(key)
+
+  if (current) {
+    current.sessions = normalizeSessions(current.sessions) + normalizeSessions(record.sessions)
+  } else {
+    rowMap.set(key, record)
+  }
+}
+
+async function fetchSearchConsoleBrandRows(year: number, accessToken: string) {
+  const dateRange = getGaDateRange(year)
+  if (!dateRange) return []
+
+  let data: SearchConsoleResponse | null = null
+
+  for (const siteUrl of KANRI_SEARCH_CONSOLE_SITE_URLS) {
+    const response = await fetch(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          dimensions: ['date', 'query'],
+          rowLimit: 25000,
+        }),
+      },
+    )
+
+    if (response.ok) {
+      data = await response.json() as SearchConsoleResponse
+      break
+    }
+  }
+
+  if (!data) return []
+  const rowsByMonth = new Map<number, number>()
+
+  for (const row of data.rows || []) {
+    const dateKey = row.keys?.[0] || ''
+    const query = row.keys?.[1] || ''
+    const month = Number(dateKey.slice(5, 7))
+    const clicks = Number(row.clicks || 0)
+
+    if (!isKanriBrandSearchQuery(query)) continue
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(clicks)) continue
+
+    rowsByMonth.set(month, (rowsByMonth.get(month) || 0) + clicks)
+  }
+
+  return Array.from(rowsByMonth.entries()).map(([month, clicks]) => ({
+    year,
+    month,
+    account: '管理課サイト',
+    media: '指名検索',
+    sessions: clicks,
+  })) satisfies AnalysisSessionRecord[]
+}
+
 async function fetchSheetOnlyAnalysisSessions() {
   if (!SHEET_ONLY_KANRI_GA_PROPERTY_ID) return []
 
@@ -805,14 +896,7 @@ async function fetchSheetOnlyAnalysisSessions() {
       if (!isSocialSession(source, medium, campaign, adContent)) continue
       if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(sessions)) continue
 
-      const key = `${year}:管理:${media}:${month}`
-      const current = rowMap.get(key)
-
-      if (current) {
-        current.sessions = normalizeSessions(current.sessions) + sessions
-      } else {
-        rowMap.set(key, { year, month, account: '管理', media, sessions })
-      }
+      addSheetOnlyRecord(rowMap, { year, month, account: '管理', media, sessions })
     }
 
     const siteData = await fetchPropertyChannelRows(SHEET_ONLY_KANRI_GA_PROPERTY_ID, year, accessToken)
@@ -827,14 +911,11 @@ async function fetchSheetOnlyAnalysisSessions() {
       if (!media) continue
       if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(sessions)) continue
 
-      const key = `${year}:管理課サイト:${media}:${month}`
-      const current = rowMap.get(key)
+      addSheetOnlyRecord(rowMap, { year, month, account: '管理課サイト', media, sessions })
+    }
 
-      if (current) {
-        current.sessions = normalizeSessions(current.sessions) + sessions
-      } else {
-        rowMap.set(key, { year, month, account: '管理課サイト', media, sessions })
-      }
+    for (const record of await fetchSearchConsoleBrandRows(year, accessToken)) {
+      addSheetOnlyRecord(rowMap, record)
     }
   }
 

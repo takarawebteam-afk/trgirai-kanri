@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './Ga4RefreshPage.css'
 
-const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly'
+const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly https://www.googleapis.com/auth/webmasters.readonly'
 const REDIRECT_URI = 'https://trgirai-kanri.vercel.app/ga4-refresh'
 
 export default function Ga4RefreshPage() {
@@ -93,8 +93,8 @@ export default function Ga4RefreshPage() {
   return (
     <main className="ga4-refresh-page">
       <section className="ga4-refresh-panel">
-        <h1>GA4接続の修理</h1>
-        <p>GA4を見る権限があるGoogleアカウントでログインしてください。</p>
+        <h1>GA4・Search Console接続の修理</h1>
+        <p>GA4とSearch Consoleを見る権限があるGoogleアカウントでログインしてください。</p>
         <button type="button" onClick={startLogin} disabled={loading || working || !clientId}>
           {working ? '接続中...' : 'Googleでログイン'}
         </button>
