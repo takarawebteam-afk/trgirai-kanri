@@ -47,6 +47,7 @@ const STORE_DESTINATION_CONFIG = {
 const SHEET_IMAGE_IMPORT_TOKENS: Record<string, string> = {
   '1WgzGsmywL16bRAX3J_MI6qbskuLfelRu3IEYGvLTrwQ': 'c02ce374-c3d2-40da-88bf-6c0483d139f3',
   '1jx3OJi-4vlrUWE4ubr-zlZkrqdeEm2v-Vq3sPkwZ5TQ': '809ca5f8-83f3-4b9c-ad4b-7049c75f7df7',
+  '1fYUxnjIAEnbXQI2L0aRgUxG1vRZ8weLQ6WfOAo3kAsM': '7a82bc02-7c0a-4261-ab6a-b817e1ea500a',
 }
 
 const TRANSPARENT_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64')
@@ -68,6 +69,9 @@ type SheetImportBody = {
   spreadsheetId?: unknown
   sheetName?: unknown
   rowNumber?: unknown
+  documentUrl?: unknown
+  propertyUrl?: unknown
+  memo?: unknown
 }
 
 type ExistingPropertyRow = {
@@ -90,6 +94,9 @@ type ExistingPostDateRow = {
 }
 
 const STORE_RULE_PLATFORM_ORDER = ['tiktok', 'instagram', 'youtube'] as const
+const KEIHAN_PROGRESS_SPREADSHEET_ID = '1fYUxnjIAEnbXQI2L0aRgUxG1vRZ8weLQ6WfOAo3kAsM'
+const KEIHAN_PROGRESS_MEDIA = 'Karilun｜京阪'
+const KEIHAN_PROGRESS_STORE_NAMES = new Set(['枚方店', '守口店', '寝屋川店'])
 
 type SupabaseMaybeError = {
   code?: string
@@ -223,11 +230,13 @@ async function getLatestPostDate(tableName: StoreSnsPropertyTableName) {
   }, null)
 }
 
-async function getNextPostDate(tableName: StoreSnsPropertyTableName, accountKey: string) {
+async function getNextDateByAccountRules(
+  accountKey: string,
+  afterDate: Date,
+  platformOrder: readonly string[] = STORE_RULE_PLATFORM_ORDER,
+) {
   const supabase = getSupabaseClient()
-  const latestPostDate = await getLatestPostDate(tableName)
-  const afterDate = latestPostDate || addDays(new Date(), -1)
-  const accountPlatformKeys = STORE_RULE_PLATFORM_ORDER.map((platform) => `${accountKey}-${platform}`)
+  const accountPlatformKeys = platformOrder.map((platform) => `${accountKey}-${platform}`)
 
   const { data, error } = await supabase
     .from('sns_posting_rules')
@@ -253,6 +262,52 @@ async function getNextPostDate(tableName: StoreSnsPropertyTableName, accountKey:
   }
 
   return { postDate: '', ruleKey: '' }
+}
+
+async function getNextPostDate(tableName: StoreSnsPropertyTableName, accountKey: string) {
+  const latestPostDate = await getLatestPostDate(tableName)
+  const afterDate = latestPostDate || addDays(new Date(), -1)
+  return getNextDateByAccountRules(accountKey, afterDate)
+}
+
+async function getLatestProgressScheduledPostDate(media: string) {
+  const supabase = getSupabaseClient()
+  const rows: ExistingPostDateRow[] = []
+  const pageSize = 1000
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('production_records')
+      .select('post_date:scheduled_post_date')
+      .eq('media', media)
+      .range(from, from + pageSize - 1)
+
+    if (error) throw new Error(error.message)
+
+    const pageRows = (data || []) as ExistingPostDateRow[]
+    rows.push(...pageRows)
+    if (pageRows.length < pageSize) break
+  }
+
+  return rows.reduce<Date | null>((latest, row) => {
+    const date = parseLocalDate(row.post_date)
+    if (!date) return latest
+    if (!latest || date > latest) return date
+    return latest
+  }, null)
+}
+
+function getLaterDate(first: Date | null, second: Date | null) {
+  if (!first) return second
+  if (!second) return first
+  return first > second ? first : second
+}
+
+async function getNextKeihanProgressScheduledPostDate() {
+  const latestKeihanSnsPostDate = await getLatestPostDate('sns_keihan_karilun_properties')
+  const latestProgressScheduledPostDate = await getLatestProgressScheduledPostDate(KEIHAN_PROGRESS_MEDIA)
+  const afterDate = getLaterDate(latestKeihanSnsPostDate, latestProgressScheduledPostDate) || addDays(new Date(), -1)
+  return getNextDateByAccountRules('keihan', afterDate, ['tiktok', 'instagram'])
 }
 function wantsJsonResponse(req: VercelRequest) {
   return getQueryParam(req, 'format') === 'json'
@@ -440,6 +495,72 @@ async function addProperty(
   }
 }
 
+async function addKeihanProgressRecord(
+  storeName: string,
+  propertyName: string,
+  roomNumber: string,
+  documentUrl: string,
+  memo: string,
+) {
+  const supabase = getSupabaseClient()
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('production_records')
+    .select('id, scheduled_post_date')
+    .eq('media', KEIHAN_PROGRESS_MEDIA)
+    .eq('property_name', propertyName)
+    .eq('room_number', roomNumber)
+    .limit(1)
+
+  if (existingError) throw new Error(existingError.message)
+
+  const existing = (existingRows || [])[0] as { id: string; scheduled_post_date: string | null } | undefined
+  if (existing) {
+    return {
+      action: 'already_exists',
+      id: existing.id,
+      scheduledPostDate: String(existing.scheduled_post_date || ''),
+      ruleKey: '',
+    }
+  }
+
+  const nextScheduledPostDate = await getNextKeihanProgressScheduledPostDate()
+  const { data, error } = await supabase
+    .from('production_records')
+    .insert([{
+      media: KEIHAN_PROGRESS_MEDIA,
+      post_type: storeName,
+      property_name: propertyName,
+      room_number: roomNumber,
+      property_url: documentUrl,
+      memo,
+      scheduled_post_date: nextScheduledPostDate.postDate || null,
+    }])
+    .select('id, scheduled_post_date')
+    .single()
+
+  if (error || !data) {
+    throw new Error(error?.message || '進捗管理への追加に失敗しました')
+  }
+
+  return {
+    action: 'inserted',
+    id: data.id as string,
+    scheduledPostDate: String(data.scheduled_post_date || nextScheduledPostDate.postDate),
+    ruleKey: nextScheduledPostDate.ruleKey,
+  }
+}
+
+function shouldImportToKeihanProgress(spreadsheetId: string, destinationName: string, storeName: string) {
+  return KEIHAN_PROGRESS_STORE_NAMES.has(storeName)
+    && (spreadsheetId === KEIHAN_PROGRESS_SPREADSHEET_ID || destinationName === '進捗管理')
+}
+
+function validateKeihanProgressStore(storeName: string) {
+  if (!KEIHAN_PROGRESS_STORE_NAMES.has(storeName)) {
+    throw new Error(`進捗管理へ反映できる店舗は、枚方店・守口店・寝屋川店です: ${storeName}`)
+  }
+}
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     const jsonMode = wantsJsonResponse(req)
@@ -456,6 +577,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const propertyName = getQueryParam(req, 'propertyName')
     const roomNumber = getQueryParam(req, 'roomNumber')
     const sourceMonth = normalizeSourceMonth(getQueryParam(req, 'sourceMonth'))
+    const requestedDestinationName = normalizeDestinationName(getQueryParam(req, 'destinationName'))
+    const documentUrl = getQueryParam(req, 'documentUrl') || getQueryParam(req, 'propertyUrl')
+    const memo = getQueryParam(req, 'memo')
 
     if (!storeName || !propertyName || !roomNumber || !isStoreName(storeName)) {
       if (csvMode) return sendCsv(res, 'SKIP')
@@ -472,6 +596,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+      if (shouldImportToKeihanProgress(spreadsheetId, requestedDestinationName, storeName)) {
+        validateKeihanProgressStore(storeName)
+        const result = await addKeihanProgressRecord(storeName, propertyName, roomNumber, documentUrl, memo)
+        if (csvMode) return sendCsv(res, `OK,${result.scheduledPostDate}`)
+        if (jsonMode) {
+          return json(res, 200, {
+            success: true,
+            storeName,
+            destinationName: '進捗管理',
+            media: KEIHAN_PROGRESS_MEDIA,
+            propertyName,
+            roomNumber,
+            action: result.action,
+            scheduledPostDate: result.scheduledPostDate,
+            ruleKey: result.ruleKey,
+            id: result.id,
+          })
+        }
+        return sendPixel(res)
+      }
+
       const config = STORE_DESTINATION_CONFIG[storeName]
       const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth)
       if (csvMode) return sendCsv(res, `OK,${result.propertyNumber}`)
@@ -518,6 +663,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const roomNumber = text(body.roomNumber)
   const requestedDestinationName = normalizeDestinationName(text(body.destinationName))
   const sourceMonth = normalizeSourceMonth(text(body.sourceMonth))
+  const spreadsheetId = text(body.spreadsheetId)
+  const documentUrl = text(body.documentUrl) || text(body.propertyUrl)
+  const memo = text(body.memo)
 
   if (!storeName || !propertyName || !roomNumber) {
     return json(res, 400, {
@@ -534,6 +682,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const config = STORE_DESTINATION_CONFIG[storeName]
+  if (shouldImportToKeihanProgress(spreadsheetId, requestedDestinationName, storeName)) {
+    try {
+      validateKeihanProgressStore(storeName)
+      const result = await addKeihanProgressRecord(storeName, propertyName, roomNumber, documentUrl, memo)
+
+      return json(res, 200, {
+        success: true,
+        message: result.action === 'already_exists'
+          ? '同じ物件名と号室がすでに進捗管理にあるため、追加はしませんでした'
+          : '進捗管理へ反映しました',
+        storeName,
+        destinationName: '進捗管理',
+        media: KEIHAN_PROGRESS_MEDIA,
+        propertyName,
+        roomNumber,
+        scheduledPostDate: result.scheduledPostDate,
+        ruleKey: result.ruleKey,
+        action: result.action,
+        id: result.id,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '進捗管理への反映に失敗しました'
+      return json(res, 500, { success: false, message })
+    }
+  }
+
   if (requestedDestinationName && requestedDestinationName !== config.destinationName) {
     return json(res, 400, {
       success: false,
