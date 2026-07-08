@@ -5,34 +5,42 @@ const STORE_DESTINATION_CONFIG = {
   '八尾店': {
     destinationName: '八尾店',
     tableName: 'sns_yao_properties',
+    accountKey: 'yao',
   },
   'JR西宮店': {
     destinationName: '西宮市',
     tableName: 'sns_nishinomiya_karilun_properties',
+    accountKey: 'nishinomiya',
   },
   '長瀬店': {
     destinationName: '長瀬店',
     tableName: 'sns_nagase_properties',
+    accountKey: 'nagase',
   },
   '西北店': {
     destinationName: '西北店',
     tableName: 'sns_nishikita_properties',
+    accountKey: 'nishikita',
   },
   '西宮北店': {
     destinationName: '西北店',
     tableName: 'sns_nishikita_properties',
+    accountKey: 'nishikita',
   },
   '枚方店': {
     destinationName: '京阪',
     tableName: 'sns_keihan_karilun_properties',
+    accountKey: 'keihan',
   },
   '守口店': {
     destinationName: '京阪',
     tableName: 'sns_keihan_karilun_properties',
+    accountKey: 'keihan',
   },
   '寝屋川店': {
     destinationName: '京阪',
     tableName: 'sns_keihan_karilun_properties',
+    accountKey: 'keihan',
   },
 } as const
 
@@ -66,7 +74,22 @@ type ExistingPropertyRow = {
   id: string
   property_number: string | null
   source_month?: string | null
+  post_date?: string | null
 }
+
+type SnsPostingRule = {
+  account_platform_key: string
+  rule_type: 'weekday' | 'interval'
+  day_of_week: number | null
+  interval_days: number | null
+  reference_date: string | null
+}
+
+type ExistingPostDateRow = {
+  post_date: string | null
+}
+
+const STORE_RULE_PLATFORM_ORDER = ['tiktok', 'instagram', 'youtube'] as const
 
 type SupabaseMaybeError = {
   code?: string
@@ -109,6 +132,128 @@ function normalizeSourceMonth(value: string) {
   return `${year}-${month}`
 }
 
+function parseLocalDate(value: unknown) {
+  const normalized = text(value)
+    .replace(/年/g, '/')
+    .replace(/月/g, '/')
+    .replace(/日/g, '')
+    .replace(/\./g, '/')
+    .replace(/-/g, '/')
+
+  const match = normalized.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day)
+
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  return date
+}
+
+function formatLocalDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function diffDays(from: Date, to: Date) {
+  const fromMidnight = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+  const toMidnight = new Date(to.getFullYear(), to.getMonth(), to.getDate())
+  return Math.round((toMidnight.getTime() - fromMidnight.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function getNextDateByRule(rule: SnsPostingRule, afterDate: Date) {
+  const startDate = addDays(afterDate, 1)
+
+  if (rule.rule_type === 'interval') {
+    if (!rule.reference_date || !rule.interval_days || rule.interval_days < 1) return null
+
+    const referenceDate = parseLocalDate(rule.reference_date)
+    if (!referenceDate) return null
+    if (startDate <= referenceDate) return referenceDate
+
+    const passedDays = diffDays(referenceDate, startDate)
+    const remainder = passedDays % rule.interval_days
+    return remainder === 0 ? startDate : addDays(startDate, rule.interval_days - remainder)
+  }
+
+  if (rule.day_of_week === null || rule.day_of_week < 0 || rule.day_of_week > 6) return null
+
+  for (let offset = 0; offset < 7; offset += 1) {
+    const candidate = addDays(startDate, offset)
+    if (candidate.getDay() === rule.day_of_week) return candidate
+  }
+
+  return null
+}
+
+async function getLatestPostDate(tableName: StoreSnsPropertyTableName) {
+  const supabase = getSupabaseClient()
+  const rows: ExistingPostDateRow[] = []
+  const pageSize = 1000
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('post_date')
+      .range(from, from + pageSize - 1)
+
+    if (error) throw new Error(error.message)
+
+    const pageRows = (data || []) as ExistingPostDateRow[]
+    rows.push(...pageRows)
+    if (pageRows.length < pageSize) break
+  }
+
+  return rows.reduce<Date | null>((latest, row) => {
+    const date = parseLocalDate(row.post_date)
+    if (!date) return latest
+    if (!latest || date > latest) return date
+    return latest
+  }, null)
+}
+
+async function getNextPostDate(tableName: StoreSnsPropertyTableName, accountKey: string) {
+  const supabase = getSupabaseClient()
+  const latestPostDate = await getLatestPostDate(tableName)
+  const afterDate = latestPostDate || addDays(new Date(), -1)
+  const accountPlatformKeys = STORE_RULE_PLATFORM_ORDER.map((platform) => `${accountKey}-${platform}`)
+
+  const { data, error } = await supabase
+    .from('sns_posting_rules')
+    .select('account_platform_key, rule_type, day_of_week, interval_days, reference_date')
+    .in('account_platform_key', accountPlatformKeys)
+
+  if (error) throw new Error(error.message)
+
+  const rules = (data || []) as SnsPostingRule[]
+  for (const accountPlatformKey of accountPlatformKeys) {
+    const candidates = rules
+      .filter((rule) => rule.account_platform_key === accountPlatformKey)
+      .map((rule) => getNextDateByRule(rule, afterDate))
+      .filter((date): date is Date => Boolean(date))
+      .sort((a, b) => a.getTime() - b.getTime())
+
+    if (candidates[0]) {
+      return {
+        postDate: formatLocalDateKey(candidates[0]),
+        ruleKey: accountPlatformKey,
+      }
+    }
+  }
+
+  return { postDate: '', ruleKey: '' }
+}
 function wantsJsonResponse(req: VercelRequest) {
   return getQueryParam(req, 'format') === 'json'
 }
@@ -187,6 +332,7 @@ async function getNextPropertyNumber(tableName: StoreSnsPropertyTableName) {
 
 async function addProperty(
   tableName: StoreSnsPropertyTableName,
+  accountKey: string,
   propertyName: string,
   roomNumber: string,
   sourceMonth: string,
@@ -196,7 +342,7 @@ async function addProperty(
   if (sourceMonth) {
     const { data: existingRows, error: existingError } = await supabase
       .from(tableName)
-      .select('id, property_number, source_month')
+      .select('id, property_number, source_month, post_date')
       .eq('source_month', sourceMonth)
       .eq('property_name', propertyName)
       .eq('room_number', roomNumber)
@@ -210,12 +356,14 @@ async function addProperty(
         action: 'already_exists',
         id: existing.id,
         propertyNumber: String(existing.property_number || ''),
+        postDate: String(existing.post_date || ''),
+        ruleKey: '',
       }
     }
 
     const { data: legacyRows, error: legacyError } = await supabase
       .from(tableName)
-      .select('id, property_number, source_month')
+      .select('id, property_number, source_month, post_date')
       .is('source_month', null)
       .eq('property_name', propertyName)
       .eq('room_number', roomNumber)
@@ -236,17 +384,21 @@ async function addProperty(
         action: 'already_exists',
         id: legacy.id,
         propertyNumber: String(legacy.property_number || ''),
+        postDate: String(legacy.post_date || ''),
+        ruleKey: '',
       }
     }
   }
 
   const propertyNumber = await getNextPropertyNumber(tableName)
+  const nextPostDate = await getNextPostDate(tableName, accountKey)
   const { data, error } = await supabase
     .from(tableName)
     .insert([{
       property_name: propertyName,
       room_number: roomNumber,
       property_number: propertyNumber,
+      post_date: nextPostDate.postDate || null,
       source_month: sourceMonth || null,
     }])
     .select('id, property_number')
@@ -255,7 +407,7 @@ async function addProperty(
   if (error && sourceMonth && (error as SupabaseMaybeError).code === '23505') {
     const { data: existingRows, error: existingError } = await supabase
       .from(tableName)
-      .select('id, property_number, source_month')
+      .select('id, property_number, source_month, post_date')
       .eq('source_month', sourceMonth)
       .eq('property_name', propertyName)
       .eq('room_number', roomNumber)
@@ -269,6 +421,8 @@ async function addProperty(
         action: 'already_exists',
         id: existing.id,
         propertyNumber: String(existing.property_number || ''),
+        postDate: String(existing.post_date || ''),
+        ruleKey: '',
       }
     }
   }
@@ -281,6 +435,8 @@ async function addProperty(
     action: 'inserted',
     id: data.id as string,
     propertyNumber: String(data.property_number || propertyNumber),
+    postDate: nextPostDate.postDate,
+    ruleKey: nextPostDate.ruleKey,
   }
 }
 
@@ -317,7 +473,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       const config = STORE_DESTINATION_CONFIG[storeName]
-      const result = await addProperty(config.tableName, propertyName, roomNumber, sourceMonth)
+      const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth)
       if (csvMode) return sendCsv(res, `OK,${result.propertyNumber}`)
       if (jsonMode) {
         return json(res, 200, {
@@ -329,6 +485,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           sourceMonth,
           action: result.action,
           propertyNumber: result.propertyNumber,
+          postDate: result.postDate,
+          ruleKey: result.ruleKey,
           id: result.id,
         })
       }
@@ -384,7 +542,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const result = await addProperty(config.tableName, propertyName, roomNumber, sourceMonth)
+    const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth)
 
     return json(res, 200, {
       success: true,
@@ -397,6 +555,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       roomNumber,
       sourceMonth,
       propertyNumber: result.propertyNumber,
+      postDate: result.postDate,
+      ruleKey: result.ruleKey,
       action: result.action,
       id: result.id,
     })
