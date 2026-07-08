@@ -1396,7 +1396,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           youtube_reserved: '',
           youtube_wp: '',
           threads_post_date: '',
-          post_text: '',
+          post_text: record.post_text || '',
         }
 
         const { error } = await supabase.from(storeConfig.tableName).insert([insertData])
