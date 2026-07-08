@@ -673,22 +673,23 @@ const MEDIA_OPTIONS = [
   'Karilun｜TikTok',
   'Karilun｜Instagram',
   'Karilun｜京阪',
-  'Karilun｜西宮市',
   '長瀬｜近大一人暮らし',
   '西北｜関学一人暮らし',
   '八尾｜アパマン八尾',
   '採用',
 ]
 
-const ALWAYS_SHOW_MEDIA = new Set(['Karilun｜京阪', 'Karilun｜西宮市', '採用'])
+const HIDDEN_MEDIA_OPTIONS = ['Karilun｜西宮市']
+const KNOWN_MEDIA_OPTIONS = [...MEDIA_OPTIONS, ...HIDDEN_MEDIA_OPTIONS]
+
+const ALWAYS_SHOW_MEDIA = new Set(['Karilun｜京阪', '採用'])
 
 const MEDIA_MIN_ROWS: Partial<Record<string, number>> = {
   'Karilun｜京阪': 6,
-  'Karilun｜西宮市': 4,
   '採用': 8,
 }
 
-const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '西宮市', '近大', '関学', '八尾', '採用']
+const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '近大', '関学', '八尾', '採用']
 
 const STORE_PROGRESS_CONFIGS: {
   target: StorePromoteTarget
@@ -814,12 +815,17 @@ function normalizeMediaName(media: string) {
 
 function getMediaDisplayName(media: string) {
   const normalized = normalizeMediaName(media)
-  const matched = MEDIA_OPTIONS.find((option) => normalizeMediaName(option) === normalized)
+  const matched = KNOWN_MEDIA_OPTIONS.find((option) => normalizeMediaName(option) === normalized)
   if (matched) return matched
   if (normalized.includes('tiktok')) return 'Karilun｜TikTok'
   if (normalized.includes('instagram')) return 'Karilun｜Instagram'
   if (normalized.includes('採用') || normalized.includes('recruit')) return '採用'
   return media || '未設定'
+}
+
+function isHiddenProgressMedia(media: string) {
+  const displayName = getMediaDisplayName(media)
+  return HIDDEN_MEDIA_OPTIONS.includes(displayName)
 }
 
 function isTikTokMedia(media: string) {
@@ -1096,19 +1102,20 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   const isDelayed = (record: ProductionRecord) =>
     !record.post_completed && !!record.scheduled_post_date && record.scheduled_post_date < today
 
-  const delayedCount = records.filter(isDelayed).length
-  const stockedRecords = records.filter((record) => record.property_name.trim())
+  const displayRecords = records.filter((record) => !isHiddenProgressMedia(record.media))
+  const delayedCount = displayRecords.filter(isDelayed).length
+  const stockedRecords = displayRecords.filter((record) => record.property_name.trim())
 
   const groupedRecords = useMemo(() => {
     return MEDIA_OPTIONS
       .map((media) => ({
         media,
-        records: records
+        records: displayRecords
           .filter((record) => getMediaDisplayName(record.media) === media)
           .sort(compareScheduledPostDateEmptyLast),
       }))
       .filter(({ media, records: mediaRecords }) => mediaRecords.length > 0 || ALWAYS_SHOW_MEDIA.has(media))
-  }, [records])
+  }, [displayRecords])
 
   const tikTokSourceRecords = useMemo(
     () =>
