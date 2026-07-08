@@ -6090,20 +6090,48 @@ button.secondary.small {
 }
 
 .sns-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-width: 0;
   height: 22px;
   border: none;
+  border-radius: 999px;
   background: transparent;
-  color: var(--blue-600);
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 700;
   cursor: pointer;
   padding: 0 4px;
+  line-height: 1;
 }
 
-.sns-link-button:hover {
-  text-decoration: underline;
+.sns-link-button-filled {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.sns-link-button-filled:hover {
+  background: #dbeafe;
+}
+
+.sns-link-button-empty {
+  color: var(--gray-400);
+}
+
+.sns-link-button-empty:hover {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.sns-link-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sns-property-toolbar {

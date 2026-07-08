@@ -58,6 +58,30 @@ type TiktokProgressRecord = {
   media: string
 }
 
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.5 12.5l6.8-6.8a3 3 0 114.2 4.2l-8.2 8.2a5 5 0 11-7.1-7.1l8.2-8.2" />
+    </svg>
+  )
+}
+
+function SnsDocumentUrlButton({ documentUrl, onClick }: { documentUrl?: string | null; onClick: () => void }) {
+  const hasDocumentUrl = (documentUrl || '').trim().length > 0
+
+  return (
+    <button
+      type="button"
+      className={`sns-link-button ${hasDocumentUrl ? 'sns-link-button-filled' : 'sns-link-button-empty'}`}
+      title={hasDocumentUrl ? '資料URLを変更' : '資料URLを入力'}
+      aria-label={hasDocumentUrl ? '資料URLを変更' : '資料URLを入力'}
+      onClick={onClick}
+    >
+      {hasDocumentUrl ? <LinkIcon /> : '未登録'}
+    </button>
+  )
+}
+
 const DEPARTMENTS = ['人事', '総務', '仲介', '管理', '売買', '本社', 'その他'] as const
 
 type BushoSchedule = {
@@ -4732,9 +4756,7 @@ function App() {
                   <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'room_number', value))}</td>
                   <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'property_number', value))}</td>
                   <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editStoreSnsPropertyUrl(platform, r.id, r.document_url)}>
-                      🔗
-                    </button>
+                    <SnsDocumentUrlButton documentUrl={r.document_url} onClick={() => editStoreSnsPropertyUrl(platform, r.id, r.document_url)} />
                   </td>
                   <td className="sns-col-check">{renderSnsSelect(r.tiktok_reserved, getSnsPropertySelectOptions('tiktok_reserved'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_reserved', value), () => openSnsPropertyOptionEditor('tiktok_reserved', 'Tiktok予約'))}</td>
                   <td className="sns-col-check">{renderSnsSelect(r.tiktok_wp, getSnsPropertySelectOptions('tiktok_wp'), (value) => updateStoreSnsPropertyRow(platform, r.id, 'tiktok_wp', value), () => openSnsPropertyOptionEditor('tiktok_wp', 'TiktokWP'))}</td>
@@ -8905,9 +8927,7 @@ function App() {
                             <td className="sns-col-area">{renderSnsTextInput(`${r.id}:area`, r.area, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'area', value, setTiktokProperties))}</td>
                             <td className="sns-col-station">{renderSnsTextInput(`${r.id}:nearest_station`, r.nearest_station, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'nearest_station', value, setTiktokProperties))}</td>
                             <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
-                              <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editSnsPropertyUrl('sns_tiktok_properties', r.id, r.document_url, setTiktokProperties)}>
-                                🔗
-                              </button>
+                              <SnsDocumentUrlButton documentUrl={r.document_url} onClick={() => editSnsPropertyUrl('sns_tiktok_properties', r.id, r.document_url, setTiktokProperties)} />
                             </td>
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'property_name', value, setTiktokProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_tiktok_properties', r.id, 'room_number', value, setTiktokProperties))}</td>
@@ -8985,9 +9005,7 @@ function App() {
                             <td className="sns-col-area">{renderSnsTextInput(`${r.id}:area`, r.area, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'area', value, setInstagramProperties))}</td>
                             <td className="sns-col-station">{renderSnsTextInput(`${r.id}:nearest_station`, r.nearest_station, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'nearest_station', value, setInstagramProperties))}</td>
                             <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
-                              <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editSnsPropertyUrl('sns_instagram_properties', r.id, r.document_url, setInstagramProperties)}>
-                                🔗
-                              </button>
+                              <SnsDocumentUrlButton documentUrl={r.document_url} onClick={() => editSnsPropertyUrl('sns_instagram_properties', r.id, r.document_url, setInstagramProperties)} />
                             </td>
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'property_name', value, setInstagramProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_instagram_properties', r.id, 'room_number', value, setInstagramProperties))}</td>
@@ -9059,9 +9077,7 @@ function App() {
                             <td className="sns-col-date">{renderSnsTextInput(`${r.id}:post_date`, normalizeSnsPropertyPostDate(r.post_date, r.property_number), (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'post_date', value, setYoutubeProperties), { type: 'date' })}</td>
                             <td className="sns-col-code">{renderSnsTextInput(`${r.id}:property_number`, r.property_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_number', value, setYoutubeProperties))}</td>
                             <td className="sns-col-link" onClick={(e) => e.stopPropagation()}>
-                              <button type="button" className="sns-link-button" title={r.document_url || '資料URLを入力'} onClick={() => editSnsPropertyUrl('sns_youtube_properties', r.id, r.document_url, setYoutubeProperties)}>
-                                🔗
-                              </button>
+                              <SnsDocumentUrlButton documentUrl={r.document_url} onClick={() => editSnsPropertyUrl('sns_youtube_properties', r.id, r.document_url, setYoutubeProperties)} />
                             </td>
                             <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'property_name', value, setYoutubeProperties))}</td>
                             <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateSnsPropertyRow('sns_youtube_properties', r.id, 'room_number', value, setYoutubeProperties))}</td>
