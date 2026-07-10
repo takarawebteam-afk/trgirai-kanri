@@ -79,6 +79,7 @@ type ExistingPropertyRow = {
   property_number: string | null
   source_month?: string | null
   post_date?: string | null
+  category?: string | null
 }
 
 type SnsPostingRule = {
@@ -391,13 +392,14 @@ async function addProperty(
   propertyName: string,
   roomNumber: string,
   sourceMonth: string,
+  category: string,
 ) {
   const supabase = getSupabaseClient()
 
   if (sourceMonth) {
     const { data: existingRows, error: existingError } = await supabase
       .from(tableName)
-      .select('id, property_number, source_month, post_date')
+      .select('id, property_number, source_month, post_date, category')
       .eq('source_month', sourceMonth)
       .eq('property_name', propertyName)
       .eq('room_number', roomNumber)
@@ -407,6 +409,15 @@ async function addProperty(
 
     const existing = (existingRows || [])[0] as ExistingPropertyRow | undefined
     if (existing) {
+      if (category && !String(existing.category || '').trim()) {
+        const { error: updateExistingError } = await supabase
+          .from(tableName)
+          .update({ category })
+          .eq('id', existing.id)
+
+        if (updateExistingError) throw new Error(updateExistingError.message)
+      }
+
       return {
         action: 'already_exists',
         id: existing.id,
@@ -418,7 +429,7 @@ async function addProperty(
 
     const { data: legacyRows, error: legacyError } = await supabase
       .from(tableName)
-      .select('id, property_number, source_month, post_date')
+      .select('id, property_number, source_month, post_date, category')
       .is('source_month', null)
       .eq('property_name', propertyName)
       .eq('room_number', roomNumber)
@@ -428,9 +439,13 @@ async function addProperty(
 
     const legacy = (legacyRows || [])[0] as ExistingPropertyRow | undefined
     if (legacy) {
+      const legacyPatch = {
+        source_month: sourceMonth,
+        ...(category && !String(legacy.category || '').trim() ? { category } : {}),
+      }
       const { error: updateLegacyError } = await supabase
         .from(tableName)
-        .update({ source_month: sourceMonth })
+        .update(legacyPatch)
         .eq('id', legacy.id)
 
       if (updateLegacyError) throw new Error(updateLegacyError.message)
@@ -455,6 +470,7 @@ async function addProperty(
       property_number: propertyNumber,
       post_date: nextPostDate.postDate || null,
       source_month: sourceMonth || null,
+      category,
     }])
     .select('id, property_number')
     .single()
@@ -462,7 +478,7 @@ async function addProperty(
   if (error && sourceMonth && (error as SupabaseMaybeError).code === '23505') {
     const { data: existingRows, error: existingError } = await supabase
       .from(tableName)
-      .select('id, property_number, source_month, post_date')
+      .select('id, property_number, source_month, post_date, category')
       .eq('source_month', sourceMonth)
       .eq('property_name', propertyName)
       .eq('room_number', roomNumber)
@@ -472,6 +488,15 @@ async function addProperty(
 
     const existing = (existingRows || [])[0] as ExistingPropertyRow | undefined
     if (existing) {
+      if (category && !String(existing.category || '').trim()) {
+        const { error: updateExistingError } = await supabase
+          .from(tableName)
+          .update({ category })
+          .eq('id', existing.id)
+
+        if (updateExistingError) throw new Error(updateExistingError.message)
+      }
+
       return {
         action: 'already_exists',
         id: existing.id,
@@ -506,7 +531,7 @@ async function addKeihanProgressRecord(
 
   const { data: existingRows, error: existingError } = await supabase
     .from('production_records')
-    .select('id, scheduled_post_date')
+    .select('id, scheduled_post_date, post_type')
     .eq('media', KEIHAN_PROGRESS_MEDIA)
     .eq('property_name', propertyName)
     .eq('room_number', roomNumber)
@@ -514,8 +539,17 @@ async function addKeihanProgressRecord(
 
   if (existingError) throw new Error(existingError.message)
 
-  const existing = (existingRows || [])[0] as { id: string; scheduled_post_date: string | null } | undefined
+  const existing = (existingRows || [])[0] as { id: string; scheduled_post_date: string | null; post_type: string | null } | undefined
   if (existing) {
+    if (!String(existing.post_type || '').trim()) {
+      const { error: updateExistingError } = await supabase
+        .from('production_records')
+        .update({ post_type: storeName })
+        .eq('id', existing.id)
+
+      if (updateExistingError) throw new Error(updateExistingError.message)
+    }
+
     return {
       action: 'already_exists',
       id: existing.id,
@@ -618,7 +652,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const config = STORE_DESTINATION_CONFIG[storeName]
-      const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth)
+      const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth, config.accountKey === 'keihan' ? storeName : '')
       if (csvMode) return sendCsv(res, `OK,${result.propertyNumber}`)
       if (jsonMode) {
         return json(res, 200, {
@@ -716,7 +750,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth)
+    const result = await addProperty(config.tableName, config.accountKey, propertyName, roomNumber, sourceMonth, config.accountKey === 'keihan' ? storeName : '')
 
     return json(res, 200, {
       success: true,

@@ -1323,7 +1323,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       .filter((record) => getMediaDisplayName(record.media) === 'Karilun｜京阪')
       .sort(compareScheduledPostDateEmptyLast)
     const usedSnsIds = new Set<string>()
-    const result = new Map<string, { propertyNumber: string; scheduledPostDate: string }>()
+    const result = new Map<string, { propertyNumber: string; scheduledPostDate: string; postType: string }>()
 
     const maxSnsPropertyNumber = snsRows.reduce((max, row) => {
       const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
@@ -1352,6 +1352,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       result.set(record.id, {
         propertyNumber: String(matched.property_number || '').trim(),
         scheduledPostDate: normalizeSnsPropertyDate(matched.post_date, matched.property_number, 'keihan-karilun'),
+        postType: String(matched.category || '').trim(),
       })
     })
 
@@ -1361,6 +1362,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       result.set(record.id, {
         propertyNumber: String(nextPropertyNumber),
         scheduledPostDate: '',
+        postType: '',
       })
       nextPropertyNumber += 1
     })
@@ -1396,7 +1398,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   useEffect(() => {
     const blankKeihanRecords = records
       .filter((record) => getMediaDisplayName(record.media) === 'Karilun｜京阪')
-      .filter((record) => !record.scheduled_post_date && record.property_name.trim() && !record.post_completed)
+      .filter((record) => record.property_name.trim() && !record.post_completed)
+      .filter((record) => !record.scheduled_post_date || !record.post_type.trim())
       .sort((a, b) => {
         const numberA = Number(keihanReflectionByRecordId.get(a.id)?.propertyNumber || 0)
         const numberB = Number(keihanReflectionByRecordId.get(b.id)?.propertyNumber || 0)
@@ -1408,39 +1411,47 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     const assignedDates = new Set<string>()
     const updates = blankKeihanRecords
       .map((record) => {
-        const reflectedDate = keihanReflectionByRecordId.get(record.id)?.scheduledPostDate || ''
-        const scheduledPostDate = reflectedDate || getNextScheduledPostDateForMedia(record.media, assignedDates)
-        if (!scheduledPostDate) return null
-        assignedDates.add(scheduledPostDate)
-        return { id: record.id, scheduledPostDate }
+        const reflection = keihanReflectionByRecordId.get(record.id)
+        const reflectedDate = reflection?.scheduledPostDate || ''
+        const reflectedPostType = reflection?.postType || ''
+        const scheduledPostDate = record.scheduled_post_date
+          ? ''
+          : reflectedDate || getNextScheduledPostDateForMedia(record.media, assignedDates)
+        if (scheduledPostDate) assignedDates.add(scheduledPostDate)
+
+        const patch: Partial<Pick<ProductionRecord, 'scheduled_post_date' | 'post_type'>> = {}
+        if (scheduledPostDate) patch.scheduled_post_date = scheduledPostDate
+        if (!record.post_type.trim() && reflectedPostType) patch.post_type = reflectedPostType
+        if (Object.keys(patch).length === 0) return null
+        return { id: record.id, patch }
       })
-      .filter((item): item is { id: string; scheduledPostDate: string } => Boolean(item))
+      .filter((item): item is { id: string; patch: Partial<Pick<ProductionRecord, 'scheduled_post_date' | 'post_type'>> } => Boolean(item))
 
     if (updates.length === 0) return
 
     let cancelled = false
-    async function saveAutoFilledDates() {
+    async function saveAutoFilledFields() {
       const results = await Promise.all(updates.map((item) => (
         supabase
           .from('production_records')
-          .update({ scheduled_post_date: item.scheduledPostDate })
+          .update(item.patch)
           .eq('id', item.id)
       )))
 
       if (cancelled) return
       const failed = results.find((result) => result.error)
       if (failed?.error) {
-        console.error('progress scheduled post date auto fill failed', failed.error)
+        console.error('progress keihan auto fill failed', failed.error)
         return
       }
 
       setRecords((prev) => prev.map((record) => {
         const update = updates.find((item) => item.id === record.id)
-        return update ? { ...record, scheduled_post_date: update.scheduledPostDate } : record
+        return update ? { ...record, ...update.patch } : record
       }))
     }
 
-    void saveAutoFilledDates()
+    void saveAutoFilledFields()
     return () => {
       cancelled = true
     }
