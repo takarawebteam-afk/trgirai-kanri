@@ -79,6 +79,23 @@ interface ProductionRecord {
   audio_source: string
 }
 
+type KeihanSnsPropertyRecord = {
+  id: string
+  created_at?: string
+  post_date: string | null
+  category: string | null
+  property_name: string | null
+  room_number: string | null
+  property_number: string | null
+}
+type SnsPostingRule = {
+  id: string
+  account_platform_key: string
+  rule_type: 'weekday' | 'interval'
+  day_of_week: number | null
+  interval_days: number | null
+  reference_date: string | null
+}
 type ProgressPageProps = {
   onSnsPropertyPromoted?: (target: PromoteTarget) => void
 }
@@ -691,6 +708,14 @@ const MEDIA_MIN_ROWS: Partial<Record<string, number>> = {
 
 const SUMMARY_LABELS = ['Tiktok', 'Instagram', '京阪', '近大', '関学', '八尾', '採用']
 
+const STORE_POSTING_RULE_KEYS: Record<StorePromoteTarget, string[]> = {
+  'keihan-karilun': ['keihan-tiktok', 'keihan-instagram'],
+  'nishinomiya-karilun': ['nishinomiya-tiktok', 'nishinomiya-instagram', 'nishinomiya-youtube'],
+  nagase: ['nagase-tiktok', 'nagase-instagram', 'nagase-youtube'],
+  nishikita: ['nishikita-tiktok', 'nishikita-instagram', 'nishikita-youtube'],
+  yao: ['yao-tiktok', 'yao-instagram', 'yao-youtube'],
+}
+
 const STORE_PROGRESS_CONFIGS: {
   target: StorePromoteTarget
   tableName: StoreProgressTableName
@@ -852,6 +877,108 @@ function getWeekdayLabel(dateText: string) {
   return ['日', '月', '火', '水', '木', '金', '土'][date.getDay()]
 }
 
+function formatLocalDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+function getSnsPropertyYearFromPropertyNumber(propertyNumber: string | null | undefined, storeTarget?: StorePromoteTarget) {
+  const normalizedPropertyNumber = String(propertyNumber || '').trim().toUpperCase()
+  const storeMatch = normalizedPropertyNumber.match(/^(\d{3})$/)
+  if (!storeMatch) return null
+
+  const code = Number(storeMatch[1])
+  if (storeTarget === 'nagase') return 2025
+  if (storeTarget === 'nishikita') return code >= 207 ? 2026 : 2025
+  return code >= 153 ? 2026 : 2025
+}
+
+function normalizeSnsPropertyDate(postDate: string | null | undefined, propertyNumber: string | null | undefined, storeTarget?: StorePromoteTarget) {
+  const rawDate = String(postDate || '').trim()
+  if (!rawDate) return ''
+
+  const isoDateMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoDateMatch) return rawDate
+
+  const fullDateMatch = rawDate.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/)
+  if (fullDateMatch) {
+    const [, year, month, day] = fullDateMatch
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const normalized = rawDate
+    .replace(/\s+/g, '')
+    .replace(/年/g, '/')
+    .replace(/月/g, '/')
+    .replace(/日/g, '')
+    .replace(/\./g, '/')
+    .replace(/-/g, '/')
+
+  const monthDayMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (!monthDayMatch) return rawDate
+
+  const propertyYear = getSnsPropertyYearFromPropertyNumber(propertyNumber, storeTarget)
+  if (!propertyYear) return rawDate
+
+  const [, month, day] = monthDayMatch
+  return `${propertyYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+}
+
+function addDays(dateKey: string, days: number) {
+  const date = new Date(`${dateKey}T00:00:00`)
+  date.setDate(date.getDate() + days)
+  return formatLocalDateKey(date)
+}
+
+function getPostingRuleKeysForMedia(media: string) {
+  const storeConfig = getStoreProgressConfig(media)
+  if (storeConfig) return STORE_POSTING_RULE_KEYS[storeConfig.target] || []
+  if (isTikTokMedia(media)) return ['karilun-tiktok']
+  if (isInstagramMedia(media)) return ['karilun-instagram']
+  if (isRecruitmentMedia(media)) return ['recruitment']
+  return []
+}
+
+function matchesPostingRule(dateKey: string, rules: SnsPostingRule[], accountPlatformKeys: string[]) {
+  if (accountPlatformKeys.length === 0) return false
+
+  const targetDate = new Date(`${dateKey}T00:00:00`)
+  if (Number.isNaN(targetDate.getTime())) return false
+
+  const dayOfWeek = targetDate.getDay()
+  return rules.some((rule) => {
+    if (!accountPlatformKeys.includes(rule.account_platform_key)) return false
+    if (rule.rule_type === 'weekday') return rule.day_of_week === dayOfWeek
+    if (rule.rule_type !== 'interval' || !rule.reference_date || !rule.interval_days) return false
+
+    const referenceDate = new Date(`${rule.reference_date}T00:00:00`)
+    if (Number.isNaN(referenceDate.getTime())) return false
+    const diffDays = Math.round((targetDate.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24))
+    return diffDays >= 0 && diffDays % rule.interval_days === 0
+  })
+}
+
+function findNextPostingDate(media: string, rules: SnsPostingRule[], usedDates: Set<string>) {
+  const accountPlatformKeys = getPostingRuleKeysForMedia(media)
+  if (accountPlatformKeys.length === 0) return ''
+
+  const sortedUsedDates = Array.from(usedDates)
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort()
+  const latestUsedDate = sortedUsedDates[sortedUsedDates.length - 1]
+  let cursor = latestUsedDate ? addDays(latestUsedDate, 1) : formatLocalDateKey(new Date())
+
+  for (let i = 0; i < 370; i += 1) {
+    if (!usedDates.has(cursor) && matchesPostingRule(cursor, rules, accountPlatformKeys)) return cursor
+    cursor = addDays(cursor, 1)
+  }
+
+  return ''
+}
+
 function compareScheduledPostDateEmptyLast(a: ProductionRecord, b: ProductionRecord) {
   const dateA = a.scheduled_post_date.trim()
   const dateB = b.scheduled_post_date.trim()
@@ -875,6 +1002,31 @@ function sanitizeProcessStatus(value: unknown): ProcessStatus {
 
 function sanitizeSelectText(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim() ? value : fallback
+}
+function normalizePropertyLookupText(value: string | null | undefined) {
+  return String(value ?? '').trim().replace(/\s+/g, '').toLowerCase()
+}
+
+function getKeihanMatchKeys(record: {
+  scheduled_post_date?: string | null
+  post_date?: string | null
+  post_type?: string | null
+  category?: string | null
+  property_name?: string | null
+  room_number?: string | null
+}) {
+  const date = normalizePropertyLookupText(record.scheduled_post_date ?? record.post_date)
+  const type = normalizePropertyLookupText(record.post_type ?? record.category)
+  const name = normalizePropertyLookupText(record.property_name)
+  const room = normalizePropertyLookupText(record.room_number)
+
+  return {
+    full: `${date}|${type}|${name}|${room}`,
+    dateNameRoom: `${date}|${name}|${room}`,
+    typeNameRoom: `${type}|${name}|${room}`,
+    nameRoom: `${name}|${room}`,
+    name,
+  }
 }
 
 function sanitizeRegisterText(value: unknown, options = INITIAL_SELECT_OPTIONS.register) {
@@ -900,6 +1052,8 @@ function LinkIcon() {
 
 export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProps) {
   const [records, setRecords] = useState<ProductionRecord[]>([])
+  const [keihanSnsProperties, setKeihanSnsProperties] = useState<KeihanSnsPropertyRecord[]>([])
+  const [snsPostingRules, setSnsPostingRules] = useState<SnsPostingRule[]>([])
   const [loading, setLoading] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -1010,17 +1164,55 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     }
   }
 
+  async function fetchKeihanSnsProperties() {
+    try {
+      const { data, error } = await supabase
+        .from('sns_keihan_karilun_properties')
+        .select('id, created_at, post_date, category, property_name, room_number, property_number')
+        .order('post_date', { ascending: true, nullsFirst: false })
+        .order('property_number', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+      setKeihanSnsProperties((data || []) as KeihanSnsPropertyRecord[])
+    } catch (error) {
+      console.error('keihan sns property fetch failed', error)
+      setKeihanSnsProperties([])
+    }
+  }
+
+  async function fetchSnsPostingRules() {
+    try {
+      const { data, error } = await supabase.from('sns_posting_rules').select('*')
+      if (error) throw error
+      setSnsPostingRules((data || []) as SnsPostingRule[])
+    } catch (error) {
+      console.error('sns posting rules fetch failed', error)
+      setSnsPostingRules([])
+    }
+  }
+
   useEffect(() => {
     fetchRecords()
+    void fetchKeihanSnsProperties()
+    void fetchSnsPostingRules()
   }, [])
 
   useEffect(() => {
     const debouncedFetchRecords = createRealtimeDebouncedHandler(() => {
       void fetchRecords({ keepScroll: true, showLoading: false })
     })
+    const debouncedFetchKeihanSnsProperties = createRealtimeDebouncedHandler(() => {
+      void fetchKeihanSnsProperties()
+    })
+    const debouncedFetchSnsPostingRules = createRealtimeDebouncedHandler(() => {
+      void fetchSnsPostingRules()
+    })
     const channel = supabase
       .channel('progress-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_records' }, debouncedFetchRecords)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_keihan_karilun_properties' }, debouncedFetchKeihanSnsProperties)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sns_posting_rules' }, debouncedFetchSnsPostingRules)
       .subscribe()
 
     return () => {
@@ -1125,6 +1317,134 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     [records],
   )
 
+  const keihanReflectionByRecordId = useMemo(() => {
+    const snsRows = keihanSnsProperties.filter((row) => String(row.property_number || '').trim())
+    const keihanRows = displayRecords
+      .filter((record) => getMediaDisplayName(record.media) === 'Karilun｜京阪')
+      .sort(compareScheduledPostDateEmptyLast)
+    const usedSnsIds = new Set<string>()
+    const result = new Map<string, { propertyNumber: string; scheduledPostDate: string }>()
+
+    const maxSnsPropertyNumber = snsRows.reduce((max, row) => {
+      const value = Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+      return Number.isFinite(value) ? Math.max(max, value) : max
+    }, 0)
+
+    const findUnusedSnsRow = (keys: ReturnType<typeof getKeihanMatchKeys>) => {
+      const matchers = [
+        (rowKeys: ReturnType<typeof getKeihanMatchKeys>) => rowKeys.full === keys.full && keys.full !== '|||',
+        (rowKeys: ReturnType<typeof getKeihanMatchKeys>) => rowKeys.dateNameRoom === keys.dateNameRoom && keys.dateNameRoom !== '||',
+        (rowKeys: ReturnType<typeof getKeihanMatchKeys>) => rowKeys.typeNameRoom === keys.typeNameRoom && keys.typeNameRoom !== '||',
+        (rowKeys: ReturnType<typeof getKeihanMatchKeys>) => rowKeys.nameRoom === keys.nameRoom && keys.nameRoom !== '|',
+      ]
+
+      for (const matcher of matchers) {
+        const matched = snsRows.find((row) => !usedSnsIds.has(row.id) && matcher(getKeihanMatchKeys(row)))
+        if (matched) return matched
+      }
+      return null
+    }
+
+    keihanRows.forEach((record) => {
+      const matched = findUnusedSnsRow(getKeihanMatchKeys(record))
+      if (!matched) return
+      usedSnsIds.add(matched.id)
+      result.set(record.id, {
+        propertyNumber: String(matched.property_number || '').trim(),
+        scheduledPostDate: normalizeSnsPropertyDate(matched.post_date, matched.property_number, 'keihan-karilun'),
+      })
+    })
+
+    let nextPropertyNumber = maxSnsPropertyNumber + 1
+    keihanRows.forEach((record) => {
+      if (result.has(record.id)) return
+      result.set(record.id, {
+        propertyNumber: String(nextPropertyNumber),
+        scheduledPostDate: '',
+      })
+      nextPropertyNumber += 1
+    })
+
+    return result
+  }, [displayRecords, keihanSnsProperties])
+
+  function getUsedScheduledPostDates(media: string) {
+    const displayName = getMediaDisplayName(media)
+    const usedDates = new Set<string>()
+
+    records.forEach((record) => {
+      if (getMediaDisplayName(record.media) !== displayName) return
+      if (record.scheduled_post_date) usedDates.add(record.scheduled_post_date)
+    })
+
+    if (displayName === 'Karilun｜京阪') {
+      keihanSnsProperties.forEach((row) => {
+        const date = normalizeSnsPropertyDate(row.post_date, row.property_number, 'keihan-karilun')
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) usedDates.add(date)
+      })
+    }
+
+    return usedDates
+  }
+
+  function getNextScheduledPostDateForMedia(media: string, extraUsedDates?: Set<string>) {
+    const usedDates = getUsedScheduledPostDates(media)
+    extraUsedDates?.forEach((date) => usedDates.add(date))
+    return findNextPostingDate(media, snsPostingRules, usedDates)
+  }
+
+  useEffect(() => {
+    const blankKeihanRecords = records
+      .filter((record) => getMediaDisplayName(record.media) === 'Karilun｜京阪')
+      .filter((record) => !record.scheduled_post_date && record.property_name.trim() && !record.post_completed)
+      .sort((a, b) => {
+        const numberA = Number(keihanReflectionByRecordId.get(a.id)?.propertyNumber || 0)
+        const numberB = Number(keihanReflectionByRecordId.get(b.id)?.propertyNumber || 0)
+        return numberA - numberB
+      })
+
+    if (blankKeihanRecords.length === 0) return
+
+    const assignedDates = new Set<string>()
+    const updates = blankKeihanRecords
+      .map((record) => {
+        const reflectedDate = keihanReflectionByRecordId.get(record.id)?.scheduledPostDate || ''
+        const scheduledPostDate = reflectedDate || getNextScheduledPostDateForMedia(record.media, assignedDates)
+        if (!scheduledPostDate) return null
+        assignedDates.add(scheduledPostDate)
+        return { id: record.id, scheduledPostDate }
+      })
+      .filter((item): item is { id: string; scheduledPostDate: string } => Boolean(item))
+
+    if (updates.length === 0) return
+
+    let cancelled = false
+    async function saveAutoFilledDates() {
+      const results = await Promise.all(updates.map((item) => (
+        supabase
+          .from('production_records')
+          .update({ scheduled_post_date: item.scheduledPostDate })
+          .eq('id', item.id)
+      )))
+
+      if (cancelled) return
+      const failed = results.find((result) => result.error)
+      if (failed?.error) {
+        console.error('progress scheduled post date auto fill failed', failed.error)
+        return
+      }
+
+      setRecords((prev) => prev.map((record) => {
+        const update = updates.find((item) => item.id === record.id)
+        return update ? { ...record, scheduled_post_date: update.scheduledPostDate } : record
+      }))
+    }
+
+    void saveAutoFilledDates()
+    return () => {
+      cancelled = true
+    }
+  }, [keihanReflectionByRecordId, keihanSnsProperties, records, snsPostingRules])
   async function getNextPropertyNumber(
     tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
   ) {
@@ -1491,6 +1811,9 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
 
       const dbField = field === 'material_saved' ? 'shooting_date' : field
       const normalizedValue = normalizeProgressFieldValue(field, value)
+      const initialScheduledPostDate = dbField === 'scheduled_post_date'
+        ? String(normalizedValue || '')
+        : getNextScheduledPostDateForMedia(media)
 
       // defaultForm を DB 形式に変換（handleSubmit と同じパターン）
       const baseDefaults = { ...defaultForm } as Omit<ProductionRecord, 'id' | 'created_at' | 'material_saved'> & { material_saved?: string }
@@ -1503,7 +1826,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         shooting_start_date: null,
         shooting_scheduled_date: null,
         shooting_end_date: null,
-        scheduled_post_date: null,
+        scheduled_post_date: initialScheduledPostDate || null,
         [dbField]: normalizedValue || null,
       }
 
@@ -1876,6 +2199,17 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     )
   }
 
+  function renderReadonlyTextCell(value: string, placeholder = '') {
+    return (
+      <div className="progress-readonly-cell" title={value || placeholder}>
+        {value || placeholder}
+      </div>
+    )
+  }
+
+  function renderKeihanPropertyNumberCell(record: ProductionRecord) {
+    return renderReadonlyTextCell(keihanReflectionByRecordId.get(record.id)?.propertyNumber || '', '物件番号')
+  }
   function renderPostTypeCell(record: ProductionRecord) {
     return renderSelectCell(record, 'post_type', 'instagram_post_type', '種別', '', undefined, false, false)
   }
@@ -2250,6 +2584,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       <table className="progress-table progress-table-keihan">
         <colgroup>
           <col style={{ width: PROGRESS_DATE_COLUMN_WIDTH }} />
+          <col style={{ width: 84 }} />
           <col style={{ width: PROGRESS_INSTAGRAM_COLUMN_WIDTHS.area }} />
           <col style={{ width: 200 }} />
           <col style={{ width: 74 }} />
@@ -2263,6 +2598,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
         <thead>
           <tr>
             <th className="ptcol-group-1">投稿予定日</th>
+            <th className="ptcol-group-1">物件番号</th>
             <th className="ptcol-group-2">{config.typeLabel}</th>
             <th className="ptcol-group-2">物件名</th>
             <th className="ptcol-group-2">号室</th>
@@ -2278,6 +2614,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           {mediaRecords.map((record) => (
             <tr key={record.id} className="row-hoverable">
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date', isDelayed(record))}</td>
+              <td className="ptcell-group-1">{renderKeihanPropertyNumberCell(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'post_type', config.typeLabel)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>
@@ -2292,6 +2629,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
           {getDraftRecords(media, Math.max(0, minRows - mediaRecords.length)).map((record) => (
             <tr key={record.id} className="row-hoverable row-draft">
               <td className="ptcell-group-1">{renderDateCell(record, 'scheduled_post_date')}</td>
+              <td className="ptcell-group-1">{renderKeihanPropertyNumberCell(record)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'post_type', config.typeLabel)}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'property_name', '物件名')}</td>
               <td className="ptcell-group-2">{renderTextCell(record, 'room_number', '号室')}</td>

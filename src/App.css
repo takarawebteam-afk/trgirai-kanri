@@ -3683,7 +3683,8 @@ button.secondary.small {
 }
 
 .progress-cell-input,
-.progress-cell-select {
+.progress-cell-select,
+.progress-readonly-cell {
   width: 100%;
   min-width: 0;
   height: 18px;
@@ -3695,6 +3696,15 @@ button.secondary.small {
   font-weight: 500;
   color: var(--gray-900);
   box-shadow: none;
+}
+
+.progress-readonly-cell {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1e293b;
 }
 
 .progress-ime-active {
@@ -4426,12 +4436,12 @@ button.secondary.small {
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
-.progress-table-keihan :is(th, td):nth-child(-n + 4) {
+.progress-table-keihan :is(th, td):nth-child(-n + 5) {
   position: sticky;
   z-index: 4;
 }
 
-.progress-table-keihan th:nth-child(-n + 4) {
+.progress-table-keihan th:nth-child(-n + 5) {
   z-index: 6;
 }
 
@@ -4441,25 +4451,30 @@ button.secondary.small {
 }
 
 .progress-table-keihan :is(th, td):nth-child(2) {
+  width: 84px;
+  min-width: 84px;
+}
+
+.progress-table-keihan :is(th, td):nth-child(3) {
   width: 83px;
   min-width: 83px;
 }
 
-.progress-table-keihan :is(th, td):nth-child(3) {
+.progress-table-keihan :is(th, td):nth-child(4) {
   width: 200px;
   min-width: 200px;
 }
 
-.progress-table-keihan :is(th, td):nth-child(4) {
+.progress-table-keihan :is(th, td):nth-child(5) {
   width: 74px;
   min-width: 74px;
 }
-
 .progress-table-keihan :is(th, td):nth-child(1) { left: 0px; }
 .progress-table-keihan :is(th, td):nth-child(2) { left: 84px; }
-.progress-table-keihan :is(th, td):nth-child(3) { left: 167px; }
-.progress-table-keihan :is(th, td):nth-child(4) {
-  left: 367px;
+.progress-table-keihan :is(th, td):nth-child(3) { left: 168px; }
+.progress-table-keihan :is(th, td):nth-child(4) { left: 251px; }
+.progress-table-keihan :is(th, td):nth-child(5) {
+  left: 451px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
 
@@ -4501,7 +4516,6 @@ button.secondary.small {
   left: 432px;
   box-shadow: inset -1px 0 0 #cbd5e1;
 }
-
 .progress-form-tabs {
   display: flex;
   border-bottom: 2px solid var(--gray-200);
