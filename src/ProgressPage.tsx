@@ -1071,6 +1071,8 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
   const draftRecordIds = useRef<Set<string>>(new Set())
   const draftRecordMediaMap = useRef<Map<string, string>>(new Map())
   const draftRowsRef = useRef<Map<string, string[]>>(new Map())
+  const draftScheduledPostDateMap = useRef<Map<string, string>>(new Map())
+  const recruitmentAutoFillInFlight = useRef<Set<string>>(new Set())
   const selectMenuRef = useRef<HTMLDivElement | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -1456,6 +1458,59 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       cancelled = true
     }
   }, [keihanReflectionByRecordId, keihanSnsProperties, records, snsPostingRules])
+
+  useEffect(() => {
+    const blankRecruitmentRecords = records
+      .filter((record) => isRecruitmentMedia(record.media))
+      .filter((record) => !record.post_completed && !record.scheduled_post_date)
+      .filter((record) => !recruitmentAutoFillInFlight.current.has(record.id))
+      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+
+    if (blankRecruitmentRecords.length === 0) return
+
+    const assignedDates = new Set<string>()
+    const updates = blankRecruitmentRecords
+      .map((record) => {
+        const scheduledPostDate = getNextScheduledPostDateForMedia(record.media, assignedDates)
+        if (!scheduledPostDate) return null
+        assignedDates.add(scheduledPostDate)
+        return { id: record.id, scheduledPostDate }
+      })
+      .filter((item): item is { id: string; scheduledPostDate: string } => Boolean(item))
+
+    if (updates.length === 0) return
+    updates.forEach((item) => recruitmentAutoFillInFlight.current.add(item.id))
+
+    let cancelled = false
+    async function saveRecruitmentScheduledPostDates() {
+      const results = await Promise.all(updates.map((item) => (
+        supabase
+          .from('production_records')
+          .update({ scheduled_post_date: item.scheduledPostDate })
+          .eq('id', item.id)
+      )))
+
+      updates.forEach((item) => recruitmentAutoFillInFlight.current.delete(item.id))
+      if (cancelled) return
+
+      const failed = results.find((result) => result.error)
+      if (failed?.error) {
+        console.error('progress recruitment auto fill failed', failed.error)
+        return
+      }
+
+      setRecords((prev) => prev.map((record) => {
+        const update = updates.find((item) => item.id === record.id)
+        return update ? { ...record, scheduled_post_date: update.scheduledPostDate } : record
+      }))
+    }
+
+    void saveRecruitmentScheduledPostDates()
+    return () => {
+      cancelled = true
+    }
+  }, [records, snsPostingRules])
+
   async function getNextPropertyNumber(
     tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
   ) {
@@ -1814,9 +1869,11 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
     // ドラフト行の場合: UPDATE ではなく INSERT
     if (draftRecordIds.current.has(id)) {
       const media = draftRecordMediaMap.current.get(id) || ''
+      const draftScheduledPostDate = draftScheduledPostDateMap.current.get(id) || ''
       // ドラフト追跡から削除
       draftRecordIds.current.delete(id)
       draftRecordMediaMap.current.delete(id)
+      draftScheduledPostDateMap.current.delete(id)
       const existingIds = draftRowsRef.current.get(media) || []
       draftRowsRef.current.set(media, existingIds.filter((i) => i !== id))
 
@@ -1824,7 +1881,7 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       const normalizedValue = normalizeProgressFieldValue(field, value)
       const initialScheduledPostDate = dbField === 'scheduled_post_date'
         ? String(normalizedValue || '')
-        : getNextScheduledPostDateForMedia(media)
+        : draftScheduledPostDate || getNextScheduledPostDateForMedia(media)
 
       // defaultForm を DB 形式に変換（handleSubmit と同じパターン）
       const baseDefaults = { ...defaultForm } as Omit<ProductionRecord, 'id' | 'created_at' | 'material_saved'> & { material_saved?: string }
@@ -2094,12 +2151,36 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
       draftRecordMediaMap.current.set(newId, media)
     }
     draftRowsRef.current.set(media, existing)
-    return existing.slice(0, count).map((id) => ({
-      ...defaultForm,
-      id,
-      media,
-      created_at: '',
-    }))
+
+    const draftIds = existing.slice(0, count)
+    const usedDates = getUsedScheduledPostDates(media)
+
+    if (isRecruitmentMedia(media)) {
+      records
+        .filter((record) => isRecruitmentMedia(record.media))
+        .filter((record) => !record.post_completed && !record.scheduled_post_date)
+        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+        .forEach(() => {
+          const reservedDate = findNextPostingDate(media, snsPostingRules, usedDates)
+          if (reservedDate) usedDates.add(reservedDate)
+        })
+    }
+
+    return draftIds.map((id) => {
+      const scheduledPostDate = isRecruitmentMedia(media)
+        ? findNextPostingDate(media, snsPostingRules, usedDates)
+        : ''
+      if (scheduledPostDate) usedDates.add(scheduledPostDate)
+      draftScheduledPostDateMap.current.set(id, scheduledPostDate)
+
+      return {
+        ...defaultForm,
+        id,
+        media,
+        created_at: '',
+        scheduled_post_date: scheduledPostDate,
+      }
+    })
   }
 
   function openNew(presetMedia?: string) {
