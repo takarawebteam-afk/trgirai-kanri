@@ -10591,7 +10591,13 @@ function App() {
           )
         })()}
         {activePage === 'taskreport' && <TaskReportPanel />}
-        {activePage === 'progress' && <ProgressPage onSnsPropertyPromoted={handleSnsPropertyPromoted} />}
+        {activePage === 'progress' && (
+          <ProgressPage
+            onSnsPropertyPromoted={handleSnsPropertyPromoted}
+            currentUserEmail={currentUserEmail}
+            allowedAccounts={allowedAccounts}
+          />
+        )}
       </main>
 
       {/* ===== フローティング追加ボタン ===== */}

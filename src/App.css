@@ -3465,6 +3465,21 @@ button.secondary.small {
 
 /* ===== 進捗管理ページ ===== */
 
+.progress-recruitment-note-panel {
+  padding: 20px;
+  overflow: visible;
+}
+
+.progress-recruitment-note-heading {
+  margin-bottom: 14px;
+}
+
+.progress-recruitment-note-heading p {
+  margin: 4px 0 0;
+  color: var(--gray-500);
+  font-size: 13px;
+}
+
 .progress-summary {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));

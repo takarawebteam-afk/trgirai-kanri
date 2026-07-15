@@ -3,6 +3,17 @@
   min-width: 0;
 }
 
+.note-page-wrapper.is-embedded .note-page {
+  height: 720px;
+  min-height: 720px;
+}
+
+.note-page-wrapper.is-embedded .note-fab {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+}
+
 .note-page {
   position: relative;
   display: grid;
@@ -969,6 +980,11 @@
 }
 
 @media (max-width: 760px) {
+  .note-page-wrapper.is-embedded .note-page {
+    height: auto;
+    min-height: 680px;
+  }
+
   .note-page {
     grid-template-columns: minmax(0, 1fr);
     height: auto;

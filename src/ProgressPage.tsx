@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import ManualsPage from './ManualsPage'
 import {
   type ChangeHistoryEntry,
   fetchChangeHistory,
@@ -96,8 +97,16 @@ type SnsPostingRule = {
   interval_days: number | null
   reference_date: string | null
 }
+type ProgressAllowedAccount = {
+  id: string
+  email: string
+  is_master?: boolean
+}
+
 type ProgressPageProps = {
   onSnsPropertyPromoted?: (target: PromoteTarget) => void
+  currentUserEmail: string | null
+  allowedAccounts: ProgressAllowedAccount[]
 }
 
 type ProgressTextCellInputProps = {
@@ -1050,7 +1059,11 @@ function LinkIcon() {
   )
 }
 
-export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProps) {
+export default function ProgressPage({
+  onSnsPropertyPromoted,
+  currentUserEmail,
+  allowedAccounts,
+}: ProgressPageProps) {
   const [records, setRecords] = useState<ProductionRecord[]>([])
   const [keihanSnsProperties, setKeihanSnsProperties] = useState<KeihanSnsPropertyRecord[]>([])
   const [snsPostingRules, setSnsPostingRules] = useState<SnsPostingRule[]>([])
@@ -3261,6 +3274,22 @@ export default function ProgressPage({ onSnsPropertyPromoted }: ProgressPageProp
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="panel progress-recruitment-note-panel">
+        <div className="panel-heading progress-recruitment-note-heading">
+          <div>
+            <h2>採用Note</h2>
+            <p>ここで作ったメモは、上の「Note」にも同じ内容が表示されます。</p>
+          </div>
+        </div>
+        <ManualsPage
+          currentUserEmail={currentUserEmail}
+          allowedAccounts={allowedAccounts}
+          sectionFilterName="採用関係"
+          sidebarTitle="採用Note"
+          embedded
+        />
       </section>
 
       {historyOpen && (

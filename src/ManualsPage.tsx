@@ -304,6 +304,7 @@ function DroppableNoteGroup({
 function SortableSectionItem({
   section,
   sectionNotes,
+  canManage = true,
   collapsed,
   isEditing,
   editingName,
@@ -319,6 +320,7 @@ function SortableSectionItem({
 }: {
   section: SectionRecord
   sectionNotes: NoteRecord[]
+  canManage?: boolean
   collapsed: boolean
   isEditing: boolean
   editingName: string
@@ -335,6 +337,7 @@ function SortableSectionItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `section-sort:${section.id}`,
     data: { type: 'section' },
+    disabled: !canManage,
   })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -344,11 +347,11 @@ function SortableSectionItem({
   return (
     <div ref={setNodeRef} style={style} className="note-section">
       <div className="note-section-head">
-        <span className="note-drag-handle note-section-drag-handle" {...attributes} {...listeners}>⋮⋮</span>
+        {canManage && <span className="note-drag-handle note-section-drag-handle" {...attributes} {...listeners}>⋮⋮</span>}
         <button type="button" className="note-section-toggle" onClick={onToggle}>
           {collapsed ? '▶' : '▼'}
         </button>
-        {isEditing ? (
+        {canManage && isEditing ? (
           <input
             className="note-section-name-input"
             value={editingName}
@@ -357,7 +360,7 @@ function SortableSectionItem({
             onKeyDown={(event) => { if (event.key === 'Enter') onSaveName() }}
             autoFocus
           />
-        ) : (
+        ) : canManage ? (
           <button
             type="button"
             className="note-section-name"
@@ -365,8 +368,10 @@ function SortableSectionItem({
           >
             {section.name}
           </button>
+        ) : (
+          <span className="note-section-name-text">{section.name}</span>
         )}
-        <button type="button" className="note-icon-button" onClick={onDelete} aria-label="セクションを削除">×</button>
+        {canManage && <button type="button" className="note-icon-button" onClick={onDelete} aria-label="セクションを削除">×</button>}
       </div>
       {!collapsed && (
         <DroppableNoteGroup sectionKey={section.id} noteIds={sectionNotes.map((note) => note.id)}>
@@ -390,9 +395,15 @@ function SortableSectionItem({
 function ManualsPage({
   currentUserEmail,
   allowedAccounts,
+  sectionFilterName,
+  sidebarTitle = 'Note',
+  embedded = false,
 }: {
   currentUserEmail: string | null
   allowedAccounts: AllowedAccountOption[]
+  sectionFilterName?: string
+  sidebarTitle?: string
+  embedded?: boolean
 }) {
   const [notes, setNotes] = useState<NoteRecord[]>([])
   const [pendingNote, setPendingNote] = useState<NoteRecord | null>(null)
@@ -554,6 +565,18 @@ function ManualsPage({
 
   const normalizedCurrentUserEmail = normalizeEmail(currentUserEmail ?? '')
 
+  const filteredSection = useMemo(
+    () => sectionFilterName
+      ? sections.find((section) => section.name.trim() === sectionFilterName.trim()) ?? null
+      : null,
+    [sectionFilterName, sections],
+  )
+
+  const visibleSections = useMemo(
+    () => sectionFilterName ? (filteredSection ? [filteredSection] : []) : sections,
+    [filteredSection, sectionFilterName, sections],
+  )
+
   const loadData = useCallback(async () => {
     setLoading(true)
     const [notesResult, sectionsResult, tagsResult, noteTagsResult, noteAccessResult] = await Promise.all([
@@ -650,10 +673,11 @@ function ManualsPage({
 
   const accessibleNotes = useMemo(
     () => notes.filter((note) => {
+      if (sectionFilterName && note.section_id !== filteredSection?.id) return false
       const allowedEmailsForNote = noteAccessMap.get(note.id) ?? []
       return allowedEmailsForNote.length === 0 || allowedEmailsForNote.includes(normalizedCurrentUserEmail)
     }),
-    [normalizedCurrentUserEmail, noteAccessMap, notes],
+    [filteredSection?.id, normalizedCurrentUserEmail, noteAccessMap, notes, sectionFilterName],
   )
 
   const selectedNote = useMemo(
@@ -753,7 +777,7 @@ function ManualsPage({
       id: target.id,
       title: target.title.trim() || '無題ノート',
       content: target.content || EMPTY_CONTENT,
-      section_id: target.section_id,
+      section_id: sectionFilterName ? (filteredSection?.id ?? target.section_id) : target.section_id,
       sort_order: target.sort_order,
       updated_at: new Date().toISOString(),
     }
@@ -801,7 +825,7 @@ function ManualsPage({
       }
     }
 
-    const savedTarget: NoteDraft = { ...target, allowedEmails: nextAllowedEmails }
+    const savedTarget: NoteDraft = { ...target, section_id: payload.section_id, allowedEmails: nextAllowedEmails }
     lastSavedSignatureRef.current = noteSignature(savedTarget)
     setNotes((current) => {
       const isNew = !current.some((note) => note.id === target.id)
@@ -820,7 +844,7 @@ function ManualsPage({
     setDraft(savedTarget)
     if (pendingNote?.id === target.id) setPendingNote(null)
     setTimedStatus('saved', '保存済み ✓')
-  }, [allowedAccountEmails, pendingNote?.id, setTimedStatus])
+  }, [allowedAccountEmails, filteredSection?.id, pendingNote?.id, sectionFilterName, setTimedStatus])
 
   const flushSave = useCallback(async () => {
     const currentDraft = draftRef.current
@@ -851,16 +875,21 @@ function ManualsPage({
       setSelectedNoteId(pendingNote.id)
       return
     }
+    if (sectionFilterName && !filteredSection) {
+      setTimedStatus('error', `「${sectionFilterName}」セクションが見つかりません`)
+      return
+    }
 
+    const targetSectionId = filteredSection?.id ?? null
     const id = crypto.randomUUID()
     const maxOrder = notes
-      .filter((note) => note.section_id === null)
+      .filter((note) => note.section_id === targetSectionId)
       .reduce((max, note) => Math.max(max, note.sort_order), -1)
     const newNote: NoteRecord = {
       id,
       title: '',
       content: EMPTY_CONTENT,
-      section_id: null,
+      section_id: targetSectionId,
       sort_order: maxOrder + 1,
       updated_at: new Date().toISOString(),
     }
@@ -1128,11 +1157,11 @@ function ManualsPage({
   const isInTable = editor?.isActive('table') ?? false
 
   return (
-    <div className="note-page-wrapper">
+    <div className={`note-page-wrapper${embedded ? ' is-embedded' : ''}`}>
       <section className={`note-page${sidebarOpen ? '' : ' sidebar-closed'}`}>
       <aside className="note-sidebar">
         <div className="note-sidebar-head">
-          <strong>Note</strong>
+          <strong>{sidebarTitle}</strong>
           <button type="button" className="note-plain-button" onClick={() => setSidebarOpen(false)}>閉じる</button>
         </div>
 
@@ -1161,17 +1190,22 @@ function ManualsPage({
               </span>
             ))}
           </div>
-          <div className="note-section-add">
-            <input value={newSectionName} onChange={(event) => setNewSectionName(event.target.value)} onKeyDown={handleSectionInputKeyDown} placeholder="セクション名" />
-            <button type="button" className="note-secondary-button" onClick={() => void createSection()}>+ セクション</button>
-          </div>
+          {!sectionFilterName && (
+            <div className="note-section-add">
+              <input value={newSectionName} onChange={(event) => setNewSectionName(event.target.value)} onKeyDown={handleSectionInputKeyDown} placeholder="セクション名" />
+              <button type="button" className="note-secondary-button" onClick={() => void createSection()}>+ セクション</button>
+            </div>
+          )}
         </div>
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="note-section-list">
             {loading && <p className="note-empty-text">読み込み中...</p>}
-            <SortableContext items={sections.map((s) => `section-sort:${s.id}`)} strategy={verticalListSortingStrategy}>
-              {sections.map((section) => {
+            {sectionFilterName && !filteredSection && !loading && (
+              <p className="note-empty-text">「{sectionFilterName}」セクションが見つかりません</p>
+            )}
+            <SortableContext items={visibleSections.map((s) => `section-sort:${s.id}`)} strategy={verticalListSortingStrategy}>
+              {visibleSections.map((section) => {
                 const sectionNotes = notesBySection.get(section.id) ?? []
                 const collapsed = collapsedSectionIds.has(section.id)
                 return (
@@ -1179,6 +1213,7 @@ function ManualsPage({
                     key={section.id}
                     section={section}
                     sectionNotes={sectionNotes}
+                    canManage={!sectionFilterName}
                     collapsed={collapsed}
                     isEditing={editingSectionId === section.id}
                     editingName={editingSectionName}
@@ -1199,7 +1234,7 @@ function ManualsPage({
               })}
             </SortableContext>
 
-            <div className="note-section note-section-none">
+            {!sectionFilterName && <div className="note-section note-section-none">
               <div className="note-section-head">
                 <button type="button" className="note-section-toggle" onClick={() => toggleSection(NO_SECTION_ID)}>
                   {collapsedSectionIds.has(NO_SECTION_ID) ? '▶' : '▼'}
@@ -1221,7 +1256,7 @@ function ManualsPage({
                   {(notesBySection.get(NO_SECTION_ID) ?? []).length === 0 && <p className="note-empty-text">ノートはありません</p>}
                 </DroppableNoteGroup>
               )}
-            </div>
+            </div>}
           </div>
 
           <DragOverlay>
@@ -1483,7 +1518,9 @@ function ManualsPage({
         )}
       </main>
       </section>
-      <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
+      {(!sectionFilterName || filteredSection) && (
+        <button type="button" className="note-fab" onClick={() => void createNote()} aria-label="新規ノート">+</button>
+      )}
     </div>
   )
 }
