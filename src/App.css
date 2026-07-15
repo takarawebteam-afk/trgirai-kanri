@@ -3571,7 +3571,7 @@ button.secondary.small {
 }
 
 .progress-table-panel {
-  padding: 0 0 45vh;
+  padding: 0;
   overflow: visible;
   min-width: 0;
   width: 100%;
