@@ -774,7 +774,7 @@ const TIKTOK_INSIGHT_ACCOUNTS: {
   propertyTable: SnsPropertyTableName | null
 }[] = [
   { key: 'karilun', label: 'Karilun', propertyTable: 'sns_tiktok_properties' },
-  { key: 'keihoku', label: '京北', propertyTable: null },
+  { key: 'keihoku', label: '京北', propertyTable: 'sns_keihan_karilun_properties' },
   { key: 'kindaialone', label: '近大一人暮らし', propertyTable: 'sns_nagase_properties' },
   { key: 'kwanseialone', label: '関学一人暮らし', propertyTable: 'sns_nishikita_properties' },
   { key: 'yao', label: '八尾', propertyTable: 'sns_yao_properties' },
