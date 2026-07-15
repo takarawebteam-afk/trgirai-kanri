@@ -6288,6 +6288,67 @@ button.secondary.small {
   gap: 16px;
 }
 
+.tiktok-insight-account-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #dbe4f0;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.tiktok-insight-account-switcher > span {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.tiktok-insight-account-switcher > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.tiktok-insight-account-switcher button {
+  position: relative;
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tiktok-insight-account-switcher button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tiktok-insight-account-switcher button.active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.tiktok-insight-account-switcher button.has-data:not(.active)::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
 .analysis-sheet-heading .analysis-actions.tiktok-insight-actions {
   flex: 1 1 auto;
   flex-direction: row;

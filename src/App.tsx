@@ -740,7 +740,10 @@ type TiktokInsightDailyPostCell = {
 
 type TiktokInsightViewMode = 'monthly' | 'cumulative'
 
+type TiktokInsightAccountKey = 'karilun' | 'keihoku' | 'kindaialone' | 'kwanseialone' | 'yao'
+
 type TiktokInsightStoredMonth = {
+  accountKey: TiktokInsightAccountKey
   monthKey: string
   year: number
   month: number
@@ -753,6 +756,7 @@ type TiktokInsightStoredMonth = {
 }
 
 type TiktokInsightDbRow = {
+  account_key: string
   month_key: string
   year: number
   month: number
@@ -763,6 +767,18 @@ type TiktokInsightDbRow = {
   file_status: unknown
   updated_at: string | null
 }
+
+const TIKTOK_INSIGHT_ACCOUNTS: {
+  key: TiktokInsightAccountKey
+  label: string
+  propertyTable: SnsPropertyTableName | null
+}[] = [
+  { key: 'karilun', label: 'Karilun', propertyTable: 'sns_tiktok_properties' },
+  { key: 'keihoku', label: '京北', propertyTable: null },
+  { key: 'kindaialone', label: '近大一人暮らし', propertyTable: 'sns_nagase_properties' },
+  { key: 'kwanseialone', label: '関学一人暮らし', propertyTable: 'sns_nishikita_properties' },
+  { key: 'yao', label: '八尾', propertyTable: 'sns_yao_properties' },
+]
 
 const ANALYSIS_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 const ANALYSIS_YEARS = [2025, 2026] as const
@@ -1213,6 +1229,10 @@ function getTiktokInsightMonthLabel(monthKey: string) {
   return year && month ? `${year}年${Number(month)}月` : monthKey
 }
 
+function getTiktokInsightStorageKey(accountKey: TiktokInsightAccountKey, monthKey: string) {
+  return `${accountKey}:${monthKey}`
+}
+
 function getTiktokInsightMonthKeyFromRows(
   overviewRows: TiktokInsightOverviewRow[],
   followerRows: TiktokInsightFollowerRow[],
@@ -1236,7 +1256,12 @@ function combineTiktokInsightFileStatus(months: TiktokInsightStoredMonth[]) {
 }
 
 function normalizeTiktokInsightDbMonth(row: TiktokInsightDbRow): TiktokInsightStoredMonth {
+  const accountKey = TIKTOK_INSIGHT_ACCOUNTS.some((account) => account.key === row.account_key)
+    ? row.account_key as TiktokInsightAccountKey
+    : 'karilun'
+
   return {
+    accountKey,
     monthKey: row.month_key,
     year: Number(row.year),
     month: Number(row.month),
@@ -2566,6 +2591,7 @@ function App() {
   const [analysisYoutubeSyncing, setAnalysisYoutubeSyncing] = useState(false)
   const [analysisYoutubeYearFilter, setAnalysisYoutubeYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_YOUTUBE_COLUMNS))
   const [tiktokInsightStoredMonths, setTiktokInsightStoredMonths] = useState<Record<string, TiktokInsightStoredMonth>>({})
+  const [tiktokInsightAccountKey, setTiktokInsightAccountKey] = useState<TiktokInsightAccountKey>('karilun')
   const [tiktokInsightSelectedMonthKey, setTiktokInsightSelectedMonthKey] = useState('')
   const [tiktokInsightViewMode, setTiktokInsightViewMode] = useState<TiktokInsightViewMode>('monthly')
   const [tiktokInsightYear, setTiktokInsightYear] = useState(new Date().getFullYear())
@@ -2580,6 +2606,8 @@ function App() {
   const [tiktokInsightLoading, setTiktokInsightLoading] = useState(false)
   const [tiktokInsightDragActive, setTiktokInsightDragActive] = useState(false)
   const tiktokInsightFileInputRef = useRef<HTMLInputElement | null>(null)
+  const tiktokInsightAccount = TIKTOK_INSIGHT_ACCOUNTS.find((account) => account.key === tiktokInsightAccountKey)
+    || TIKTOK_INSIGHT_ACCOUNTS[0]
 
   const analysisTiktokYearOptions = useMemo(() => getAnalysisYearOptions(analysisTiktokData.columns), [analysisTiktokData.columns])
   const analysisTiktokVisibleColumns = useMemo(
@@ -2603,14 +2631,14 @@ function App() {
   )
   const tiktokInsightMonthOptions = useMemo(() => (
     Object.values(tiktokInsightStoredMonths)
-      .filter((month) => month.year === tiktokInsightYear)
+      .filter((month) => month.accountKey === tiktokInsightAccountKey && month.year === tiktokInsightYear)
       .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
-  ), [tiktokInsightStoredMonths, tiktokInsightYear])
+  ), [tiktokInsightAccountKey, tiktokInsightStoredMonths, tiktokInsightYear])
   const tiktokInsightSelectedMonth = useMemo(() => (
     tiktokInsightSelectedMonthKey
-      ? tiktokInsightStoredMonths[tiktokInsightSelectedMonthKey] || null
+      ? tiktokInsightStoredMonths[getTiktokInsightStorageKey(tiktokInsightAccountKey, tiktokInsightSelectedMonthKey)] || null
       : tiktokInsightMonthOptions[tiktokInsightMonthOptions.length - 1] || null
-  ), [tiktokInsightMonthOptions, tiktokInsightSelectedMonthKey, tiktokInsightStoredMonths])
+  ), [tiktokInsightAccountKey, tiktokInsightMonthOptions, tiktokInsightSelectedMonthKey, tiktokInsightStoredMonths])
   const tiktokInsightDisplayMonths = useMemo(() => {
     const selectedLimitMonthKey = tiktokInsightSelectedMonth?.monthKey || tiktokInsightSelectedMonthKey
     if (tiktokInsightViewMode === 'monthly') return [tiktokInsightSelectedMonth]
@@ -2703,7 +2731,7 @@ function App() {
   }, [selectedYear])
 
   useEffect(() => {
-    const selectedMonth = tiktokInsightStoredMonths[tiktokInsightSelectedMonthKey]
+    const selectedMonth = tiktokInsightStoredMonths[getTiktokInsightStorageKey(tiktokInsightAccountKey, tiktokInsightSelectedMonthKey)]
     if (selectedMonth && selectedMonth.year === tiktokInsightYear) return
     if (Number(tiktokInsightSelectedMonthKey.slice(0, 4)) === tiktokInsightYear) return
 
@@ -2717,7 +2745,7 @@ function App() {
     if (!latestMonthForYear && currentMonthKey !== tiktokInsightSelectedMonthKey) {
       setTiktokInsightSelectedMonthKey(currentMonthKey)
     }
-  }, [tiktokInsightMonthOptions, tiktokInsightSelectedMonthKey, tiktokInsightStoredMonths, tiktokInsightYear])
+  }, [tiktokInsightAccountKey, tiktokInsightMonthOptions, tiktokInsightSelectedMonthKey, tiktokInsightStoredMonths, tiktokInsightYear])
 
   useEffect(() => {
     const nextOverviewRows = tiktokInsightDisplayMonths
@@ -2743,7 +2771,7 @@ function App() {
     setTiktokInsightLoading(true)
     const { data, error } = await supabase
       .from('tiktok_insight_months')
-      .select('month_key,year,month,overview_rows,follower_rows,gender_rows,territory_rows,file_status,updated_at')
+      .select('account_key,month_key,year,month,overview_rows,follower_rows,gender_rows,territory_rows,file_status,updated_at')
       .order('month_key', { ascending: true })
 
     if (error) {
@@ -2755,12 +2783,12 @@ function App() {
 
     const months = ((data || []) as TiktokInsightDbRow[]).reduce((acc, row) => {
       const month = normalizeTiktokInsightDbMonth(row)
-      acc[month.monthKey] = month
+      acc[getTiktokInsightStorageKey(month.accountKey, month.monthKey)] = month
       return acc
     }, {} as Record<string, TiktokInsightStoredMonth>)
     const selectionYear = nextSelectedMonthKey ? Number(nextSelectedMonthKey.slice(0, 4)) : tiktokInsightYear
     const monthsInSelectionYear = Object.values(months)
-      .filter((month) => month.year === selectionYear)
+      .filter((month) => month.accountKey === tiktokInsightAccountKey && month.year === selectionYear)
       .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
     const currentMonthKey = `${selectionYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
     const keptMonthKey = Number(tiktokInsightSelectedMonthKey.slice(0, 4)) === selectionYear ? tiktokInsightSelectedMonthKey : ''
@@ -2832,8 +2860,10 @@ function App() {
         tiktokInsightSelectedMonthKey,
       )
       const [yearText, monthText] = monthKey.split('-')
-      const previousMonth = tiktokInsightStoredMonths[monthKey]
+      const storageKey = getTiktokInsightStorageKey(tiktokInsightAccountKey, monthKey)
+      const previousMonth = tiktokInsightStoredMonths[storageKey]
       const nextMonth: TiktokInsightStoredMonth = {
+        accountKey: tiktokInsightAccountKey,
         monthKey,
         year: Number(yearText),
         month: Number(monthText),
@@ -2850,6 +2880,7 @@ function App() {
         updatedAt: new Date().toISOString(),
       }
       const { error: saveError } = await supabase.from('tiktok_insight_months').upsert({
+        account_key: nextMonth.accountKey,
         month_key: nextMonth.monthKey,
         year: nextMonth.year,
         month: nextMonth.month,
@@ -2859,13 +2890,13 @@ function App() {
         territory_rows: nextMonth.territoryRows,
         file_status: nextMonth.fileStatus,
         updated_at: nextMonth.updatedAt,
-      }, { onConflict: 'month_key' })
+      }, { onConflict: 'account_key,month_key' })
 
       if (saveError) throw saveError
 
       setTiktokInsightStoredMonths((current) => ({
         ...current,
-        [monthKey]: nextMonth,
+        [storageKey]: nextMonth,
       }))
       setTiktokInsightSelectedMonthKey(monthKey)
       setTiktokInsightYear(nextMonth.year)
@@ -2900,7 +2931,8 @@ function App() {
     const selectedLabel = tiktokInsightViewMode === 'cumulative'
       ? `${tiktokInsightYear}年累計`
       : getTiktokInsightMonthLabel(tiktokInsightSelectedMonth?.monthKey || tiktokInsightSelectedMonthKey)
-    const safePeriod = selectedLabel.replace(/[\\/:*?"<>|]/g, '')
+    const selectedAccountLabel = tiktokInsightAccount.label
+    const safePeriod = [selectedAccountLabel, selectedLabel].join('_').replace(/[\\/:*?"<>|]/g, '')
 
     const thinBorder = {
       top: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } },
@@ -2915,7 +2947,7 @@ function App() {
       views: [{ state: 'frozen', ySplit: 7 }],
     })
     summarySheet.addRows([
-      ['TikTok分析 Gemini資料用'],
+      ['TikTok分析 Gemini資料用（' + selectedAccountLabel + '）'],
       ['出力対象', selectedLabel],
       ['期間', tiktokInsightSummary.periodLabel],
       ['表示', tiktokInsightViewMode === 'cumulative' ? '累計' : '月別'],
@@ -3065,22 +3097,28 @@ function App() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `TikTok分析_Gemini資料用_${safePeriod}.xlsx`
+    link.download = 'TikTok分析_Gemini資料用_' + safePeriod + '.xlsx'
     document.body.appendChild(link)
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
-    setTiktokInsightMessage('TikTok分析をExcelで出力しました。')
+    setTiktokInsightMessage(selectedAccountLabel + 'のTikTok分析をExcelで出力しました。')
     setTiktokInsightMessageType('success')
   }
 
   async function fetchTiktokInsightPostProperties(startDate: string, endDate: string) {
+    const propertyTable = tiktokInsightAccount.propertyTable
+    if (!propertyTable) {
+      setTiktokInsightPostProperties([])
+      return
+    }
+
     const pageSize = 1000
     const allRows: TiktokInsightPropertyRow[] = []
 
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await supabase
-        .from('sns_tiktok_properties')
+        .from(propertyTable)
         .select('id,post_date,property_number,property_name')
         .range(from, from + pageSize - 1)
 
@@ -3119,7 +3157,7 @@ function App() {
     const startDate = tiktokInsightDailyRows[0].dateKey
     const endDate = tiktokInsightDailyRows[tiktokInsightDailyRows.length - 1].dateKey
     void fetchTiktokInsightPostProperties(startDate, endDate)
-  }, [tiktokInsightDailyRows, tiktokInsightYear])
+  }, [tiktokInsightAccountKey, tiktokInsightDailyRows, tiktokInsightYear])
 
   async function fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
@@ -7874,7 +7912,7 @@ function App() {
                   <div className="panel-heading analysis-sheet-heading">
                     <div>
                       <h2>TikTok分析</h2>
-                      <p>KarilunのTikTokインサイトCSVと、SNS物件管理の投稿日を見比べます。</p>
+                      <p>{tiktokInsightAccount.label}のTikTokインサイトCSVを表示します。</p>
                     </div>
                     <div className="analysis-actions tiktok-insight-actions">
                       {tiktokInsightMessage && (
@@ -7906,7 +7944,7 @@ function App() {
                         </button>
                         {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
                           const monthKey = `${tiktokInsightYear}-${String(month).padStart(2, '0')}`
-                          const hasCsv = Boolean(tiktokInsightStoredMonths[monthKey])
+                          const hasCsv = Boolean(tiktokInsightStoredMonths[getTiktokInsightStorageKey(tiktokInsightAccountKey, monthKey)])
                           return (
                             <button
                               key={monthKey}
@@ -7943,6 +7981,34 @@ function App() {
                     </div>
                   </div>
 
+                  <div className="tiktok-insight-account-switcher" aria-label="TikTok分析のアカウント切り替え">
+                    <span>表示するアカウント</span>
+                    <div>
+                      {TIKTOK_INSIGHT_ACCOUNTS.map((account) => {
+                        const hasAccountData = Object.values(tiktokInsightStoredMonths)
+                          .some((month) => month.accountKey === account.key)
+                        return (
+                          <button
+                            key={account.key}
+                            type="button"
+                            className={[
+                              account.key === tiktokInsightAccountKey ? 'active' : '',
+                              hasAccountData ? 'has-data' : '',
+                            ].filter(Boolean).join(' ')}
+                            onClick={() => {
+                              setTiktokInsightAccountKey(account.key)
+                              setTiktokInsightSelectedMonthKey('')
+                              setTiktokInsightViewMode('monthly')
+                              setTiktokInsightMessage('')
+                            }}
+                          >
+                            {account.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
                   <div
                     className={`tiktok-insight-dropzone ${tiktokInsightDragActive ? 'is-active' : ''}`}
                     onDragEnter={(e) => {
@@ -7962,7 +8028,7 @@ function App() {
                       void importTiktokInsightCsvFiles(e.dataTransfer.files)
                     }}
                   >
-                    <strong>CSVをここにドロップ</strong>
+                    <strong>{tiktokInsightAccount.label}のCSVをここにドロップ</strong>
                     <span>Overview / FollowerHistory / FollowerGender / FollowerTopTerritories</span>
                   </div>
 
