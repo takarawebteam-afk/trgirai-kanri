@@ -2585,12 +2585,14 @@ function App() {
   const [analysisThreadsMessage, setAnalysisThreadsMessage] = useState('')
   const [analysisThreadsSavingCell, setAnalysisThreadsSavingCell] = useState('')
   const [analysisThreadsSyncing, setAnalysisThreadsSyncing] = useState(false)
+  const [analysisThreadsSheetSyncing, setAnalysisThreadsSheetSyncing] = useState(false)
   const [analysisThreadsYearFilter, setAnalysisThreadsYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_THREADS_COLUMNS))
   const [analysisYoutubeData, setAnalysisYoutubeData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisYoutubeLoading, setAnalysisYoutubeLoading] = useState(false)
   const [analysisYoutubeMessage, setAnalysisYoutubeMessage] = useState('')
   const [analysisYoutubeSavingCell, setAnalysisYoutubeSavingCell] = useState('')
   const [analysisYoutubeSyncing, setAnalysisYoutubeSyncing] = useState(false)
+  const [analysisYoutubeSheetSyncing, setAnalysisYoutubeSheetSyncing] = useState(false)
   const [analysisYoutubeYearFilter, setAnalysisYoutubeYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_YOUTUBE_COLUMNS))
   const [tiktokInsightStoredMonths, setTiktokInsightStoredMonths] = useState<Record<string, TiktokInsightStoredMonth>>({})
   const [tiktokInsightAccountKey, setTiktokInsightAccountKey] = useState<TiktokInsightAccountKey>('karilun')
@@ -3576,6 +3578,34 @@ function App() {
     }))
   }
 
+  async function syncAnalysisThreadsSheet(options: { silent?: boolean } = {}) {
+    if (!options.silent) {
+      setAnalysisThreadsSheetSyncing(true)
+      setAnalysisThreadsMessage('スプレッドシートへ反映中...')
+    }
+
+    try {
+      const response = await fetch('/api/sync-analysis-tiktok-sheet?sheet=threads', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'シート反映に失敗しました。')
+      }
+
+      if (!options.silent) {
+        setAnalysisThreadsMessage(`スプレッドシート反映済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'シート反映に失敗しました。'
+      if (!options.silent) {
+        setAnalysisThreadsMessage(`シート反映に失敗しました: ${message}`)
+      }
+      throw error
+    } finally {
+      if (!options.silent) setAnalysisThreadsSheetSyncing(false)
+    }
+  }
+
   async function saveAnalysisThreadsCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
     const value = stripNumberCommas(row.values[valueIndex] || '')
     const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
@@ -3590,7 +3620,8 @@ function App() {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'year,month,account,metric' })
       if (error) throw error
-      setAnalysisThreadsMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      await syncAnalysisThreadsSheet({ silent: true })
+      setAnalysisThreadsMessage(`保存・シート反映済み: ${new Date().toLocaleTimeString('ja-JP')}`)
     } catch (e) {
       const message = e instanceof Error ? e.message : '保存に失敗しました。'
       setAnalysisThreadsMessage(`保存に失敗しました: ${message}`)
@@ -3723,6 +3754,7 @@ function App() {
           })),
         }))
       }
+      await syncAnalysisThreadsSheet({ silent: true })
       setAnalysisThreadsMessage(`Threadsから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Threadsの自動反映に失敗しました。'
@@ -3771,6 +3803,34 @@ function App() {
     }))
   }
 
+  async function syncAnalysisYoutubeSheet(options: { silent?: boolean } = {}) {
+    if (!options.silent) {
+      setAnalysisYoutubeSheetSyncing(true)
+      setAnalysisYoutubeMessage('スプレッドシートへ反映中...')
+    }
+
+    try {
+      const response = await fetch('/api/sync-analysis-tiktok-sheet?sheet=youtube', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'シート反映に失敗しました。')
+      }
+
+      if (!options.silent) {
+        setAnalysisYoutubeMessage(`スプレッドシート反映済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'シート反映に失敗しました。'
+      if (!options.silent) {
+        setAnalysisYoutubeMessage(`シート反映に失敗しました: ${message}`)
+      }
+      throw error
+    } finally {
+      if (!options.silent) setAnalysisYoutubeSheetSyncing(false)
+    }
+  }
+
   async function saveAnalysisYoutubeCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
     const value = stripNumberCommas(row.values[valueIndex] || '')
     const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
@@ -3785,7 +3845,8 @@ function App() {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'year,month,account,metric' })
       if (error) throw error
-      setAnalysisYoutubeMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      await syncAnalysisYoutubeSheet({ silent: true })
+      setAnalysisYoutubeMessage(`保存・シート反映済み: ${new Date().toLocaleTimeString('ja-JP')}`)
     } catch (e) {
       const message = e instanceof Error ? e.message : '保存に失敗しました。'
       setAnalysisYoutubeMessage(`保存に失敗しました: ${message}`)
@@ -3861,6 +3922,7 @@ function App() {
           })),
         }))
       }
+      await syncAnalysisYoutubeSheet({ silent: true })
       const successMessage = `YouTubeから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`
       setAnalysisYoutubeMessage(youtubeSyncFailureNote ? `${successMessage}\n${youtubeSyncFailureNote}` : successMessage)
     } catch (error) {
@@ -7617,6 +7679,14 @@ function App() {
                     <button
                       type="button"
                       className="secondary"
+                      onClick={() => void syncAnalysisThreadsSheet()}
+                      disabled={analysisThreadsSheetSyncing || analysisThreadsSyncing}
+                    >
+                      {analysisThreadsSheetSyncing ? '反映中...' : 'スプレッドシートへ反映'}
+                    </button>
+                    <button
+                      type={'button'}
+                      className={'secondary'}
                       onClick={() => void syncAnalysisThreadsMetrics()}
                       disabled={analysisThreadsSyncing}
                     >
@@ -7717,6 +7787,14 @@ function App() {
                     <button
                       type="button"
                       className="secondary"
+                      onClick={() => void syncAnalysisYoutubeSheet()}
+                      disabled={analysisYoutubeSheetSyncing || analysisYoutubeSyncing}
+                    >
+                      {analysisYoutubeSheetSyncing ? '反映中...' : 'スプレッドシートへ反映'}
+                    </button>
+                    <button
+                      type={'button'}
+                      className={'secondary'}
                       onClick={() => void syncAnalysisYoutubeMetrics()}
                       disabled={analysisYoutubeSyncing}
                     >

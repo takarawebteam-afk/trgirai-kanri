@@ -6,7 +6,7 @@ const SPREADSHEET_ID = '1hOIT8zCmR_KGtsHvFEaqkLkBKxkrDGwbltmNULKCmkM'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 
-type AnalysisSheetType = 'tiktok' | 'insta'
+type AnalysisSheetType = 'tiktok' | 'insta' | 'threads' | 'youtube'
 
 type AnalysisTiktokMetricRecord = {
   year: number
@@ -81,6 +81,47 @@ const SHEET_CONFIGS: Record<AnalysisSheetType, {
       URLクリック: 7,
     },
     totalBlockStart: 57,
+  },
+  threads: {
+    sheetName: '店舗threads',
+    tableName: 'analysis_threads_metrics',
+    accountBlockStart: {
+      Karilun: 3,
+      京北: 11,
+      京阪: 11,
+      長瀬: 19,
+      西北: 27,
+      八尾: 35,
+    },
+    metricRowOffset: {
+      フォロワー数: 0,
+      投稿数: 2,
+      '視聴回数(閲覧数)': 4,
+      いいね数: 5,
+      リポスト数: 6,
+      コメント数: 7,
+    },
+    totalBlockStart: 43,
+  },
+  youtube: {
+    sheetName: '店舗YouTube',
+    tableName: 'analysis_youtube_metrics',
+    accountBlockStart: {
+      Karilun: 3,
+      長瀬: 11,
+      西北: 19,
+      八尾: 27,
+    },
+    metricRowOffset: {
+      チャンネル登録数: 0,
+      投稿数: 2,
+      再生数: 4,
+      平均視聴時間: 5,
+      '平均視聴時間（秒）': 5,
+      いいね数: 6,
+      コメント数: 7,
+    },
+    totalBlockStart: 35,
   },
 }
 
@@ -323,7 +364,12 @@ async function formatFollowersPerPostRows(
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const sheetType: AnalysisSheetType = req.query.sheet === 'insta' ? 'insta' : 'tiktok'
+    const requestedSheet = Array.isArray(req.query.sheet) ? req.query.sheet[0] : req.query.sheet
+    const sheetType: AnalysisSheetType = (
+      requestedSheet === 'insta'
+      || requestedSheet === 'threads'
+      || requestedSheet === 'youtube'
+    ) ? requestedSheet : 'tiktok'
     const config = SHEET_CONFIGS[sheetType]
 
     if (req.method === 'GET') {
