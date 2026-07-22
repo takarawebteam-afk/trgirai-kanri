@@ -471,7 +471,7 @@ const SHEET_START_YEAR = 2025
 const SHEET_MONTH_COUNT = 24
 const SHEET_END_YEAR = SHEET_START_YEAR + Math.ceil(SHEET_MONTH_COUNT / 12) - 1
 const SHEET_ONLY_KANRI_GA_PROPERTY_ID = process.env.GA4_PROPERTY_KANRI || '398626147'
-const KANRI_SEARCH_CONSOLE_SITE_URLS = (process.env.SEARCH_CONSOLE_SITE_URL || process.env.GSC_SITE_URL || 'https://www.rentax.co.jp/,http://www.rentax.co.jp/,sc-domain:rentax.co.jp')
+const KANRI_SEARCH_CONSOLE_SITE_URLS = (process.env.SEARCH_CONSOLE_SITE_URL || process.env.GSC_SITE_URL || 'https://www.rentax.co.jp/')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean)
