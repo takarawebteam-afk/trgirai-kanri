@@ -3,9 +3,10 @@ import { createSign } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
 const SPREADSHEET_ID = '1hOIT8zCmR_KGtsHvFEaqkLkBKxkrDGwbltmNULKCmkM'
-const SHEET_NAME = '店舗TikTok'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
+
+type AnalysisSheetType = 'tiktok' | 'insta'
 
 type AnalysisTiktokMetricRecord = {
   year: number
@@ -26,33 +27,62 @@ type SheetsMetadataResponse = {
   }>
 }
 
-const ACCOUNT_BLOCK_START: Record<string, number> = {
-  Karilun: 3,
-  京北: 13,
-  京阪: 13,
-  西宮市: 23,
-  長瀬: 33,
-  西北: 43,
-  八尾: 53,
-}
-
-const METRIC_ROW_OFFSET: Record<string, number> = {
-  フォロワー数: 0,
-  フォロワー増加数: 1,
-  投稿数: 2,
-  視聴者リーチ: 4,
-  プロフ閲覧: 5,
-  URLクリック: 6,
-  電話クリック: 8,
-}
-
-const FOLLOWERS_PER_POST_BLOCK_STARTS = [...new Set([...Object.values(ACCOUNT_BLOCK_START), 63])].sort(
-  (a, b) => a - b,
-)
 const FOLLOWERS_PER_POST_ROW_OFFSET = 3
-const FOLLOWERS_PER_POST_ROW_NUMBERS = FOLLOWERS_PER_POST_BLOCK_STARTS.map(
-  (blockStart) => blockStart + FOLLOWERS_PER_POST_ROW_OFFSET,
-)
+
+const SHEET_CONFIGS: Record<AnalysisSheetType, {
+  sheetName: string
+  tableName: string
+  accountBlockStart: Record<string, number>
+  metricRowOffset: Record<string, number>
+  totalBlockStart: number
+}> = {
+  tiktok: {
+    sheetName: '店舗TikTok',
+    tableName: 'analysis_tiktok_metrics',
+    accountBlockStart: {
+      Karilun: 3,
+      京北: 13,
+      京阪: 13,
+      西宮市: 23,
+      長瀬: 33,
+      西北: 43,
+      八尾: 53,
+    },
+    metricRowOffset: {
+      フォロワー数: 0,
+      フォロワー増加数: 1,
+      投稿数: 2,
+      視聴者リーチ: 4,
+      プロフ閲覧: 5,
+      URLクリック: 6,
+      電話クリック: 8,
+    },
+    totalBlockStart: 63,
+  },
+  insta: {
+    sheetName: '店舗INSTA',
+    tableName: 'analysis_insta_metrics',
+    accountBlockStart: {
+      Karilun: 3,
+      京北: 12,
+      京阪: 12,
+      西宮市: 21,
+      長瀬: 30,
+      西北: 39,
+      八尾: 48,
+    },
+    metricRowOffset: {
+      フォロワー数: 0,
+      フォロワー増加数: 1,
+      投稿数: 2,
+      '視聴回数(閲覧数)': 4,
+      視聴者リーチ: 5,
+      プロフ閲覧: 6,
+      URLクリック: 7,
+    },
+    totalBlockStart: 57,
+  },
+}
 
 function base64Url(value: string) {
   return Buffer.from(value)
@@ -125,14 +155,14 @@ function getSupabaseClient() {
   return createClient(url, key)
 }
 
-async function fetchAllTiktokMetrics() {
+async function fetchAllMetrics(tableName: string) {
   const supabase = getSupabaseClient()
   const rows: AnalysisTiktokMetricRecord[] = []
   const pageSize = 1000
 
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
-      .from('analysis_tiktok_metrics')
+      .from(tableName)
       .select('year, month, account, metric, value')
       .order('year', { ascending: true })
       .order('month', { ascending: true })
@@ -171,14 +201,17 @@ function escapeSheetName(sheetName: string) {
   return sheetName.replace(/'/g, "''")
 }
 
-function buildBatchUpdateData(records: AnalysisTiktokMetricRecord[]) {
+function buildBatchUpdateData(
+  records: AnalysisTiktokMetricRecord[],
+  config: (typeof SHEET_CONFIGS)[AnalysisSheetType],
+) {
   const rowsByNumber = new Map<number, SheetCellValue[]>()
 
   for (const record of records) {
     const account = String(record.account ?? '').trim()
     const metric = String(record.metric ?? '').trim()
-    const blockStart = ACCOUNT_BLOCK_START[account]
-    const offset = METRIC_ROW_OFFSET[metric]
+    const blockStart = config.accountBlockStart[account]
+    const offset = config.metricRowOffset[metric]
     const monthIndex = getMonthIndex(record.year, record.month)
 
     if (blockStart === undefined || offset === undefined || monthIndex === null) continue
@@ -189,7 +222,7 @@ function buildBatchUpdateData(records: AnalysisTiktokMetricRecord[]) {
     rowsByNumber.set(rowNumber, rowValues)
   }
 
-  const sheetName = escapeSheetName(SHEET_NAME)
+  const sheetName = escapeSheetName(config.sheetName)
   return Array.from(rowsByNumber.entries())
     .filter(([, values]) => values.some((value) => value !== ''))
     .sort(([a], [b]) => a - b)
@@ -220,7 +253,7 @@ async function updateSheet(accessToken: string, data: Array<{ range: string; val
   if (!response.ok) throw new Error(`Sheet batch update failed. ${await response.text()}`)
 }
 
-async function getSheetId(accessToken: string) {
+async function getSheetId(accessToken: string, sheetName: string) {
   const fields = encodeURIComponent('sheets.properties(sheetId,title)')
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=${fields}`,
@@ -235,22 +268,29 @@ async function getSheetId(accessToken: string) {
 
   const data = await response.json() as SheetsMetadataResponse
   const sheetId = data.sheets
-    ?.find((sheet) => sheet.properties?.title === SHEET_NAME)
+    ?.find((sheet) => sheet.properties?.title === sheetName)
     ?.properties
     ?.sheetId
 
-  if (sheetId === undefined) throw new Error(`Sheet not found: ${SHEET_NAME}`)
+  if (sheetId === undefined) throw new Error(`Sheet not found: ${sheetName}`)
   return sheetId
 }
 
-async function formatFollowersPerPostRows(accessToken: string) {
-  const sheetId = await getSheetId(accessToken)
-  const requests = FOLLOWERS_PER_POST_ROW_NUMBERS.map((rowNumber) => ({
+async function formatFollowersPerPostRows(
+  accessToken: string,
+  config: (typeof SHEET_CONFIGS)[AnalysisSheetType],
+) {
+  const sheetId = await getSheetId(accessToken, config.sheetName)
+  const blockStarts = [...new Set([
+    ...Object.values(config.accountBlockStart),
+    config.totalBlockStart,
+  ])].sort((a, b) => a - b)
+  const requests = blockStarts.map((blockStart) => ({
     repeatCell: {
       range: {
         sheetId,
-        startRowIndex: rowNumber - 1,
-        endRowIndex: rowNumber,
+        startRowIndex: blockStart + FOLLOWERS_PER_POST_ROW_OFFSET - 1,
+        endRowIndex: blockStart + FOLLOWERS_PER_POST_ROW_OFFSET,
         startColumnIndex: 2,
         endColumnIndex: 26,
       },
@@ -283,6 +323,9 @@ async function formatFollowersPerPostRows(accessToken: string) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    const sheetType: AnalysisSheetType = req.query.sheet === 'insta' ? 'insta' : 'tiktok'
+    const config = SHEET_CONFIGS[sheetType]
+
     if (req.method === 'GET') {
       const account = getGoogleServiceAccount()
       if (!account) {
@@ -293,7 +336,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: true,
         serviceAccountEmail: account.email,
         spreadsheetId: SPREADSHEET_ID,
-        sheet: SHEET_NAME,
+        sheet: config.sheetName,
       })
     }
 
@@ -301,8 +344,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ ok: false, message: 'GET or POST only.' })
     }
 
-    const records = await fetchAllTiktokMetrics()
-    const data = buildBatchUpdateData(records)
+    const records = await fetchAllMetrics(config.tableName)
+    const data = buildBatchUpdateData(records, config)
     const cellsWritten = data.reduce(
       (sum, item) => sum + item.values[0].filter((value) => value !== '').length,
       0,
@@ -310,15 +353,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessToken = await getGoogleAccessToken()
 
     await updateSheet(accessToken, data)
-    await formatFollowersPerPostRows(accessToken)
+    await formatFollowersPerPostRows(accessToken, config)
 
     return res.status(200).json({
       ok: true,
+      sheet: config.sheetName,
       rowsWritten: data.length,
       cellsWritten,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'TikTok analysis sheet sync failed.'
+    const message = error instanceof Error ? error.message : 'Analysis sheet sync failed.'
     return res.status(500).json({ ok: false, message })
   }
 }

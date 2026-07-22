@@ -2578,6 +2578,7 @@ function App() {
   const [analysisInstaMessage, setAnalysisInstaMessage] = useState('')
   const [analysisInstaSavingCell, setAnalysisInstaSavingCell] = useState('')
   const [analysisInstaSyncing, setAnalysisInstaSyncing] = useState(false)
+  const [analysisInstaSheetSyncing, setAnalysisInstaSheetSyncing] = useState(false)
   const [analysisInstaYearFilter, setAnalysisInstaYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_INSTA_COLUMNS))
   const [analysisThreadsData, setAnalysisThreadsData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisThreadsLoading, setAnalysisThreadsLoading] = useState(false)
@@ -3447,6 +3448,7 @@ function App() {
       await supabase.from('analysis_insta_metrics').upsert(rowsToSave, {
         onConflict: 'year,month,account,metric',
       })
+      await syncAnalysisInstaSheet({ silent: true })
       setAnalysisInstaMessage('')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'INSTAの数字を取れませんでした。'
@@ -3479,6 +3481,34 @@ function App() {
     }))
   }
 
+  async function syncAnalysisInstaSheet(options: { silent?: boolean } = {}) {
+    if (!options.silent) {
+      setAnalysisInstaSheetSyncing(true)
+      setAnalysisInstaMessage('スプレッドシートへ反映中...')
+    }
+
+    try {
+      const response = await fetch('/api/sync-analysis-tiktok-sheet?sheet=insta', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; message?: string }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || 'シート反映に失敗しました。')
+      }
+
+      if (!options.silent) {
+        setAnalysisInstaMessage(`スプレッドシート反映済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'シート反映に失敗しました。'
+      if (!options.silent) {
+        setAnalysisInstaMessage(`シート反映に失敗しました: ${message}`)
+      }
+      throw error
+    } finally {
+      if (!options.silent) setAnalysisInstaSheetSyncing(false)
+    }
+  }
+
   async function saveAnalysisInstaCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
     const value = stripNumberCommas(row.values[valueIndex] || '')
     const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
@@ -3497,7 +3527,8 @@ function App() {
       })
 
       if (error) throw error
-      setAnalysisInstaMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      await syncAnalysisInstaSheet({ silent: true })
+      setAnalysisInstaMessage(`保存・シート反映済み: ${new Date().toLocaleTimeString('ja-JP')}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '保存に失敗しました。'
       setAnalysisInstaMessage(`保存に失敗しました: ${message}`)
@@ -3625,6 +3656,7 @@ function App() {
           })),
         }))
       }
+      await syncAnalysisInstaSheet({ silent: true })
       setAnalysisInstaMessage(`Instagramから${prevYear}年${prevMonth}月・${currentYear}年${currentMonth}月の数字を反映しました。`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Instagramの自動反映に失敗しました。'
@@ -7473,6 +7505,14 @@ function App() {
                     <button
                       type="button"
                       className="secondary"
+                      onClick={() => void syncAnalysisInstaSheet()}
+                      disabled={analysisInstaSheetSyncing || analysisInstaSyncing}
+                    >
+                      {analysisInstaSheetSyncing ? '反映中...' : 'スプレッドシートへ反映'}
+                    </button>
+                    <button
+                      type={'button'}
+                      className={'secondary'}
                       onClick={() => void syncAnalysisInstaMetrics()}
                       disabled={analysisInstaSyncing}
                     >
