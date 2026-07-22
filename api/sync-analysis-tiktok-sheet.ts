@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createSign } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
-const SPREADSHEET_ID = '1LmM6QPq5cwic6j-IKumeOI72x1MmK8Vx88Fz-uJSsEI'
+const SPREADSHEET_ID = '1hOIT8zCmR_KGtsHvFEaqkLkBKxkrDGwbltmNULKCmkM'
 const SHEET_NAME = '店舗TikTok'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
