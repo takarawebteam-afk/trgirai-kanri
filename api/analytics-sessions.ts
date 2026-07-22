@@ -471,7 +471,7 @@ const SHEET_START_YEAR = 2025
 const SHEET_MONTH_COUNT = 24
 const SHEET_END_YEAR = SHEET_START_YEAR + Math.ceil(SHEET_MONTH_COUNT / 12) - 1
 const SHEET_ONLY_KANRI_GA_PROPERTY_ID = process.env.GA4_PROPERTY_KANRI || '398626147'
-const KANRI_SEARCH_CONSOLE_SITE_URLS = (process.env.SEARCH_CONSOLE_SITE_URL || process.env.GSC_SITE_URL || 'http://www.rentax.co.jp/,https://www.rentax.co.jp/,sc-domain:rentax.co.jp')
+const KANRI_SEARCH_CONSOLE_SITE_URLS = (process.env.SEARCH_CONSOLE_SITE_URL || process.env.GSC_SITE_URL || 'https://www.rentax.co.jp/,http://www.rentax.co.jp/,sc-domain:rentax.co.jp')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean)
@@ -505,11 +505,12 @@ const MEDIA_ROW_OFFSET: Record<string, number> = {
 
 const SITE_TRAFFIC_ROW_OFFSET: Record<string, number> = {
   自然検索: 0,
-  指名検索: 1,
-  ダイレクト: 2,
-  外部サイト: 3,
-  AI経由: 4,
-  その他: 5,
+  指名検索表示数: 1,
+  指名検索クリック: 2,
+  ダイレクト: 3,
+  外部サイト: 4,
+  AI経由: 5,
+  その他: 6,
 }
 
 const INDIRECT_SOCIAL_ACCOUNT_BLOCK_START: Record<string, number> = {
@@ -850,27 +851,46 @@ async function fetchSearchConsoleBrandRows(year: number, accessToken: string) {
   }
 
   if (!data) return []
-  const rowsByMonth = new Map<number, number>()
+  const rowsByMonth = new Map<number, { clicks: number, impressions: number }>()
 
   for (const row of data.rows || []) {
     const dateKey = row.keys?.[0] || ''
     const query = row.keys?.[1] || ''
     const month = Number(dateKey.slice(5, 7))
+    const clicks = Number(row.clicks || 0)
     const impressions = Number(row.impressions || 0)
 
     if (!isKanriBrandSearchQuery(query)) continue
-    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isFinite(impressions)) continue
+    if (
+      !Number.isInteger(month)
+      || month < 1
+      || month > 12
+      || !Number.isFinite(clicks)
+      || !Number.isFinite(impressions)
+    ) continue
 
-    rowsByMonth.set(month, (rowsByMonth.get(month) || 0) + impressions)
+    const current = rowsByMonth.get(month) || { clicks: 0, impressions: 0 }
+    current.clicks += clicks
+    current.impressions += impressions
+    rowsByMonth.set(month, current)
   }
 
-  return Array.from(rowsByMonth.entries()).map(([month, impressions]) => ({
-    year,
-    month,
-    account: '管理課サイト',
-    media: '指名検索',
-    sessions: impressions,
-  })) satisfies AnalysisSessionRecord[]
+  return Array.from(rowsByMonth.entries()).flatMap(([month, values]) => [
+    {
+      year,
+      month,
+      account: '管理課サイト',
+      media: '指名検索表示数',
+      sessions: values.impressions,
+    },
+    {
+      year,
+      month,
+      account: '管理課サイト',
+      media: '指名検索クリック',
+      sessions: values.clicks,
+    },
+  ]) satisfies AnalysisSessionRecord[]
 }
 
 async function fetchSheetOnlyAnalysisSessions() {
