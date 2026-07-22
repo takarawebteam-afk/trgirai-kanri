@@ -2571,6 +2571,7 @@ function App() {
   const [analysisTiktokLoading, setAnalysisTiktokLoading] = useState(false)
   const [analysisTiktokMessage, setAnalysisTiktokMessage] = useState('')
   const [analysisTiktokSavingCell, setAnalysisTiktokSavingCell] = useState('')
+  const [analysisTiktokSyncing, setAnalysisTiktokSyncing] = useState(false)
   const [analysisTiktokYearFilter, setAnalysisTiktokYearFilter] = useState<AnalysisYearFilter>(() => getDefaultAnalysisYearFilter(ANALYSIS_TIKTOK_COLUMNS))
   const [analysisInstaData, setAnalysisInstaData] = useState<AnalysisTiktokSheetData>({ columns: [], groups: [] })
   const [analysisInstaLoading, setAnalysisInstaLoading] = useState(false)
@@ -3304,6 +3305,7 @@ function App() {
       await supabase.from('analysis_tiktok_metrics').upsert(rowsToSave, {
         onConflict: 'year,month,account,metric',
       })
+      await syncAnalysisTiktokSheet({ silent: true })
       setAnalysisTiktokMessage('')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'TikTokの数字を取れませんでした。'
@@ -3336,6 +3338,34 @@ function App() {
     }))
   }
 
+  async function syncAnalysisTiktokSheet(options: { silent?: boolean } = {}) {
+    if (!options.silent) {
+      setAnalysisTiktokSyncing(true)
+      setAnalysisTiktokMessage('\u30b9\u30d7\u30ec\u30c3\u30c9\u30b7\u30fc\u30c8\u3078\u53cd\u6620\u4e2d...')
+    }
+
+    try {
+      const response = await fetch('/api/sync-analysis-tiktok-sheet', { method: 'POST' })
+      const data = await response.json() as { ok?: boolean; message?: string; rowsWritten?: number; cellsWritten?: number }
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || '\u30b7\u30fc\u30c8\u53cd\u6620\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002')
+      }
+
+      if (!options.silent) {
+        setAnalysisTiktokMessage(`\u30b9\u30d7\u30ec\u30c3\u30c9\u30b7\u30fc\u30c8\u53cd\u6620\u6e08\u307f: ${new Date().toLocaleTimeString('ja-JP')}`)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '\u30b7\u30fc\u30c8\u53cd\u6620\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002'
+      if (!options.silent) {
+        setAnalysisTiktokMessage(`\u30b7\u30fc\u30c8\u53cd\u6620\u306b\u5931\u6557\u3057\u307e\u3057\u305f: ${message}`)
+      }
+      throw error
+    } finally {
+      if (!options.silent) setAnalysisTiktokSyncing(false)
+    }
+  }
+
   async function saveAnalysisTiktokCell(group: AnalysisTiktokGroup, row: AnalysisTiktokMetricRow, column: AnalysisTiktokColumn, valueIndex: number) {
     const value = stripNumberCommas(row.values[valueIndex] || '')
     const cellKey = `${group.account}-${row.metric}-${column.year}-${column.month}`
@@ -3354,10 +3384,11 @@ function App() {
       })
 
       if (error) throw error
-      setAnalysisTiktokMessage(`保存済み: ${new Date().toLocaleTimeString('ja-JP')}`)
+      await syncAnalysisTiktokSheet({ silent: true })
+      setAnalysisTiktokMessage(`\u4fdd\u5b58\u30fb\u30b7\u30fc\u30c8\u53cd\u6620\u6e08\u307f: ${new Date().toLocaleTimeString('ja-JP')}`)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '保存に失敗しました。'
-      setAnalysisTiktokMessage(`保存に失敗しました: ${message}`)
+      const message = error instanceof Error ? error.message : '\u4fdd\u5b58\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002'
+      setAnalysisTiktokMessage(`\u4fdd\u5b58\u307e\u305f\u306f\u30b7\u30fc\u30c8\u53cd\u6620\u306b\u5931\u6557\u3057\u307e\u3057\u305f: ${message}`)
     } finally {
       setAnalysisTiktokSavingCell('')
     }
@@ -7335,6 +7366,14 @@ function App() {
                     <h2>TikTok</h2>
                   </div>
                   <div className="analysis-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void syncAnalysisTiktokSheet()}
+                      disabled={analysisTiktokSyncing}
+                    >
+                      {analysisTiktokSyncing ? '\u53cd\u6620\u4e2d...' : '\u30b9\u30d7\u30ec\u30c3\u30c9\u30b7\u30fc\u30c8\u3078\u53cd\u6620'}
+                    </button>
                     <div className="analysis-year-filter" aria-label="TikTokの表示期間">
                       <button
                         type="button"
