@@ -908,9 +908,17 @@ td { font-size: 0.9rem; color: var(--gray-900); font-weight: 500; }
 
 .dashboard-task-item > div:last-child {
   display: grid;
+  flex: 0 0 auto;
+  min-width: max-content;
   gap: 4px;
   justify-items: end;
   text-align: right;
+}
+
+.dashboard-task-item > div:last-child span {
+  margin-right: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .dashboard-schedule-item {
