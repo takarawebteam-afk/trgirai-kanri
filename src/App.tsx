@@ -12731,7 +12731,7 @@ function TaskReportPanel() {
             <div className="task-report-category-modal-body">
               <div className="task-report-category-master-list">
                 <div className="task-report-category-master-list-head">
-                  <strong>登録ずみカテゴリ</strong>
+                  <strong>カテゴリ一覧</strong>
                   <button type="button" className="task-report-category-new-button" onClick={startCreateCategory}>＋ 新規作成</button>
                 </div>
                 {categoryModalLoading && <p className="empty-text">読み込み中です...</p>}

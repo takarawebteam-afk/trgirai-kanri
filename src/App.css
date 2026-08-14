@@ -5399,7 +5399,8 @@ button.secondary.small {
   min-height: 40px;
   padding: 9px 12px;
   border: 0;
-  border-radius: 8px;
+  border-bottom: 1px solid #eef0f2;
+  border-radius: 0;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -5418,6 +5419,7 @@ button.secondary.small {
 
 .task-report-category-master-item.active {
   background: #e8f0fe;
+  border-bottom-color: #d2e3fc;
   box-shadow: none;
 }
 
