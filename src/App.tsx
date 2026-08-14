@@ -1529,6 +1529,13 @@ const storeSnsPropertyTableMap: Record<StoreSnsPropertyPlatform, SnsPropertyTabl
   nishikita: 'sns_nishikita_properties',
   yao: 'sns_yao_properties',
 }
+const storeSnsRuleConfig = {
+  keihan: { platform: 'keihan-karilun', label: '京阪' },
+  nishinomiya: { platform: 'nishinomiya-karilun', label: '西宮市' },
+  nagase: { platform: 'nagase', label: '長瀬店' },
+  nishikita: { platform: 'nishikita', label: '西北店' },
+  yao: { platform: 'yao', label: '八尾店' },
+} as const satisfies Record<string, { platform: StoreSnsPropertyPlatform; label: string }>
 const snsPropertyHistoryTables: SnsPropertyTableName[] = [
   'sns_tiktok_properties',
   'sns_instagram_properties',
@@ -4368,7 +4375,9 @@ function App() {
       await supabase.from('sns_posting_rules').delete().eq('account_platform_key', apKey).eq('day_of_week', dayOfWeek)
     }
     const { data } = await supabase.from('sns_posting_rules').select('*')
-    setSnsPostingRules((data || []) as SnsPostingRule[])
+    const nextRules = (data || []) as SnsPostingRule[]
+    setSnsPostingRules(nextRules)
+    await rescheduleUnreservedStorePostDates(apKey, nextRules)
   }
 
   async function saveIntervalRule(apKey: string, intervalDays: number, referenceDate: string) {
@@ -4387,7 +4396,9 @@ function App() {
     })
 
     const { data } = await supabase.from('sns_posting_rules').select('*')
-    setSnsPostingRules((data || []) as SnsPostingRule[])
+    const nextRules = (data || []) as SnsPostingRule[]
+    setSnsPostingRules(nextRules)
+    await rescheduleUnreservedStorePostDates(apKey, nextRules)
   }
 
   async function deleteIntervalRule(apKey: string) {
@@ -4398,9 +4409,126 @@ function App() {
       .eq('rule_type', 'interval')
 
     const { data } = await supabase.from('sns_posting_rules').select('*')
-    setSnsPostingRules((data || []) as SnsPostingRule[])
+    const nextRules = (data || []) as SnsPostingRule[]
+    setSnsPostingRules(nextRules)
+    await rescheduleUnreservedStorePostDates(apKey, nextRules)
   }
 
+  async function rescheduleUnreservedStorePostDates(apKey: string, rules: SnsPostingRule[]) {
+    const accountKey = apKey.split('-')[0] as keyof typeof storeSnsRuleConfig
+    const config = storeSnsRuleConfig[accountKey]
+    if (!config) return
+
+    const activeRules = rules.filter((rule) => rule.account_platform_key === apKey)
+    if (activeRules.length === 0) return
+
+    const findNextDate = (afterDate: Date) => {
+      for (let offset = 1; offset <= 3700; offset += 1) {
+        const candidate = new Date(afterDate)
+        candidate.setDate(candidate.getDate() + offset)
+
+        const matchesRule = activeRules.some((rule) => {
+          if (rule.rule_type === 'weekday') {
+            return rule.day_of_week === candidate.getDay()
+          }
+          if (!rule.reference_date || !rule.interval_days || rule.interval_days < 1) return false
+
+          const referenceDate = new Date(`${rule.reference_date}T00:00:00`)
+          const diffDays = Math.round((candidate.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24))
+          return diffDays >= 0 && diffDays % rule.interval_days === 0
+        })
+
+        if (matchesRule) return candidate
+      }
+      return null
+    }
+
+    const tableName = storeSnsPropertyTableMap[config.platform]
+    const rows: StoreSnsPropertyRecord[] = []
+    const pageSize = 1000
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .range(from, from + pageSize - 1)
+
+      if (error) {
+        alert(`投稿ルールは保存しましたが、${config.label}の投稿日を読み込めませんでした。\n\n${error.message}`)
+        return
+      }
+
+      const pageRows = (data || []) as StoreSnsPropertyRecord[]
+      rows.push(...pageRows)
+      if (pageRows.length < pageSize) break
+    }
+
+    const hasReservation = (row: StoreSnsPropertyRecord) => {
+      const reservedValues = [row.tiktok_reserved, row.instagram_reserved]
+      if (config.platform !== 'keihan-karilun') reservedValues.push(row.youtube_reserved)
+      return reservedValues.some((value) => String(value || '').trim() !== '')
+    }
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const dayBeforeToday = new Date(today)
+    dayBeforeToday.setDate(dayBeforeToday.getDate() - 1)
+
+    const reservedDates = rows
+      .filter(hasReservation)
+      .map((row) => normalizeSnsPropertyPostDate(row.post_date, row.property_number, config.platform))
+      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      .sort()
+    const lastReservedDate = reservedDates[reservedDates.length - 1]
+
+    let cursor = lastReservedDate ? new Date(`${lastReservedDate}T00:00:00`) : dayBeforeToday
+    if (cursor < dayBeforeToday) cursor = dayBeforeToday
+
+    const unreservedRows = rows
+      .filter((row) => !hasReservation(row))
+      .sort((a, b) => {
+        const dateA = normalizeSnsPropertyPostDate(a.post_date, a.property_number, config.platform)
+        const dateB = normalizeSnsPropertyPostDate(b.post_date, b.property_number, config.platform)
+        if (dateA && dateB && dateA !== dateB) return dateA.localeCompare(dateB)
+        if (dateA && !dateB) return -1
+        if (!dateA && dateB) return 1
+
+        const numberA = Number(String(a.property_number || '').match(/\d+/)?.[0] || 0)
+        const numberB = Number(String(b.property_number || '').match(/\d+/)?.[0] || 0)
+        if (numberA !== numberB) return numberA - numberB
+        return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      })
+
+    const updates: Array<{ id: string; postDate: string }> = []
+    for (const row of unreservedRows) {
+      const nextDate = findNextDate(cursor)
+      if (!nextDate) break
+      cursor = nextDate
+      const postDate = formatLocalDateKey(nextDate)
+      const currentDate = normalizeSnsPropertyPostDate(row.post_date, row.property_number, config.platform)
+      if (currentDate !== postDate) updates.push({ id: row.id, postDate })
+    }
+
+    for (let index = 0; index < updates.length; index += 50) {
+      const chunk = updates.slice(index, index + 50)
+      const results = await Promise.all(chunk.map((item) => (
+        supabase.from(tableName).update({ post_date: item.postDate }).eq('id', item.id)
+      )))
+      const failed = results.find((result) => result.error)
+      if (failed?.error) {
+        alert(`投稿ルールは保存しましたが、${config.label}の投稿日変更が途中で止まりました。\n\n${failed.error.message}`)
+        await fetchStoreSnsProperties(config.platform)
+        scheduleSnsPropertySheetSync(config.platform)
+        return
+      }
+    }
+
+    if (updates.length === 0) return
+
+    await fetchStoreSnsProperties(config.platform)
+    scheduleSnsPropertySheetSync(config.platform)
+    alert(`${config.label}の予約されていない${updates.length}件を、新しい投稿ルールで並べ直しました。`)
+  }
   function getSokanriCellStatus(apKey: string, date: Date): '✅' | '⚠️' | '─' {
     const dayOfWeek = date.getDay()
     const dateStr = formatLocalDateKey(date)
