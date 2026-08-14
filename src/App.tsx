@@ -12732,7 +12732,7 @@ function TaskReportPanel() {
               <div className="task-report-category-master-list">
                 <div className="task-report-category-master-list-head">
                   <strong>登録ずみカテゴリ</strong>
-                  <button type="button" className="secondary" onClick={startCreateCategory}>新しく作る</button>
+                  <button type="button" className="task-report-category-new-button" onClick={startCreateCategory}>＋ 新規作成</button>
                 </div>
                 {categoryModalLoading && <p className="empty-text">読み込み中です...</p>}
                 {!categoryModalLoading && categoryMasters.map((category) => (
@@ -12771,9 +12771,9 @@ function TaskReportPanel() {
                 </p>
                 {categoryModalError && <p className="task-report-error">{categoryModalError}</p>}
                 <div className="task-report-category-editor-actions">
-                  <button type="button" className="secondary" onClick={startCreateCategory}>入力を空にする</button>
+                  <button type="button" className="secondary" onClick={startCreateCategory}>入力をリセット</button>
                   <button type="button" className="primary" onClick={saveCategoryMaster} disabled={categoryModalSaving}>
-                    {categoryModalSaving ? '保存中...' : categoryDraft.id ? '上書き保存' : '追加する'}
+                    {categoryModalSaving ? '保存中...' : categoryDraft.id ? '変更を保存' : '追加'}
                   </button>
                   {categoryDraft.id && (
                     <button

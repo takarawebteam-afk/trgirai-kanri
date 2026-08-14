@@ -5302,37 +5302,62 @@ button.secondary.small {
 .task-report-category-modal {
   max-width: 920px;
   width: min(920px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid #e0e3e7;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(60, 64, 67, 0.2);
 }
 
 .task-report-category-modal-header {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin: 0;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid #f1f3f4;
 }
 
 .task-report-category-modal-header h3 {
   margin: 0;
-  color: #0f172a;
-  font-size: 1.15rem;
+  color: #202124;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .task-report-category-modal-header p {
-  margin: 6px 0 0;
-  color: #64748b;
-  font-size: 0.88rem;
+  margin: 5px 0 0;
+  color: #5f6368;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.task-report-category-modal .modal-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5f6368;
+}
+
+.task-report-category-modal .modal-close:hover {
+  background: #f1f3f4;
+  color: #202124;
 }
 
 .task-report-category-modal-body {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+  padding: 24px 28px 28px;
 }
 
 .task-report-category-master-list {
   display: grid;
-  gap: 10px;
+  gap: 4px;
   align-content: start;
 }
 
@@ -5341,83 +5366,188 @@ button.secondary.small {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-height: 36px;
+  margin-bottom: 6px;
+  padding: 0 4px 0 12px;
+  color: #3c4043;
+  font-size: 0.84rem;
+}
+
+.task-report-category-new-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: #1a73e8;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.task-report-category-new-button:hover {
+  background: #e8f0fe;
+  color: #174ea6;
 }
 
 .task-report-category-master-item {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 8px 16px;
-  border: 1px solid #d8e1ec;
-  border-radius: 16px;
-  background: #ffffff;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .task-report-category-master-item strong {
-  color: #0f172a;
-  font-size: 0.95rem;
+  color: #3c4043;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.task-report-category-master-item:hover {
+  background: #f1f3f4;
 }
 
 .task-report-category-master-item.active {
-  border-color: #60a5fa;
-  background: linear-gradient(180deg, #f8fbff 0%, #eaf3ff 100%);
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+  background: #e8f0fe;
+  box-shadow: none;
+}
+
+.task-report-category-master-item.active strong {
+  color: #1967d2;
+  font-weight: 600;
 }
 
 .task-report-category-editor {
   display: grid;
-  gap: 14px;
-  padding: 18px;
-  border: 1px solid #d8e1ec;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  align-content: start;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #e0e3e7;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
 }
 
 .task-report-category-editor label {
   display: grid;
-  gap: 6px;
-  color: #334155;
-  font-size: 0.84rem;
-  font-weight: 700;
+  gap: 8px;
+  color: #3c4043;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .task-report-category-editor input,
 .task-report-category-editor textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
+  padding: 11px 13px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
   background: #ffffff;
-  color: #0f172a;
+  color: #202124;
   font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
   box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.task-report-category-editor input {
+  min-height: 44px;
+}
+
+.task-report-category-editor input:hover,
+.task-report-category-editor textarea:hover {
+  border-color: #bdc1c6;
+}
+
+.task-report-category-editor input:focus,
+.task-report-category-editor textarea:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+  outline: none;
 }
 
 .task-report-category-editor textarea {
   resize: vertical;
-  min-height: 180px;
+  min-height: 156px;
 }
 
 .task-report-category-help {
-  margin: -4px 0 0;
-  color: #64748b;
-  font-size: 0.8rem;
+  margin: -8px 0 0;
+  color: #5f6368;
+  font-size: 0.78rem;
+  line-height: 1.55;
 }
 
 .task-report-category-editor-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px;
   flex-wrap: wrap;
+  margin-top: 2px;
+  padding-top: 18px;
+  border-top: 1px solid #f1f3f4;
 }
 
 .task-report-category-editor-actions button {
   align-self: center;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.task-report-category-editor-actions .secondary {
+  margin-right: auto;
+  background: transparent;
+  color: #5f6368;
+}
+
+.task-report-category-editor-actions .secondary:hover {
+  background: #f1f3f4;
+  color: #202124;
+}
+
+.task-report-category-editor-actions .primary {
+  background: #1a73e8;
+  color: #ffffff;
+}
+
+.task-report-category-editor-actions .primary:hover {
+  background: #1765cc;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.28);
+  transform: none;
+}
+
+.task-report-category-editor-actions .danger {
+  order: -1;
+  background: transparent;
+  color: #c5221f;
+}
+
+.task-report-category-editor-actions .danger:hover {
+  background: #fce8e6;
+}
+
+.task-report-category-editor-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 @media (max-width: 900px) {
   .task-report-member-grid {
     grid-template-columns: 1fr;
