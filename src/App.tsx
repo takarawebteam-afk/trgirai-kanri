@@ -11979,18 +11979,34 @@ function TaskReportPanel() {
     return item
   })
 
-  const monthlyMap = new Map<string, { month: string; count: number; minutes: number }>()
+  const isDailyTrend = selectedReportPeriod !== 'total'
+  const trendMap = new Map<string, { label: string; count: number; minutes: number }>()
+
+  if (isDailyTrend) {
+    reportDateTexts.forEach((dateText) => {
+      trendMap.set(dateText, {
+        label: `${Number(dateText.slice(8, 10))}日`,
+        count: 0,
+        minutes: 0,
+      })
+    })
+  }
+
   reportRows.forEach((row) => {
-    const monthKey = row.event_date.slice(0, 7)
-    if (!monthlyMap.has(monthKey)) {
-      monthlyMap.set(monthKey, { month: monthKey.replace('-', '/'), count: 0, minutes: 0 })
+    const trendKey = isDailyTrend ? row.event_date : row.event_date.slice(0, 7)
+    if (!trendMap.has(trendKey)) {
+      trendMap.set(trendKey, {
+        label: isDailyTrend ? `${Number(row.event_date.slice(8, 10))}日` : trendKey.replace('-', '/'),
+        count: 0,
+        minutes: 0,
+      })
     }
-    const monthItem = monthlyMap.get(monthKey)!
-    monthItem.count += 1
-    monthItem.minutes += row.minutes
+    const trendItem = trendMap.get(trendKey)!
+    trendItem.count += 1
+    trendItem.minutes += row.minutes
   })
 
-  const monthlyTrendChartData = Array.from(monthlyMap.entries())
+  const trendChartData = Array.from(trendMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0], 'ja'))
     .map(([, value]) => value)
 
@@ -12587,14 +12603,18 @@ function TaskReportPanel() {
 
           <article className="task-report-chart-card wide">
             <div className="task-report-chart-card-head">
-              <h3>C｜月ごとの推移</h3>
-              <p>月ごとの合計で、忙しさの増え方や減り方を追いやすくしています。</p>
+              <h3>C｜{isDailyTrend ? '日ごとの推移' : '月ごとの推移'}</h3>
+              <p>
+                {isDailyTrend
+                  ? '1日ごとの合計で、月の中の忙しさの波を追いやすくしています。'
+                  : '月ごとの合計で、忙しさの増え方や減り方を追いやすくしています。'}
+              </p>
             </div>
             <div className="task-report-chart-box">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyTrendChartData} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                <LineChart data={trendChartData} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="month" stroke="#64748b" />
+                  <XAxis dataKey="label" stroke="#64748b" />
                   <YAxis tickFormatter={(value) => formatTaskReportChartAxis(Number(value), chartMetric)} stroke="#64748b" />
                   <Tooltip
                     formatter={(value) => (
