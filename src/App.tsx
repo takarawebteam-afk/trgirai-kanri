@@ -11420,6 +11420,7 @@ function TaskReportPanel() {
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [categoryModalLoading, setCategoryModalLoading] = useState(false)
   const [categoryModalSaving, setCategoryModalSaving] = useState(false)
+  const [deletingCategoryId, setDeletingCategoryId] = useState('')
   const [categoryModalError, setCategoryModalError] = useState('')
   const [categoryDraft, setCategoryDraft] = useState({ id: '', name: '', keywords: '' })
   const [workMinutesByDate, setWorkMinutesByDate] = useState<Record<string, Record<string, number>>>({})
@@ -11995,6 +11996,40 @@ function TaskReportPanel() {
     setCategoryModalSaving(false)
   }
 
+
+  const deleteCategoryMaster = async () => {
+    const deletingCategory = categoryMasters.find((category) => category.id === categoryDraft.id)
+    if (!deletingCategory) return
+
+    if (categoryMasters.length === 1) {
+      setCategoryModalError('カテゴリは最低1つ必要なため、最後のカテゴリは削除できません。')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `「${deletingCategory.name}」を今後使うカテゴリの一覧から削除しますか？\n\n過去の業務と集計には、このカテゴリ名がそのまま残ります。`,
+    )
+    if (!confirmed) return
+
+    setDeletingCategoryId(deletingCategory.id)
+    setCategoryModalError('')
+
+    const { data: deletedCategories, error: deleteError } = await supabase
+      .from('task_report_categories')
+      .delete()
+      .eq('id', deletingCategory.id)
+      .select('id')
+
+    if (deleteError || !deletedCategories?.some((category) => category.id === deletingCategory.id)) {
+      setDeletingCategoryId('')
+      setCategoryModalError(`カテゴリの削除に失敗しました: ${deleteError?.message || '削除結果を確認できませんでした。'}`)
+      return
+    }
+
+    await loadCategoryMasters()
+    setCategoryDraft({ id: '', name: '', keywords: '' })
+    setDeletingCategoryId('')
+  }
   const exportTaskReportCsv = () => {
     const exportRows = reportRows
     const exportMemberSummaries = visibleMemberOptions.map((member) => {
@@ -12617,6 +12652,16 @@ function TaskReportPanel() {
                   <button type="button" className="primary" onClick={saveCategoryMaster} disabled={categoryModalSaving}>
                     {categoryModalSaving ? '保存中...' : categoryDraft.id ? '上書き保存' : '追加する'}
                   </button>
+                  {categoryDraft.id && (
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={deleteCategoryMaster}
+                      disabled={categoryModalSaving || Boolean(deletingCategoryId)}
+                    >
+                      {deletingCategoryId === categoryDraft.id ? '削除中...' : 'このカテゴリを削除'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
