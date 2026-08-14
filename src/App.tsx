@@ -12743,11 +12743,6 @@ function TaskReportPanel() {
                     onClick={() => startEditCategory(category)}
                   >
                     <strong>{category.name}</strong>
-                    <span>
-                      {category.keywords
-                        ? `${formatInteger(category.keywords.split(/\r?\n/).filter(Boolean).length)}個の手がかり`
-                        : '手がかり未設定'}
-                    </span>
                   </button>
                 ))}
               </div>

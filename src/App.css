@@ -5344,10 +5344,10 @@ button.secondary.small {
 }
 
 .task-report-category-master-item {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 14px 16px;
+  padding: 8px 16px;
   border: 1px solid #d8e1ec;
   border-radius: 16px;
   background: #ffffff;
@@ -5358,11 +5358,6 @@ button.secondary.small {
 .task-report-category-master-item strong {
   color: #0f172a;
   font-size: 0.95rem;
-}
-
-.task-report-category-master-item span {
-  color: #64748b;
-  font-size: 0.8rem;
 }
 
 .task-report-category-master-item.active {
