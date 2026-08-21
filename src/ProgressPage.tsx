@@ -1043,6 +1043,8 @@ const TIKTOK_FIELDS_AFTER_MEMO = [
   'post_completed',
 ] as const satisfies readonly (keyof ProductionRecord)[]
 
+const TIKTOK_INITIAL_VALUE_LABELS = new Set(['未着手', '未設定', '未登録'])
+
 function getKarilunPropertyMatchKey(record: ProductionRecord) {
   const propertyName = normalizePropertyLookupText(record.property_name)
   const roomNumber = normalizePropertyLookupText(record.room_number)
@@ -1052,16 +1054,15 @@ function getKarilunPropertyMatchKey(record: ProductionRecord) {
   return `${propertyName}|${roomNumber}|${postType}`
 }
 
-function hasTikTokInputAfterMemo(record: ProductionRecord) {
-  const initialLabels = new Set(['未着手', '未設定', '未登録'])
+function isTikTokFieldAfterMemo(field: keyof ProductionRecord | 'shooting_date') {
+  return TIKTOK_FIELDS_AFTER_MEMO.some((targetField) => targetField === field)
+}
 
-  return TIKTOK_FIELDS_AFTER_MEMO.some((field) => {
-    const value = record[field]
-    if (typeof value === 'boolean') return value
+function isEnteredTikTokValue(value: unknown) {
+  if (typeof value === 'boolean') return value
 
-    const normalizedValue = String(value ?? '').trim()
-    return Boolean(normalizedValue && !initialLabels.has(normalizedValue))
-  })
+  const normalizedValue = String(value ?? '').trim()
+  return Boolean(normalizedValue && !TIKTOK_INITIAL_VALUE_LABELS.has(normalizedValue))
 }
 
 function canAutoFillInstagramEditing(record: ProductionRecord) {
@@ -1139,7 +1140,6 @@ export default function ProgressPage({
   const draftRowsRef = useRef<Map<string, string[]>>(new Map())
   const draftScheduledPostDateMap = useRef<Map<string, string>>(new Map())
   const recruitmentAutoFillInFlight = useRef<Set<string>>(new Set())
-  const instagramEditingAutoFillInFlight = useRef<Set<string>>(new Set())
   const selectMenuRef = useRef<HTMLDivElement | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -1578,62 +1578,6 @@ export default function ProgressPage({
     }
   }, [records, snsPostingRules])
 
-  useEffect(() => {
-    const activeTikTokKeys = new Set(
-      records
-        .filter((record) => isTikTokMedia(record.media) && hasTikTokInputAfterMemo(record))
-        .map(getKarilunPropertyMatchKey)
-        .filter((key): key is string => Boolean(key)),
-    )
-
-    if (activeTikTokKeys.size === 0) return
-
-    const updates = records.filter((record) => {
-      if (!isInstagramMedia(record.media) || !canAutoFillInstagramEditing(record)) return false
-      if (instagramEditingAutoFillInFlight.current.has(record.id)) return false
-
-      const matchKey = getKarilunPropertyMatchKey(record)
-      return Boolean(matchKey && activeTikTokKeys.has(matchKey))
-    })
-
-    if (updates.length === 0) return
-    updates.forEach((record) => instagramEditingAutoFillInFlight.current.add(record.id))
-
-    let cancelled = false
-    async function saveInstagramEditingStatuses() {
-      const results = await Promise.all(updates.map(async (record) => {
-        const { error } = await supabase
-          .from('production_records')
-          .update({ final_save: '編集中' })
-          .eq('id', record.id)
-
-        return { id: record.id, error }
-      }))
-
-      updates.forEach((record) => instagramEditingAutoFillInFlight.current.delete(record.id))
-      if (cancelled) return
-
-      const failedResults = results.filter((result) => result.error)
-      if (failedResults.length > 0) {
-        console.error('progress instagram editing auto fill failed', failedResults.map((result) => result.error))
-      }
-
-      const successfulIds = new Set(
-        results.filter((result) => !result.error).map((result) => result.id),
-      )
-      if (successfulIds.size === 0) return
-
-      setRecords((prev) => prev.map((record) => (
-        successfulIds.has(record.id) ? { ...record, final_save: '編集中' } : record
-      )))
-    }
-
-    void saveInstagramEditingStatuses()
-    return () => {
-      cancelled = true
-    }
-  }, [records])
-
   async function getNextPropertyNumber(
     tableName: 'sns_tiktok_properties' | 'sns_instagram_properties' | 'sns_youtube_properties',
   ) {
@@ -1988,6 +1932,41 @@ export default function ProgressPage({
     }
   }
 
+  async function autoFillInstagramEditingFromTikTok(tikTokRecord: ProductionRecord) {
+    const matchKey = getKarilunPropertyMatchKey(tikTokRecord)
+    if (!matchKey) return
+
+    const targets = records.filter((record) => (
+      isInstagramMedia(record.media)
+      && canAutoFillInstagramEditing(record)
+      && getKarilunPropertyMatchKey(record) === matchKey
+    ))
+    if (targets.length === 0) return
+
+    const results = await Promise.all(targets.map(async (record) => {
+      const { error } = await supabase
+        .from('production_records')
+        .update({ final_save: '編集中' })
+        .eq('id', record.id)
+
+      return { id: record.id, error }
+    }))
+
+    const failedResults = results.filter((result) => result.error)
+    if (failedResults.length > 0) {
+      console.error('progress instagram editing auto fill failed', failedResults.map((result) => result.error))
+    }
+
+    const successfulIds = new Set(
+      results.filter((result) => !result.error).map((result) => result.id),
+    )
+    if (successfulIds.size === 0) return
+
+    setRecords((prev) => prev.map((record) => (
+      successfulIds.has(record.id) ? { ...record, final_save: '編集中' } : record
+    )))
+  }
+
   async function updateField(id: string, field: keyof ProductionRecord | 'shooting_date', value: string | boolean) {
     // ドラフト行の場合: UPDATE ではなく INSERT
     if (draftRecordIds.current.has(id)) {
@@ -2068,6 +2047,17 @@ export default function ProgressPage({
       if (record.id !== id || !updatedRecord) return record
       return updatedRecord
     }))
+
+    const oldValue = currentRecord?.[field as keyof ProductionRecord]
+    if (
+      updatedRecord
+      && isTikTokMedia(updatedRecord.media)
+      && isTikTokFieldAfterMemo(field)
+      && oldValue !== normalizedValue
+      && isEnteredTikTokValue(normalizedValue)
+    ) {
+      await autoFillInstagramEditingFromTikTok(updatedRecord)
+    }
 
     if (updatedRecord && field === 'post_completed' && value === true) {
       await promoteToSnsPropertySafe(updatedRecord, field)
