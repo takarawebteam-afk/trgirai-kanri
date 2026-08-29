@@ -4469,32 +4469,35 @@ function App() {
       return reservedValues.some((value) => String(value || '').trim() !== '')
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const dayBeforeToday = new Date(today)
-    dayBeforeToday.setDate(dayBeforeToday.getDate() - 1)
-
-    const reservedDates = rows
+    const getPropertyNumberValue = (row: StoreSnsPropertyRecord) => (
+      Number(String(row.property_number || '').match(/\d+/)?.[0] || 0)
+    )
+    const reservedRows = rows
       .filter(hasReservation)
-      .map((row) => normalizeSnsPropertyPostDate(row.post_date, row.property_number, config.platform))
-      .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-      .sort()
-    const lastReservedDate = reservedDates[reservedDates.length - 1]
+      .sort((a, b) => getPropertyNumberValue(a) - getPropertyNumberValue(b))
+    const lastReservedRow = reservedRows[reservedRows.length - 1]
+    const lastReservedDate = lastReservedRow
+      ? normalizeSnsPropertyPostDate(lastReservedRow.post_date, lastReservedRow.property_number, config.platform)
+      : ''
 
+    if (lastReservedRow && !/^\d{4}-\d{2}-\d{2}$/.test(lastReservedDate)) {
+      alert(`${config.label}の最後の予約済み物件に、正しい投稿日が入っていません。`)
+      return
+    }
+
+    const dayBeforeToday = new Date()
+    dayBeforeToday.setHours(0, 0, 0, 0)
+    dayBeforeToday.setDate(dayBeforeToday.getDate() - 1)
     let cursor = lastReservedDate ? new Date(`${lastReservedDate}T00:00:00`) : dayBeforeToday
-    if (cursor < dayBeforeToday) cursor = dayBeforeToday
+    const lastReservedPropertyNumber = lastReservedRow
+      ? getPropertyNumberValue(lastReservedRow)
+      : Number.NEGATIVE_INFINITY
 
     const unreservedRows = rows
-      .filter((row) => !hasReservation(row))
+      .filter((row) => !hasReservation(row) && getPropertyNumberValue(row) > lastReservedPropertyNumber)
       .sort((a, b) => {
-        const dateA = normalizeSnsPropertyPostDate(a.post_date, a.property_number, config.platform)
-        const dateB = normalizeSnsPropertyPostDate(b.post_date, b.property_number, config.platform)
-        if (dateA && dateB && dateA !== dateB) return dateA.localeCompare(dateB)
-        if (dateA && !dateB) return -1
-        if (!dateA && dateB) return 1
-
-        const numberA = Number(String(a.property_number || '').match(/\d+/)?.[0] || 0)
-        const numberB = Number(String(b.property_number || '').match(/\d+/)?.[0] || 0)
+        const numberA = getPropertyNumberValue(a)
+        const numberB = getPropertyNumberValue(b)
         if (numberA !== numberB) return numberA - numberB
         return String(a.created_at || '').localeCompare(String(b.created_at || ''))
       })
