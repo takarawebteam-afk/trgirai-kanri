@@ -188,30 +188,26 @@ function normalizeMetaName(value: string | undefined) {
 }
 
 async function fetchConnectedInstagramAccounts(accessToken: string): Promise<ConnectedInstagramAccount[]> {
-  try {
-    const data = await fetchGraphJson<{
-      data?: Array<{
-        name?: string
-        instagram_business_account?: {
-          id?: string
-          username?: string
-        }
-      }>
-    }>(
-      `/me/accounts?fields=${encodeURIComponent('name,instagram_business_account{id,username}')}&limit=100`,
-      accessToken,
-    )
+  const data = await fetchGraphJson<{
+    data?: Array<{
+      name?: string
+      instagram_business_account?: {
+        id?: string
+        username?: string
+      }
+    }>
+  }>(
+    `/me/accounts?fields=${encodeURIComponent('name,instagram_business_account{id,username}')}&limit=100`,
+    accessToken,
+  )
 
-    return (data.data ?? [])
-      .map((page) => ({
-        pageName: page.name ?? '',
-        instagramUserId: page.instagram_business_account?.id ?? '',
-        instagramUsername: page.instagram_business_account?.username,
-      }))
-      .filter((page) => page.instagramUserId)
-  } catch {
-    return []
-  }
+  return (data.data ?? [])
+    .map((page) => ({
+      pageName: page.name ?? '',
+      instagramUserId: page.instagram_business_account?.id ?? '',
+      instagramUsername: page.instagram_business_account?.username,
+    }))
+    .filter((page) => page.instagramUserId)
 }
 
 function resolveInstagramUserId(
@@ -279,7 +275,11 @@ async function fetchGraphJson<T>(path: string, accessToken: string) {
   const data = await response.json() as T & { error?: { message?: string } }
 
   if (!response.ok || data.error) {
-    throw new Error(data.error?.message || 'Instagramの数字を取得できませんでした。')
+    const graphMessage = data.error?.message || ''
+    if (/token has expired|session has been invalidated|error validating access token/i.test(graphMessage)) {
+      throw new Error('Metaの接続キーの期限が切れています。接続キーを更新してください。')
+    }
+    throw new Error(graphMessage || 'Instagramの数字を取得できませんでした。')
   }
 
   return data
@@ -1066,6 +1066,15 @@ async function fetchPreviousYoutubeSubscribers(
   }
 }
 
+async function fetchYoutubeSubscribersForMonth(
+  supabase: { from: (table: string) => any },
+  accountNames: string[],
+  year: number,
+  month: number,
+): Promise<Record<string, number | null>> {
+  return fetchPreviousYoutubeSubscribers(supabase, accountNames, year, month)
+}
+
 function formatYoutubeAnalyticsDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
@@ -1110,6 +1119,14 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
       prevYear,
       prevMonth,
     )
+    const savedSubscribers = skipSubscriberCount
+      ? await fetchYoutubeSubscribersForMonth(
+        supabase,
+        accounts.map((acc) => acc.account),
+        year,
+        month,
+      )
+      : {}
 
     const results = await Promise.all(accounts.map(async (acc) => {
       try {
@@ -1120,13 +1137,16 @@ async function syncYoutubeInsights(req: VercelRequest, res: VercelResponse) {
 
         const rows: Array<{ year: number; month: number; account: string; metric: string; value: string; updated_at: string }> = []
         const updatedAt = new Date().toISOString()
-        const currentSubscriber = parseStoredNumber(stats.subscriberCount)
+        const liveSubscriber = parseStoredNumber(stats.subscriberCount)
+        const currentSubscriber = skipSubscriberCount
+          ? (savedSubscribers[acc.account] ?? null)
+          : liveSubscriber
         const previousSubscriber = previousSubscribers[acc.account] ?? null
 
-        if (!skipSubscriberCount && currentSubscriber !== null) {
-          rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_SUBSCRIBERS, value: String(currentSubscriber), updated_at: updatedAt })
+        if (!skipSubscriberCount && liveSubscriber !== null) {
+          rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_SUBSCRIBERS, value: String(liveSubscriber), updated_at: updatedAt })
         }
-        if (!skipSubscriberCount && currentSubscriber !== null && previousSubscriber !== null) {
+        if (currentSubscriber !== null && previousSubscriber !== null) {
           const growth = currentSubscriber - previousSubscriber
           rows.push({ year, month, account: acc.account, metric: YOUTUBE_METRIC_SUBSCRIBER_GROWTH, value: String(growth), updated_at: updatedAt })
           if (monthlyVideos.videoCount > 0) {
