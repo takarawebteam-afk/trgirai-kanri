@@ -94,14 +94,10 @@ const SHEET_CONFIGS: Record<AnalysisSheetType, {
       八尾: 35,
     },
     metricRowOffset: {
-      フォロワー数: 0,
-      フォロワー増加数: 1,
-      投稿数: 2,
-      'フォロワー/投稿': 3,
-      '視聴回数(閲覧数)': 4,
-      いいね数: 5,
-      リポスト数: 6,
-      コメント数: 7,
+      再生数: 0,
+      '閲覧数（リーチ数）': 1,
+      準フォロワー数: 2,
+      インタラクション数: 3,
     },
     totalBlockStart: 43,
   },
@@ -325,6 +321,8 @@ async function formatFollowersPerPostRows(
   accessToken: string,
   config: (typeof SHEET_CONFIGS)[AnalysisSheetType],
 ) {
+  if (config.sheetName === '店舗threads') return
+
   const sheetId = await getSheetId(accessToken, config.sheetName)
   const blockStarts = [...new Set([
     ...Object.values(config.accountBlockStart),

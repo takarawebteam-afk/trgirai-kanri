@@ -619,9 +619,15 @@ async function fetchThreadsInsightMetrics(
   accessToken: string,
   since: number,
   until: number,
-): Promise<{ views: number | null; likes: number | null; replies: number | null; reposts: number | null }> {
-  const results = { views: null as number | null, likes: null as number | null, replies: null as number | null, reposts: null as number | null }
-  const metrics = ['views', 'likes', 'replies', 'reposts'] as const
+): Promise<{ views: number | null; likes: number | null; replies: number | null; reposts: number | null; quotes: number | null }> {
+  const results = {
+    views: null as number | null,
+    likes: null as number | null,
+    replies: null as number | null,
+    reposts: null as number | null,
+    quotes: null as number | null,
+  }
+  const metrics = ['views', 'likes', 'replies', 'reposts', 'quotes'] as const
   const chunkSeconds = 30 * 24 * 60 * 60
 
   for (const metricName of metrics) {
@@ -677,7 +683,7 @@ function buildThreadsRows(
   followers: number | null,
   previousFollowers: number | null,
   postCount: number | null,
-  metrics: { views: number | null; likes: number | null; replies: number | null; reposts: number | null },
+  metrics: { views: number | null; likes: number | null; replies: number | null; reposts: number | null; quotes: number | null },
   includeFollowerMetrics: boolean,
 ) {
   const rows: Array<{ metric: string; value: number | string | null }> = []
@@ -687,7 +693,7 @@ function buildThreadsRows(
   }
 
   if (includeFollowerMetrics && followers !== null && previousFollowers !== null) {
-    rows.push({ metric: 'フォロワー増加数', value: followers - previousFollowers })
+    rows.push({ metric: '準フォロワー数', value: followers - previousFollowers })
   }
 
   if (postCount !== null) {
@@ -705,10 +711,16 @@ function buildThreadsRows(
     rows.push({ metric: 'フォロワー/投稿', value: Math.round((growth / postCount) * 10) / 10 })
   }
 
-  if (metrics.views !== null) rows.push({ metric: '視聴回数(閲覧数)', value: metrics.views })
-  if (metrics.likes !== null) rows.push({ metric: 'いいね数', value: metrics.likes })
-  if (metrics.reposts !== null) rows.push({ metric: 'リポスト数', value: metrics.reposts })
-  if (metrics.replies !== null) rows.push({ metric: 'コメント数', value: metrics.replies })
+  if (metrics.views !== null) rows.push({ metric: '再生数', value: metrics.views })
+
+  const interactionValues = [metrics.likes, metrics.replies, metrics.reposts, metrics.quotes]
+    .filter((value): value is number => value !== null)
+  if (interactionValues.length > 0) {
+    rows.push({
+      metric: 'インタラクション数',
+      value: interactionValues.reduce((total, value) => total + value, 0),
+    })
+  }
 
   return rows
     .filter((row) => row.value !== null && row.value !== '')
@@ -802,6 +814,7 @@ async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
           likes: insightMetrics.likes,
           replies: insightMetrics.replies,
           reposts: insightMetrics.reposts,
+          quotes: insightMetrics.quotes,
           previousFollowers,
         })
 

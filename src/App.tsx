@@ -870,10 +870,10 @@ const ANALYSIS_THREADS_COLUMNS: AnalysisTiktokColumn[] = [
 ]
 
 const ANALYSIS_THREADS_GROUP_DEFINITIONS = [
-  { account: 'Karilun', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
-  { account: '長瀬', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
-  { account: '八尾', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
-  { account: '京北', metrics: ['フォロワー数', 'フォロワー増加数', '投稿数', 'フォロワー/投稿', '視聴回数(閲覧数)', 'いいね数', 'リポスト数', 'コメント数'] },
+  { account: 'Karilun', metrics: ['再生数', '閲覧数（リーチ数）', '準フォロワー数', 'インタラクション数'] },
+  { account: '長瀬', metrics: ['再生数', '閲覧数（リーチ数）', '準フォロワー数', 'インタラクション数'] },
+  { account: '八尾', metrics: ['再生数', '閲覧数（リーチ数）', '準フォロワー数', 'インタラクション数'] },
+  { account: '京北', metrics: ['再生数', '閲覧数（リーチ数）', '準フォロワー数', 'インタラクション数'] },
 ] as const
 
 const ANALYSIS_YOUTUBE_COLUMNS: AnalysisTiktokColumn[] = [
