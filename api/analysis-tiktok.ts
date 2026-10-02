@@ -555,9 +555,17 @@ async function fetchThreadsJson<T>(url: string, accessToken: string) {
   const response = await fetch(`${url}${separator}access_token=${encodeURIComponent(accessToken)}`)
   const data = await response.json() as T & { error?: { message?: string } }
   if (!response.ok || data.error) {
-    throw new Error(data.error?.message || 'Threadsの数字を取得できませんでした。')
+    const graphMessage = data.error?.message || ''
+    if (/token has expired|session has expired|session has been invalidated|error validating access token/i.test(graphMessage)) {
+      throw new Error('Threadsの接続キーの期限が切れています。接続キーを更新してください。')
+    }
+    throw new Error(graphMessage || 'Threadsの数字を取得できませんでした。')
   }
   return data
+}
+
+function isThreadsConnectionError(error: unknown) {
+  return error instanceof Error && error.message.includes('Threadsの接続キー')
 }
 
 function parseThreadsAccountsConfig(): ThreadsAccountConfig[] {
@@ -598,18 +606,12 @@ async function fetchPreviousThreadsFollowers(
 }
 
 async function fetchThreadsAccountFields(threadsUserId: string, accessToken: string) {
-  const until = Math.floor(Date.now() / 1000)
-  const since = until - 2 * 24 * 60 * 60
-  try {
-    const data = await fetchThreadsJson<{ data?: unknown[] }>(
-      `${THREADS_API_BASE}/${threadsUserId}/threads_insights?metric=followers_count&period=day&since=${since}&until=${until}`,
-      accessToken,
-    )
-    const item = data.data?.[0] as { total_value?: { value?: number } } | undefined
-    return { followers_count: item?.total_value?.value }
-  } catch {
-    return { followers_count: undefined }
-  }
+  const data = await fetchThreadsJson<{ data?: unknown[] }>(
+    `${THREADS_API_BASE}/${threadsUserId}/threads_insights?metric=followers_count`,
+    accessToken,
+  )
+  const item = data.data?.[0] as { total_value?: { value?: number } } | undefined
+  return { followers_count: item?.total_value?.value }
 }
 
 async function fetchThreadsInsightMetrics(
@@ -625,6 +627,7 @@ async function fetchThreadsInsightMetrics(
   for (const metricName of metrics) {
     let total = 0
     let cursor = since
+    let fetched = false
     while (cursor < until) {
       const chunkUntil = Math.min(cursor + chunkSeconds, until)
       try {
@@ -633,13 +636,16 @@ async function fetchThreadsInsightMetrics(
           accessToken,
         )
         const val = sumInsightValues(data.data?.[0])
-        total += val ?? 0
-      } catch {
-        // chunk failed, continue
+        if (val !== null) {
+          total += val
+          fetched = true
+        }
+      } catch (error) {
+        if (isThreadsConnectionError(error)) throw error
       }
       cursor = chunkUntil
     }
-    results[metricName] = total
+    results[metricName] = fetched ? total : null
   }
 
   return results
@@ -658,7 +664,8 @@ async function fetchThreadsPostCount(
       accessToken,
     )
     return Array.isArray(data.data) ? data.data.length : null
-  } catch {
+  } catch (error) {
+    if (isThreadsConnectionError(error)) throw error
     return null
   }
 }
@@ -746,15 +753,24 @@ async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
     const includeFollowerMetrics = year === currentYearMonth.year && month === currentYearMonth.month
     const { since, until } = getMonthRange(year, month)
 
+    const supabase = getSupabaseClient()
     let previousFollowersMap: Record<string, number | null> = {}
+    let savedFollowersMap: Record<string, number | null> = {}
     try {
-      const supabaseForRead = getSupabaseClient()
       previousFollowersMap = await fetchPreviousThreadsFollowers(
-        supabaseForRead,
+        supabase,
         accounts.map((a) => a.account),
         prevYear,
         prevMonth,
       )
+      if (!includeFollowerMetrics) {
+        savedFollowersMap = await fetchPreviousThreadsFollowers(
+          supabase,
+          accounts.map((a) => a.account),
+          year,
+          month,
+        )
+      }
     } catch {
       // computed metrics will be skipped
     }
@@ -768,7 +784,9 @@ async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
       const accountToken = (account as ThreadsAccountConfig).accessToken || accessToken
       try {
         const [accountFields, insightMetrics, postCount] = await Promise.all([
-          fetchThreadsAccountFields(threadsUserId, accountToken),
+          includeFollowerMetrics
+            ? fetchThreadsAccountFields(threadsUserId, accountToken)
+            : Promise.resolve({ followers_count: savedFollowersMap[account.account] ?? undefined }),
           fetchThreadsInsightMetrics(threadsUserId, accountToken, since, until),
           fetchThreadsPostCount(threadsUserId, accountToken, since, until),
         ])
@@ -790,7 +808,7 @@ async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
         rowsToSave.push(...buildThreadsRows(
           year, month, account.account,
           followers, previousFollowers, postCount,
-          insightMetrics, includeFollowerMetrics,
+          insightMetrics, includeFollowerMetrics || followers !== null,
         ))
       } catch (error) {
         failures.push({
@@ -802,7 +820,6 @@ async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
     }
 
     if (rowsToSave.length > 0) {
-      const supabase = getSupabaseClient()
       const { error } = await supabase
         .from('analysis_threads_metrics')
         .upsert(rowsToSave, { onConflict: 'year,month,account,metric' })
@@ -817,7 +834,10 @@ async function syncThreadsInsights(req: VercelRequest, res: VercelResponse) {
       summaries,
       failures,
       message: failures.length > 0
-        ? `一部のThreadsは取得できませんでした: ${failures.map((f) => (f as { key: string }).key).join(', ')}`
+        ? `一部のThreadsは取得できませんでした: ${failures.map((f) => {
+          const failure = f as { key: string; message: string }
+          return `${failure.key}（${failure.message}）`
+        }).join('、')}`
         : undefined,
     })
   } catch (error) {

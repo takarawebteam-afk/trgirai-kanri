@@ -95,7 +95,9 @@ const SHEET_CONFIGS: Record<AnalysisSheetType, {
     },
     metricRowOffset: {
       フォロワー数: 0,
+      フォロワー増加数: 1,
       投稿数: 2,
+      'フォロワー/投稿': 3,
       '視聴回数(閲覧数)': 4,
       いいね数: 5,
       リポスト数: 6,
