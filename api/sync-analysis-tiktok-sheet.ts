@@ -114,7 +114,9 @@ const SHEET_CONFIGS: Record<AnalysisSheetType, {
     },
     metricRowOffset: {
       チャンネル登録数: 0,
+      登録者増加数: 1,
       投稿数: 2,
+      '登録者/投稿': 3,
       再生数: 4,
       平均視聴時間: 5,
       '平均視聴時間（秒）': 5,
