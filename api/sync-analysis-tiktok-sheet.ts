@@ -16,7 +16,7 @@ type AnalysisTiktokMetricRecord = {
   value: string | null
 }
 
-type SheetCellValue = number | ''
+type SheetCellValue = number | string
 
 type SheetsMetadataResponse = {
   sheets?: Array<{
@@ -27,7 +27,23 @@ type SheetsMetadataResponse = {
   }>
 }
 
+type SheetsValuesBatchGetResponse = {
+  valueRanges?: Array<{
+    values?: Array<Array<string | number>>
+  }>
+}
+
 const FOLLOWERS_PER_POST_ROW_OFFSET = 3
+const THREADS_METRIC_LABELS = [
+  '再生数',
+  '閲覧数（リーチ数）',
+  '準フォロワー数',
+  'インタラクション数',
+  '',
+  '',
+  '',
+  '',
+]
 
 const SHEET_CONFIGS: Record<AnalysisSheetType, {
   sheetName: string
@@ -294,6 +310,90 @@ async function updateSheet(accessToken: string, data: Array<{ range: string; val
   if (!response.ok) throw new Error(`Sheet batch update failed. ${await response.text()}`)
 }
 
+function getSheetColumnName(columnNumber: number) {
+  let value = columnNumber
+  let result = ''
+
+  while (value > 0) {
+    const remainder = (value - 1) % 26
+    result = String.fromCharCode(65 + remainder) + result
+    value = Math.floor((value - 1) / 26)
+  }
+
+  return result
+}
+
+async function ensureThreadsSheetLayout(
+  accessToken: string,
+  config: (typeof SHEET_CONFIGS)[AnalysisSheetType],
+) {
+  const accountBlockStarts = [...new Set(Object.values(config.accountBlockStart))].sort((a, b) => a - b)
+  const blockStarts = [...accountBlockStarts, config.totalBlockStart]
+  const sheetName = escapeSheetName(config.sheetName)
+  const ranges = blockStarts.map((start) => `'${sheetName}'!B${start}:B${start + 7}`)
+  const query = new URLSearchParams()
+  ranges.forEach((range) => query.append('ranges', range))
+
+  const currentResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${query.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!currentResponse.ok) throw new Error(`Sheet labels fetch failed. ${await currentResponse.text()}`)
+
+  const current = await currentResponse.json() as SheetsValuesBatchGetResponse
+  const hasCurrentLayout = blockStarts.every((_, blockIndex) => {
+    const values = current.valueRanges?.[blockIndex]?.values || []
+    return THREADS_METRIC_LABELS.every((label, rowIndex) => String(values[rowIndex]?.[0] ?? '') === label)
+  })
+  if (hasCurrentLayout) return false
+
+  const clearResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchClear`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ranges: blockStarts.map((start) => `'${sheetName}'!B${start}:Z${start + 7}`),
+      }),
+    },
+  )
+  if (!clearResponse.ok) throw new Error(`Sheet old Threads rows clear failed. ${await clearResponse.text()}`)
+
+  const labelData = blockStarts.map((start) => ({
+    range: `'${sheetName}'!B${start}:B${start + 7}`,
+    values: THREADS_METRIC_LABELS.map((label) => [label]),
+  }))
+  const totalFormulaData = THREADS_METRIC_LABELS.slice(0, 4).map((_, rowOffset) => ({
+    range: `'${sheetName}'!C${config.totalBlockStart + rowOffset}:Z${config.totalBlockStart + rowOffset}`,
+    values: [Array.from({ length: 24 }, (_, columnIndex) => {
+      const columnName = getSheetColumnName(columnIndex + 3)
+      const cells = accountBlockStarts.map((start) => `${columnName}${start + rowOffset}`)
+      return `=SUM(${cells.join(',')})`
+    })],
+  }))
+
+  const updateResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        valueInputOption: 'USER_ENTERED',
+        data: [...labelData, ...totalFormulaData],
+      }),
+    },
+  )
+  if (!updateResponse.ok) throw new Error(`Sheet Threads layout update failed. ${await updateResponse.text()}`)
+
+  return true
+}
+
 async function getSheetId(accessToken: string, sheetName: string) {
   const fields = encodeURIComponent('sheets.properties(sheetId,title)')
   const response = await fetch(
@@ -399,6 +499,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       0,
     )
     const accessToken = await getGoogleAccessToken()
+    const layoutUpdated = sheetType === 'threads'
+      ? await ensureThreadsSheetLayout(accessToken, config)
+      : false
 
     await updateSheet(accessToken, data)
     await formatFollowersPerPostRows(accessToken, config)
@@ -408,6 +511,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sheet: config.sheetName,
       rowsWritten: data.length,
       cellsWritten,
+      layoutUpdated,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Analysis sheet sync failed.'
