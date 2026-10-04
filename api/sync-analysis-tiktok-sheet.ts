@@ -464,6 +464,51 @@ async function formatFollowersPerPostRows(
   if (!response.ok) throw new Error(`Sheet format update failed. ${await response.text()}`)
 }
 
+async function formatThreadsMetricRows(
+  accessToken: string,
+  config: (typeof SHEET_CONFIGS)[AnalysisSheetType],
+) {
+  const sheetId = await getSheetId(accessToken, config.sheetName)
+  const blockStarts = [...new Set([
+    ...Object.values(config.accountBlockStart),
+    config.totalBlockStart,
+  ])].sort((a, b) => a - b)
+  const requests = blockStarts.map((blockStart) => ({
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: blockStart - 1,
+        endRowIndex: blockStart + 3,
+        startColumnIndex: 2,
+        endColumnIndex: 26,
+      },
+      cell: {
+        userEnteredFormat: {
+          numberFormat: {
+            type: 'NUMBER',
+            pattern: '#,##0',
+          },
+        },
+      },
+      fields: 'userEnteredFormat.numberFormat',
+    },
+  }))
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ requests }),
+    },
+  )
+
+  if (!response.ok) throw new Error(`Threads sheet format update failed. ${await response.text()}`)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const requestedSheet = Array.isArray(req.query.sheet) ? req.query.sheet[0] : req.query.sheet
@@ -504,7 +549,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : false
 
     await updateSheet(accessToken, data)
-    await formatFollowersPerPostRows(accessToken, config)
+    if (sheetType === 'threads') {
+      await formatThreadsMetricRows(accessToken, config)
+    } else {
+      await formatFollowersPerPostRows(accessToken, config)
+    }
 
     return res.status(200).json({
       ok: true,
