@@ -35,14 +35,14 @@ type SheetsValuesBatchGetResponse = {
 
 const FOLLOWERS_PER_POST_ROW_OFFSET = 3
 const THREADS_METRIC_LABELS = [
+  'フォロワー数',
+  'フォロワー増加数',
+  '投稿数',
+  'フォロワー/投稿',
   '再生数',
   '閲覧数（リーチ数）',
   '準フォロワー数',
   'インタラクション数',
-  '',
-  '',
-  '',
-  '',
 ]
 
 const SHEET_CONFIGS: Record<AnalysisSheetType, {
@@ -112,10 +112,14 @@ const SHEET_CONFIGS: Record<AnalysisSheetType, {
       八尾: 35,
     },
     metricRowOffset: {
-      再生数: 0,
-      '閲覧数（リーチ数）': 1,
-      準フォロワー数: 2,
-      インタラクション数: 3,
+      フォロワー数: 0,
+      フォロワー増加数: 1,
+      投稿数: 2,
+      'フォロワー/投稿': 3,
+      再生数: 4,
+      '閲覧数（リーチ数）': 5,
+      準フォロワー数: 6,
+      インタラクション数: 7,
     },
     totalBlockStart: 43,
   },
@@ -368,7 +372,7 @@ async function ensureThreadsSheetLayout(
     range: `'${sheetName}'!B${start}:B${start + 7}`,
     values: THREADS_METRIC_LABELS.map((label) => [label]),
   }))
-  const totalFormulaData = THREADS_METRIC_LABELS.slice(0, 4).map((_, rowOffset) => ({
+  const totalFormulaData = THREADS_METRIC_LABELS.map((_, rowOffset) => ({
     range: `'${sheetName}'!C${config.totalBlockStart + rowOffset}:Z${config.totalBlockStart + rowOffset}`,
     values: [Array.from({ length: 24 }, (_, columnIndex) => {
       const columnName = getSheetColumnName(columnIndex + 3)
@@ -475,26 +479,48 @@ async function formatThreadsMetricRows(
     ...Object.values(config.accountBlockStart),
     config.totalBlockStart,
   ])].sort((a, b) => a - b)
-  const requests = blockStarts.map((blockStart) => ({
-    repeatCell: {
-      range: {
-        sheetId,
-        startRowIndex: blockStart - 1,
-        endRowIndex: blockStart + 3,
-        startColumnIndex: 2,
-        endColumnIndex: 26,
-      },
-      cell: {
-        userEnteredFormat: {
-          numberFormat: {
-            type: 'NUMBER',
-            pattern: '#,##0',
+  const requests = blockStarts.flatMap((blockStart) => ([
+    {
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: blockStart - 1,
+          endRowIndex: blockStart + 7,
+          startColumnIndex: 2,
+          endColumnIndex: 26,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: {
+              type: 'NUMBER',
+              pattern: '#,##0',
+            },
           },
         },
+        fields: 'userEnteredFormat.numberFormat',
       },
-      fields: 'userEnteredFormat.numberFormat',
     },
-  }))
+    {
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: blockStart + 2,
+          endRowIndex: blockStart + 3,
+          startColumnIndex: 2,
+          endColumnIndex: 26,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: {
+              type: 'NUMBER',
+              pattern: '0.0',
+            },
+          },
+        },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+    },
+  ]))
 
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`,
