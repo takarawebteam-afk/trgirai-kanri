@@ -550,6 +550,89 @@ function buildInstagramRows(
     }))
 }
 
+async function backfillInstagramCalculatedRows(supabase: ReturnType<typeof getSupabaseClient>) {
+  const sourceMetrics = ['フォロワー増加数', '投稿数', 'URLクリック', 'プロフ閲覧']
+  const { data, error } = await supabase
+    .from('analysis_insta_metrics')
+    .select('year, month, account, metric, value')
+    .in('metric', sourceMetrics)
+
+  if (error) throw new Error(error.message)
+
+  const grouped = new Map<string, {
+    year: number
+    month: number
+    account: string
+    values: Record<string, string | null>
+  }>()
+
+  for (const row of data || []) {
+    const item = row as {
+      year: number
+      month: number
+      account: string
+      metric: string
+      value: string | null
+    }
+    const key = `${item.year}::${item.month}::${item.account}`
+    const group = grouped.get(key) || {
+      year: item.year,
+      month: item.month,
+      account: item.account,
+      values: {},
+    }
+    group.values[item.metric] = item.value
+    grouped.set(key, group)
+  }
+
+  const calculatedRows: Array<{
+    year: number
+    month: number
+    account: string
+    metric: string
+    value: string
+    updated_at: string
+  }> = []
+  const updatedAt = new Date().toISOString()
+
+  for (const group of grouped.values()) {
+    const growth = numberOrNull(group.values['フォロワー増加数'])
+    const posts = numberOrNull(group.values['投稿数'])
+    if (growth !== null && posts !== null && posts > 0) {
+      calculatedRows.push({
+        year: group.year,
+        month: group.month,
+        account: group.account,
+        metric: 'フォロワー/投稿',
+        value: String(Math.round((growth / posts) * 10) / 10),
+        updated_at: updatedAt,
+      })
+    }
+
+    const urlClicks = numberOrNull(group.values['URLクリック'])
+    const profileViews = numberOrNull(group.values['プロフ閲覧'])
+    if (urlClicks !== null && profileViews !== null && profileViews > 0) {
+      calculatedRows.push({
+        year: group.year,
+        month: group.month,
+        account: group.account,
+        metric: 'URLクリック率',
+        value: `${Math.round((urlClicks / profileViews) * 100)}%`,
+        updated_at: updatedAt,
+      })
+    }
+  }
+
+  if (calculatedRows.length === 0) return 0
+
+  const { error: upsertError } = await supabase
+    .from('analysis_insta_metrics')
+    .upsert(calculatedRows, { onConflict: 'year,month,account,metric' })
+  if (upsertError) throw new Error(upsertError.message)
+
+  return calculatedRows.length
+}
+
 async function fetchThreadsJson<T>(url: string, accessToken: string) {
   const separator = url.includes('?') ? '&' : '?'
   const response = await fetch(`${url}${separator}access_token=${encodeURIComponent(accessToken)}`)
@@ -902,6 +985,7 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
     const summaries: object[] = []
     const failures: object[] = []
     const rowsToSave: object[] = []
+    let calculatedSaved = 0
     const connectedAccounts = accounts.some((account) => !account.instagramUserId)
       ? await fetchConnectedInstagramAccounts(accessToken)
       : []
@@ -949,13 +1033,15 @@ async function syncInstagramInsights(req: VercelRequest, res: VercelResponse) {
         .from('analysis_insta_metrics')
         .upsert(rowsToSave, { onConflict: 'year,month,account,metric' })
       if (error) throw new Error(error.message)
+      calculatedSaved = await backfillInstagramCalculatedRows(supabase)
     }
 
     return res.status(200).json({
       ok: failures.length < accounts.length,
       year,
       month,
-      saved: dryRun ? 0 : rowsToSave.length,
+      saved: dryRun ? 0 : rowsToSave.length + calculatedSaved,
+      calculatedSaved,
       summaries,
       failures,
       message: failures.length > 0
