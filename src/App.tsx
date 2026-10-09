@@ -1460,9 +1460,9 @@ const snsPropertyTabs: SnsPropertyTab[] = [
   { key: 'youtube', label: 'YouTube', title: 'Karilun｜YouTube 物件管理', status: 'ready' },
   { key: 'keihan-karilun', label: '京阪', title: '京阪かりるん 物件管理', status: 'ready' },
   { key: 'nishinomiya-karilun', label: '西宮市', title: '西宮かりるん 物件管理', status: 'ready' },
-  { key: 'nagase', label: '長瀬店', title: '長瀬店 物件管理', status: 'ready' },
+  { key: 'nagase', label: '近大', title: '近大 物件管理', status: 'ready' },
   { key: 'nishikita', label: '西北店', title: '西北店 物件管理', status: 'ready' },
-  { key: 'yao', label: '八尾店', title: '八尾店 物件管理', status: 'ready' },
+  { key: 'yao', label: '売買推進', title: '売買推進 物件管理', status: 'ready' },
   { key: 'recruitment', label: '採用', title: '採用 物件管理', status: 'ready' },
 ]
 
@@ -1648,6 +1648,7 @@ const SNS_PROPERTY_DEFAULT_OPTIONS: Record<SnsPropertySelectField, string[]> = {
 }
 const SNS_PROPERTY_PAGE_SIZE = 30
 const SNS_PROPERTY_CATEGORY_OPTIONS = ['動画', '画像'] as const
+const YAO_SNS_PROPERTY_CATEGORY_OPTIONS = [...SNS_PROPERTY_CATEGORY_OPTIONS, '賃貸', '売買'] as const
 
 function normalizeSnsPropertySearch(value: string) {
   return value.trim().toUpperCase()
@@ -4956,6 +4957,9 @@ function App() {
     const isNishinomiyaKarilun = platform === 'nishinomiya-karilun'
     const hidesThreadsPostDate = isNishinomiyaKarilun || platform === 'nishikita'
     const usesThreadsDateInput = storeThreadsDateInputPlatforms.has(platform)
+    const categoryOptions = platform === 'yao'
+      ? [...YAO_SNS_PROPERTY_CATEGORY_OPTIONS]
+      : [...SNS_PROPERTY_CATEGORY_OPTIONS]
     const emptyColSpan = 16 - (isKeihanKarilun ? 2 : 0) - (hidesThreadsPostDate ? 1 : 0)
 
     return (
@@ -5041,7 +5045,7 @@ function App() {
                   <td className="sns-col-plan">
                     {isKeihanKarilun
                       ? renderSnsTextInput(`${r.id}:category`, r.category, (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))
-                      : renderSnsSelect(r.category, [...SNS_PROPERTY_CATEGORY_OPTIONS], (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))}
+                      : renderSnsSelect(r.category, categoryOptions, (value) => updateStoreSnsPropertyRow(platform, r.id, 'category', value))}
                   </td>
                   <td className="sns-col-property-name">{renderSnsTextInput(`${r.id}:property_name`, r.property_name, (value) => updateStoreSnsPropertyRow(platform, r.id, 'property_name', value))}</td>
                   <td className="sns-col-room">{renderSnsTextInput(`${r.id}:room_number`, r.room_number, (value) => updateStoreSnsPropertyRow(platform, r.id, 'room_number', value))}</td>
@@ -6927,6 +6931,9 @@ function App() {
     if (snsPropertyCreatePlatform && isStoreSnsPropertyPlatform(snsPropertyCreatePlatform)) {
       const isKeihanKarilun = snsPropertyCreatePlatform === 'keihan-karilun'
       const hidesThreadsPostDate = snsPropertyCreatePlatform === 'nishinomiya-karilun' || snsPropertyCreatePlatform === 'nishikita'
+      const categoryOptions = snsPropertyCreatePlatform === 'yao'
+        ? [...YAO_SNS_PROPERTY_CATEGORY_OPTIONS]
+        : [...SNS_PROPERTY_CATEGORY_OPTIONS]
 
       return (
         <>
@@ -6934,7 +6941,7 @@ function App() {
           {renderSnsPropertyCreateInput('投稿日', 'post_date', storeSnsPropertyForm, setStoreSnsPropertyForm, { type: 'date' })}
           {isKeihanKarilun
             ? renderSnsPropertyCreateInput('場所', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm)
-            : renderSnsPropertyCreateSelect('種別', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm, [...SNS_PROPERTY_CATEGORY_OPTIONS])}
+            : renderSnsPropertyCreateSelect('種別', 'category', storeSnsPropertyForm, setStoreSnsPropertyForm, categoryOptions)}
           {renderSnsPropertyCreateInput('物件名', 'property_name', storeSnsPropertyForm, setStoreSnsPropertyForm)}
           {renderSnsPropertyCreateInput('号室', 'room_number', storeSnsPropertyForm, setStoreSnsPropertyForm)}
           {renderSnsPropertyCreateInput('番号', 'property_number', storeSnsPropertyForm, setStoreSnsPropertyForm)}
